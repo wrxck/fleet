@@ -1,0 +1,249 @@
+import { writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { execSync } from 'node:child_process';
+
+import { SecretsError } from '../core/errors.js';
+import { load, findApp } from '../core/registry.js';
+import { initVault, getPublicKey, loadManifest, listSecrets } from '../core/secrets.js';
+import {
+  setSecret, getSecret, importEnvFile, importDbSecrets,
+  exportApp, unsealAll, sealFromRuntime, rotateKey, getStatus,
+} from '../core/secrets-ops.js';
+import { generateUnsealService } from '../templates/unseal.js';
+import { validateApp, validateAll } from '../core/secrets-validate.js';
+import { confirm } from '../ui/confirm.js';
+import { c, heading, table, success, error, info, warn } from '../ui/output.js';
+
+const DB_SECRETS_DIR = '/home/matt/docker-databases/secrets';
+
+export async function secretsCommand(args: string[]): Promise<void> {
+  const sub = args[0];
+  const rest = args.slice(1);
+
+  switch (sub) {
+    case 'init': return secretsInit();
+    case 'list': return secretsList(rest);
+    case 'set': return secretsSet(rest);
+    case 'get': return secretsGet(rest);
+    case 'import': return secretsImport(rest);
+    case 'export': return secretsExport(rest);
+    case 'seal': return secretsSeal(rest);
+    case 'unseal': return secretsUnseal();
+    case 'rotate': return secretsRotate(rest);
+    case 'validate': return secretsValidate(rest);
+    case 'status': return secretsStatus(rest);
+    default:
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|validate|status>');
+      process.exit(1);
+  }
+}
+
+function secretsInit(): void {
+  const pubkey = initVault();
+  success(`Vault initialised`);
+  info(`Public key: ${pubkey}`);
+
+  const serviceContent = generateUnsealService();
+  const servicePath = '/etc/systemd/system/fleet-unseal.service';
+  writeFileSync(servicePath, serviceContent);
+  execSync('systemctl daemon-reload');
+  execSync('systemctl enable fleet-unseal');
+  success('Installed fleet-unseal.service');
+}
+
+function secretsList(args: string[]): void {
+  const json = args.includes('--json');
+  const appName = args.find(a => !a.startsWith('-'));
+
+  if (appName) {
+    const secrets = listSecrets(appName);
+    if (json) {
+      process.stdout.write(JSON.stringify(secrets, null, 2) + '\n');
+      return;
+    }
+    heading(`Secrets: ${appName} (${secrets.length})`);
+    const rows = secrets.map(s => [s.key, `${c.dim}${s.maskedValue}${c.reset}`]);
+    table(['KEY', 'VALUE'], rows);
+    process.stdout.write('\n');
+    return;
+  }
+
+  const manifest = loadManifest();
+  const entries = Object.entries(manifest.apps);
+
+  if (json) {
+    process.stdout.write(JSON.stringify(manifest.apps, null, 2) + '\n');
+    return;
+  }
+
+  heading(`Managed Secrets (${entries.length} apps)`);
+  const rows = entries.map(([name, entry]) => [
+    `${c.bold}${name}${c.reset}`,
+    entry.type,
+    String(entry.keyCount),
+    entry.lastSealedAt.substring(0, 19).replace('T', ' '),
+  ]);
+  table(['APP', 'TYPE', 'KEYS', 'LAST SEALED'], rows);
+  process.stdout.write('\n');
+}
+
+function secretsSet(args: string[]): void {
+  const [app, key, ...valueParts] = args;
+  const value = valueParts.join(' ');
+  if (!app || !key || !value) {
+    error('Usage: fleet secrets set <app> <KEY> <VALUE>');
+    process.exit(1);
+  }
+  setSecret(app, key, value);
+  success(`Set ${key} for ${app}`);
+}
+
+function secretsGet(args: string[]): void {
+  const [app, key] = args;
+  if (!app || !key) {
+    error('Usage: fleet secrets get <app> <KEY>');
+    process.exit(1);
+  }
+  const val = getSecret(app, key);
+  if (val === null) {
+    error(`Key not found: ${key}`);
+    process.exit(1);
+  }
+  process.stdout.write(val + '\n');
+}
+
+function secretsImport(args: string[]): void {
+  const app = args.find(a => !a.startsWith('-'));
+  const pathArg = args[1] && !args[1].startsWith('-') ? args[1] : null;
+
+  if (!app) {
+    error('Usage: fleet secrets import <app> [path]');
+    process.exit(1);
+  }
+
+  if (app === 'docker-databases') {
+    const dir = pathArg || DB_SECRETS_DIR;
+    const count = importDbSecrets(app, dir);
+    success(`Imported ${count} secret files from ${dir}`);
+    return;
+  }
+
+  const reg = load();
+  const entry = findApp(reg, app);
+  let envPath: string;
+
+  if (pathArg) {
+    envPath = pathArg;
+  } else if (entry) {
+    envPath = join(entry.composePath, '.env');
+  } else {
+    throw new SecretsError(`App not in registry and no path given: ${app}`);
+  }
+
+  const count = importEnvFile(app, envPath);
+  success(`Imported ${count} keys from ${envPath}`);
+}
+
+function secretsExport(args: string[]): void {
+  const app = args[0];
+  if (!app) {
+    error('Usage: fleet secrets export <app>');
+    process.exit(1);
+  }
+  process.stdout.write(exportApp(app));
+}
+
+function secretsUnseal(): void {
+  unsealAll();
+  const manifest = loadManifest();
+  const count = Object.keys(manifest.apps).length;
+  success(`Unsealed ${count} apps to /run/fleet-secrets/`);
+}
+
+function secretsSeal(args: string[]): void {
+  const app = args.find(a => !a.startsWith('-')) || undefined;
+  const sealed = sealFromRuntime(app);
+  for (const a of sealed) {
+    success(`Sealed ${a}`);
+  }
+}
+
+async function secretsRotate(args: string[]): Promise<void> {
+  const yes = args.includes('-y') || args.includes('--yes');
+  if (!yes && !await confirm('Rotate age key? This will re-encrypt all secrets.')) {
+    info('Cancelled');
+    return;
+  }
+
+  const result = rotateKey();
+  success(`Key rotated`);
+  info(`Old: ${result.oldPubkey}`);
+  info(`New: ${result.newPubkey}`);
+  info(`Re-encrypted ${result.appsRotated.length} apps`);
+  warn('Run "fleet secrets unseal" to update runtime secrets');
+}
+
+function secretsValidate(args: string[]): void {
+  const json = args.includes('--json');
+  const appName = args.find(a => !a.startsWith('-'));
+
+  const results = appName ? [validateApp(appName)] : validateAll();
+
+  if (json) {
+    process.stdout.write(JSON.stringify(results, null, 2) + '\n');
+    return;
+  }
+
+  heading('Secrets Validation');
+  let failures = 0;
+
+  for (const r of results) {
+    if (r.missing.length === 0 && r.extra.length === 0) {
+      if (r.ok) {
+        info(`${c.green}ok${c.reset}  ${r.app}`);
+      }
+      continue;
+    }
+
+    if (r.missing.length > 0) {
+      failures++;
+      error(`${r.app}: missing from vault: ${r.missing.join(', ')}`);
+    }
+    if (r.extra.length > 0) {
+      warn(`${r.app}: extra in vault (not in compose): ${r.extra.join(', ')}`);
+    }
+  }
+
+  process.stdout.write('\n');
+  if (failures > 0) {
+    error(`${failures} app(s) have missing secrets`);
+    process.exit(1);
+  }
+  success('All secrets validated');
+}
+
+function secretsStatus(args: string[]): void {
+  const json = args.includes('--json');
+  const status = getStatus();
+
+  if (json) {
+    process.stdout.write(JSON.stringify(status, null, 2) + '\n');
+    return;
+  }
+
+  heading('Secrets Status');
+  const stateLabel = status.initialized
+    ? `${c.green}initialised${c.reset}`
+    : `${c.red}not initialised${c.reset}`;
+  const sealLabel = status.sealed
+    ? `${c.yellow}sealed${c.reset}`
+    : `${c.green}unsealed${c.reset}`;
+
+  info(`Vault: ${stateLabel}`);
+  info(`State: ${sealLabel}`);
+  info(`Key:   ${status.keyPath}`);
+  info(`Vault: ${status.vaultDir}`);
+  info(`Runtime: ${status.runtimeDir}`);
+  info(`Apps: ${status.appCount} | Keys: ${status.totalKeys}`);
+  process.stdout.write('\n');
+}

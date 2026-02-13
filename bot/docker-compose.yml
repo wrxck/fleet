@@ -1,0 +1,53 @@
+services:
+  fleet-bot:
+    container_name: fleet-bot
+    build: .
+    restart: unless-stopped
+    network_mode: host
+    hostname: fleet-bot
+    volumes:
+      # Docker SDK + CLI
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /usr/bin/docker:/usr/bin/docker:ro
+      # Host metrics
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      # Bot config (specific files only — age.key intentionally excluded)
+      - /etc/fleet/telegram.json:/etc/fleet/telegram.json:ro
+      # Nginx configs (for fleet nginx list)
+      - /etc/nginx:/etc/nginx:ro
+      # WAF config (rw for whitelist/rate changes) and logs
+      - /etc/truewaf:/etc/truewaf
+      - /var/log/truewaf:/var/log/truewaf:ro
+      # Home dir: fleet source, claude binary, app directories
+      - /home/matt:/home/matt
+      # Node.js runtime for fleet CLI
+      - /usr/local/bin/node:/usr/local/bin/node:ro
+      - /usr/local/lib/node_modules:/usr/local/lib/node_modules:ro
+      # Runtime secrets (for fleet CLI commands)
+      - /run/fleet-secrets:/run/fleet-secrets:ro
+      # systemd/dbus for systemctl
+      - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+      - PATH=/home/matt/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      - HOME=/home/matt
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "fleet-bot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
