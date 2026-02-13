@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Compiled Go binary
+bot/fleet-bot
+
+# Environment / secrets (decrypted)
+.env
+*.env
+*.secrets
+
+# Encrypted vault files use .age extension and ARE safe to track
+# Do NOT ignore vault/ or *.env.age
+
+# Claude Code local settings
+.claude/
+
+# Lock files
+package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "apps": {
+    "docker-databases": {
+      "type": "secrets-dir",
+      "encryptedFile": "docker-databases.secrets.age",
+      "sourceFile": "/home/matt/docker-databases/secrets",
+      "files": [
+        "mongo_abmanvan_password.txt",
+        "mongo_bahar_password.txt",
+        "mongo_hesketh_password.txt",
+        "mongo_jewelleryauctionhouse_password.txt",
+        "mongo_nlc_password.txt",
+        "mongo_root_password.txt",
+        "mongo_selljewellery_password.txt",
+        "mysql_devilcat_password.txt",
+        "mysql_leelas_password.txt",
+        "mysql_root_password.txt",
+        "postgres_imagemerger_password.txt",
+        "postgres_naturesart_password.txt",
+        "postgres_password.txt",
+        "postgres_trustedpets_password.txt",
+        "postgres_weteach_password.txt",
+        "redis_password.txt"
+      ],
+      "lastSealedAt": "2026-02-12T09:36:01.504Z",
+      "keyCount": 16
+    },
+    "abmanandvan": {
+      "type": "env",
+      "encryptedFile": "abmanandvan.env.age",
+      "sourceFile": "/home/matt/abmanandvan/server/.env",
+      "lastSealedAt": "2026-02-06T23:33:46.026Z",
+      "keyCount": 19
+    },
+    "devilcat": {
+      "type": "env",
+      "encryptedFile": "devilcat.env.age",
+      "sourceFile": "/home/matt/devilcat-studios/app/server/.env",
+      "lastSealedAt": "2026-02-06T23:33:46.670Z",
+      "keyCount": 33
+    },
+    "heskethwebdesign-react": {
+      "type": "env",
+      "encryptedFile": "heskethwebdesign-react.env.age",
+      "sourceFile": "/home/matt/heskethwebdesign-react/.env",
+      "lastSealedAt": "2026-02-06T23:33:47.383Z",
+      "keyCount": 13
+    },
+    "image-merger": {
+      "type": "env",
+      "encryptedFile": "image-merger.env.age",
+      "sourceFile": "/home/matt/image-merger/.env",
+      "lastSealedAt": "2026-02-06T23:33:48.146Z",
+      "keyCount": 27
+    },
+    "leelas-ladybirds": {
+      "type": "env",
+      "encryptedFile": "leelas-ladybirds.env.age",
+      "sourceFile": "/home/matt/leelas-ladybirds/.env",
+      "lastSealedAt": "2026-02-06T23:33:48.819Z",
+      "keyCount": 12
+    },
+    "macpool": {
+      "type": "env",
+      "encryptedFile": "macpool.env.age",
+      "sourceFile": "/home/matt/macpool/.env",
+      "lastSealedAt": "2026-02-06T23:33:56.317Z",
+      "keyCount": 16
+    },
+    "nlcgroup": {
+      "type": "env",
+      "encryptedFile": "nlcgroup.env.age",
+      "sourceFile": "/home/matt/nlc/nlc-react/server/.env",
+      "lastSealedAt": "2026-02-06T23:33:57.038Z",
+      "keyCount": 10
+    },
+    "natures-art": {
+      "type": "env",
+      "encryptedFile": "natures-art.env.age",
+      "sourceFile": "/home/matt/natures-art/.env",
+      "lastSealedAt": "2026-02-06T23:33:57.769Z",
+      "keyCount": 7
+    },
+    "we-teach-academy": {
+      "type": "env",
+      "encryptedFile": "we-teach-academy.env.age",
+      "sourceFile": "/home/matt/we-teach-academy/.env",
+      "lastSealedAt": "2026-02-06T23:33:58.493Z",
+      "keyCount": 17
+    },
+    "zmb": {
+      "type": "env",
+      "encryptedFile": "zmb.env.age",
+      "sourceFile": "/home/matt/zmb/server/.env",
+      "lastSealedAt": "2026-02-13T22:55:19.336Z",
+      "keyCount": 8
+    }
+  }
+}
