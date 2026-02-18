@@ -13,6 +13,7 @@ import { secretsCommand } from './commands/secrets.js';
 import { gitCommand } from './commands/git.js';
 import { initCommand } from './commands/init.js';
 import { watchdogCommand } from './commands/watchdog.js';
+import { installMcpCommand } from './commands/install-mcp.js';
 import { startMcpServer } from './mcp/server.js';
 import { error } from './ui/output.js';
 
@@ -58,6 +59,7 @@ Commands:
   git release <app>   Create develop->main PR
   init                Auto-discover all existing apps
   watchdog            Health check all services, alert on failure
+  install-mcp         Install fleet as Claude Code MCP server
   mcp                 Start as MCP server
 
 Global flags:
@@ -99,6 +101,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'git': return gitCommand(rest);
     case 'init': return initCommand(rest);
     case 'watchdog': return watchdogCommand(rest);
+    case 'install-mcp': return installMcpCommand(rest);
     case 'mcp': return startMcpServer();
     default:
       error(`Unknown command: ${command}`);
