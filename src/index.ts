@@ -5,8 +5,9 @@ import { error } from './ui/output.js';
 import { FleetError } from './core/errors.js';
 
 const isMcp = process.argv.includes('mcp');
+const isInstallMcp = process.argv.includes('install-mcp');
 
-if (!isMcp && process.getuid && process.getuid() !== 0) {
+if (!isMcp && !isInstallMcp && process.getuid && process.getuid() !== 0) {
   error('fleet must be run as root');
   process.exit(1);
 }
