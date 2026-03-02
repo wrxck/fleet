@@ -7,11 +7,12 @@ export interface ExecResult {
   ok: boolean;
 }
 
-export function exec(cmd: string, opts: { timeout?: number; cwd?: string } = {}): ExecResult {
+export function exec(cmd: string, opts: { timeout?: number; cwd?: string; env?: Record<string, string> } = {}): ExecResult {
   try {
     const stdout = execSync(cmd, {
       timeout: opts.timeout ?? 30_000,
       cwd: opts.cwd,
+      env: opts.env ? { ...process.env, ...opts.env } : undefined,
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
