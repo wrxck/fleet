@@ -109,16 +109,17 @@ export function unsealAll(): void {
     }
   }
 
-  // run validation after unseal and warn on stderr (visible in journalctl)
-  try {
-    const results = validateAll();
-    for (const r of results) {
-      if (r.missing.length > 0) {
-        process.stderr.write(`[fleet-unseal] WARNING: ${r.app} missing secrets: ${r.missing.join(', ')}\n`);
-      }
+  // run validation after unseal — fail hard if any secrets are missing
+  const results = validateAll();
+  let hasMissing = false;
+  for (const r of results) {
+    if (r.missing.length > 0) {
+      process.stderr.write(`[fleet-unseal] ERROR: ${r.app} missing secrets: ${r.missing.join(', ')}\n`);
+      hasMissing = true;
     }
-  } catch {
-    // validation is best-effort during unseal
+  }
+  if (hasMissing) {
+    throw new SecretsError('Unseal completed but validation failed — some secrets are missing from the vault. Run "fleet secrets validate" for details.');
   }
 }
 

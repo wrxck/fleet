@@ -4,9 +4,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import { getStatusData } from '../commands/status.js';
-import { load, findApp } from '../core/registry.js';
+import { existsSync } from 'node:fs';
+import { load, findApp, save, addApp, type AppEntry } from '../core/registry.js';
 import { startService, stopService, restartService } from '../core/systemd.js';
-import { getContainerLogs } from '../core/docker.js';
+import { getContainerLogs, getContainersByCompose } from '../core/docker.js';
 import { checkHealth, checkAllHealth } from '../core/health.js';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx.js';
 import { generateNginxConfig } from '../templates/nginx.js';
@@ -116,7 +117,7 @@ export async function startMcpServer(): Promise<void> {
     { app: z.string().describe('App name') },
     async ({ app }) => {
       const entry = requireApp(app);
-      const buildOk = composeBuild(entry.composePath, entry.composeFile);
+      const buildOk = composeBuild(entry.composePath, entry.composeFile, entry.name);
       if (!buildOk) return text(`Build failed for ${entry.name}`);
       const ok = restartService(entry.serviceName);
       return text(ok ? `Deployed ${entry.name}` : `Deploy failed for ${entry.name}`);
@@ -183,6 +184,58 @@ export async function startMcpServer(): Promise<void> {
       if (!isInitialized()) return text('Vault not initialised');
       const results = app ? [validateApp(app)] : validateAll();
       return text(JSON.stringify(results, null, 2));
+    }
+  );
+
+  server.tool(
+    'fleet_register',
+    'Register a new app in the fleet registry',
+    {
+      name: z.string().describe('App name (kebab-case identifier)'),
+      composePath: z.string().describe('Absolute path to docker-compose directory'),
+      displayName: z.string().optional().describe('Human-friendly name'),
+      composeFile: z.string().optional().describe('Custom compose filename'),
+      serviceName: z.string().optional().describe('Systemd service name'),
+      domains: z.array(z.string()).optional().default([]).describe('Domain names'),
+      port: z.number().optional().describe('Backend port'),
+      type: z.enum(['proxy', 'spa', 'nextjs', 'service']).optional().default('service').describe('App type'),
+      containers: z.array(z.string()).optional().describe('Container names (auto-detected if omitted)'),
+      usesSharedDb: z.boolean().optional().default(false).describe('Uses shared database'),
+      dependsOnDatabases: z.boolean().optional().default(false).describe('Depends on docker-databases'),
+    },
+    async (params) => {
+      if (!existsSync(params.composePath)) {
+        return text(`Error: composePath does not exist: ${params.composePath}`);
+      }
+
+      const reg = load();
+      const existing = findApp(reg, params.name);
+
+      let containers = params.containers;
+      if (!containers || containers.length === 0) {
+        containers = getContainersByCompose(params.composePath, params.composeFile ?? null);
+        if (containers.length === 0) containers = [params.name];
+      }
+
+      const entry: AppEntry = {
+        name: params.name,
+        displayName: params.displayName ?? params.name,
+        composePath: params.composePath,
+        composeFile: params.composeFile ?? null,
+        serviceName: params.serviceName ?? params.name,
+        domains: params.domains,
+        port: params.port ?? null,
+        type: params.type,
+        containers,
+        usesSharedDb: params.usesSharedDb,
+        dependsOnDatabases: params.dependsOnDatabases,
+        registeredAt: new Date().toISOString(),
+      };
+
+      save(addApp(reg, entry));
+
+      const action = existing ? 'Updated' : 'Registered';
+      return text(`${action} app "${params.name}":\n${JSON.stringify(entry, null, 2)}`);
     }
   );
 

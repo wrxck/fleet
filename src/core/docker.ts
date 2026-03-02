@@ -1,5 +1,26 @@
+import { readFileSync, existsSync } from 'node:fs';
 import { exec } from './exec.js';
 
+const SECRETS_BASE = '/run/fleet-secrets';
+
+function loadEnvFile(path: string): Record<string, string> {
+  if (!existsSync(path)) return {};
+  const vars: Record<string, string> = {};
+  for (const line of readFileSync(path, 'utf-8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq);
+    let val = trimmed.slice(eq + 1);
+    // Strip surrounding quotes
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    vars[key] = val;
+  }
+  return vars;
+}
 
 export interface ContainerInfo {
   name: string;
@@ -43,11 +64,12 @@ export function getContainerLogs(container: string, lines = 100): string {
   return result.ok ? result.stdout : result.stderr || 'No logs available';
 }
 
-export function composeBuild(composePath: string, composeFile: string | null): boolean {
+export function composeBuild(composePath: string, composeFile: string | null, appName?: string): boolean {
   const fileFlag = composeFile ? `-f ${composeFile}` : '';
+  const env = appName ? loadEnvFile(`${SECRETS_BASE}/${appName}/.env`) : {};
   const result = exec(
     `docker compose ${fileFlag} build`,
-    { cwd: composePath, timeout: 300_000 }
+    { cwd: composePath, timeout: 300_000, env: Object.keys(env).length > 0 ? env : undefined }
   );
   return result.ok;
 }
