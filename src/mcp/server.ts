@@ -117,7 +117,7 @@ export async function startMcpServer(): Promise<void> {
     { app: z.string().describe('App name') },
     async ({ app }) => {
       const entry = requireApp(app);
-      const buildOk = composeBuild(entry.composePath, entry.composeFile);
+      const buildOk = composeBuild(entry.composePath, entry.composeFile, entry.name);
       if (!buildOk) return text(`Build failed for ${entry.name}`);
       const ok = restartService(entry.serviceName);
       return text(ok ? `Deployed ${entry.name}` : `Deploy failed for ${entry.name}`);
