@@ -43,7 +43,7 @@ export async function deployCommand(args: string[]): Promise<void> {
   }
 
   info(`Building ${app.name}...`);
-  if (!composeBuild(app.composePath, app.composeFile)) {
+  if (!composeBuild(app.composePath, app.composeFile, app.name)) {
     error('Build failed');
     process.exit(1);
   }

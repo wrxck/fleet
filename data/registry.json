@@ -145,7 +145,9 @@
       "composePath": "/home/matt/macpool",
       "composeFile": null,
       "serviceName": "macpool",
-      "domains": [],
+      "domains": [
+        "macpool.org.uk"
+      ],
       "port": 3549,
       "usesSharedDb": false,
       "type": "service",
@@ -278,6 +280,108 @@
       "gitRepo": "heskethwebdesign/zmb",
       "gitRemoteUrl": "git@github.com:heskethwebdesign/zmb.git",
       "gitOnboardedAt": "2026-02-07T02:10:05.639Z"
+    },
+    {
+      "name": "minecraft",
+      "displayName": "minecraft",
+      "composePath": "/home/matt/minecraft",
+      "composeFile": null,
+      "serviceName": "minecraft",
+      "domains": [],
+      "port": null,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "agentcraft"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-02-15T01:19:03.494Z"
+    },
+    {
+      "name": "saas-plumber",
+      "displayName": "SaaS Plumber",
+      "composePath": "/home/matt/pentest/saas-plumber",
+      "composeFile": null,
+      "serviceName": "saas-plumber",
+      "domains": [
+        "saas-plumber.hesketh.pro"
+      ],
+      "port": 4849,
+      "usesSharedDb": true,
+      "type": "nextjs",
+      "containers": [
+        "saas-plumber-web-1",
+        "saas-plumber-worker-1",
+        "saas-plumber-worker-2",
+        "saas-plumber-ai-worker-1",
+        "saas-plumber-code-analysis-worker-1",
+        "saas-plumber-scanner-sandbox-1",
+        "saas-plumber-scanner-sandbox-2",
+        "saas-plumber-scanner-sandbox-3",
+        "saas-plumber-scanner-sandbox-4"
+      ],
+      "dependsOnDatabases": true,
+      "healthPath": "/api/health",
+      "registeredAt": "2026-02-18T17:00:00.000Z",
+      "gitRepo": "wrxck/saas-plumber",
+      "gitRemoteUrl": "https://github.com/wrxck/saas-plumber.git"
+    },
+    {
+      "name": "saasisdead",
+      "displayName": "SaaS Is Dead",
+      "composePath": "/home/matt/saasisdead",
+      "composeFile": null,
+      "serviceName": "saasisdead",
+      "domains": [
+        "saasisde.ad"
+      ],
+      "port": 3099,
+      "type": "proxy",
+      "containers": [
+        "saasisdead-app-1"
+      ],
+      "usesSharedDb": false,
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-02-24T00:15:15.568Z"
+    },
+    {
+      "name": "outreach",
+      "displayName": "Outreach",
+      "composePath": "/home/matt/outreach",
+      "composeFile": "docker-compose.prod.yml",
+      "serviceName": "outreach",
+      "domains": [
+        "app.heskethweb.design"
+      ],
+      "port": 8090,
+      "type": "service",
+      "containers": [
+        "outreach-backend"
+      ],
+      "usesSharedDb": true,
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-02-24T00:40:51.514Z"
+    },
+    {
+      "name": "trustedpets",
+      "displayName": "TrustedPets",
+      "composePath": "/home/matt/trustedpets",
+      "composeFile": null,
+      "serviceName": "trustedpets",
+      "domains": [
+        "trustedpets.co.uk",
+        "www.trustedpets.co.uk",
+        "app.trustedpets.co.uk"
+      ],
+      "port": 3010,
+      "type": "proxy",
+      "containers": [
+        "trustedpets-frontend",
+        "trustedpets-backend"
+      ],
+      "usesSharedDb": true,
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-02-24T16:14:58.538Z"
     }
   ],
   "infrastructure": {
