@@ -22,18 +22,61 @@ export interface ServiceStatus {
   description: string;
 }
 
+function parseSystemctlShow(output: string): Record<string, string> {
+  const props: Record<string, string> = {};
+  for (const line of output.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0) {
+      props[line.slice(0, eq)] = line.slice(eq + 1);
+    }
+  }
+  return props;
+}
+
 export function getServiceStatus(serviceName: string): ServiceStatus {
-  const active = exec(`systemctl is-active ${serviceName}.service`);
-  const enabled = exec(`systemctl is-enabled ${serviceName}.service`);
-  const show = exec(`systemctl show ${serviceName}.service --property=Description --value`);
+  const result = exec(
+    `systemctl show ${serviceName}.service --property=ActiveState,UnitFileState,Description --no-pager`,
+  );
+  const props = parseSystemctlShow(result.stdout);
 
   return {
     name: serviceName,
-    active: active.stdout === 'active',
-    enabled: enabled.stdout === 'enabled',
-    state: active.stdout || 'unknown',
-    description: show.stdout || '',
+    active: props.ActiveState === 'active',
+    enabled: props.UnitFileState === 'enabled',
+    state: props.ActiveState || 'unknown',
+    description: props.Description || '',
   };
+}
+
+export function getMultipleServiceStatuses(serviceNames: string[]): Map<string, ServiceStatus> {
+  if (serviceNames.length === 0) return new Map();
+
+  const args = serviceNames.map(n => `${n}.service`).join(' ');
+  const result = exec(
+    `systemctl show ${args} --property=Id,ActiveState,UnitFileState,Description --no-pager`,
+    { timeout: 15_000 },
+  );
+
+  const map = new Map<string, ServiceStatus>();
+  if (!result.stdout) return map;
+
+  const blocks = result.stdout.split('\n\n');
+  for (const block of blocks) {
+    if (!block.trim()) continue;
+    const props = parseSystemctlShow(block);
+    const name = (props.Id || '').replace(/\.service$/, '');
+    if (name) {
+      map.set(name, {
+        name,
+        active: props.ActiveState === 'active',
+        enabled: props.UnitFileState === 'enabled',
+        state: props.ActiveState || 'unknown',
+        description: props.Description || '',
+      });
+    }
+  }
+
+  return map;
 }
 
 export function startService(serviceName: string): boolean {
