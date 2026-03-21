@@ -1,5 +1,5 @@
 import { load } from '../core/registry.js';
-import { getServiceStatus, systemdAvailable } from '../core/systemd.js';
+import { getMultipleServiceStatuses, systemdAvailable } from '../core/systemd.js';
 import { listContainers } from '../core/docker.js';
 import { c, icon, heading, table, info } from '../ui/output.js';
 
@@ -21,9 +21,12 @@ export function getStatusData(): StatusData {
   const containers = listContainers();
 
   const hasSystemd = systemdAvailable();
+  const serviceStatuses = hasSystemd
+    ? getMultipleServiceStatuses(reg.apps.map(a => a.serviceName))
+    : new Map();
 
   const apps = reg.apps.map(app => {
-    const svc = hasSystemd ? getServiceStatus(app.serviceName) : null;
+    const svc = serviceStatuses.get(app.serviceName) ?? null;
     const appContainers = containers.filter(ct =>
       app.containers.some(name => ct.name === name)
     );
