@@ -1,6 +1,6 @@
 import { exec } from './exec.js';
-import { getServiceStatus, systemdAvailable } from './systemd.js';
-import { listContainers } from './docker.js';
+import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable, type ServiceStatus } from './systemd.js';
+import { listContainers, type ContainerInfo } from './docker.js';
 import type { AppEntry } from './registry.js';
 
 export interface HealthResult {
@@ -17,10 +17,18 @@ export interface ContainerHealth {
   health: string;
 }
 
-export function checkHealth(app: AppEntry): HealthResult {
-  const hasSystemd = systemdAvailable();
-  const systemd = hasSystemd ? getServiceStatus(app.serviceName) : null;
-  const allContainers = listContainers();
+export interface PrefetchedData {
+  containers: ContainerInfo[];
+  serviceStatus: ServiceStatus | null;
+}
+
+export function checkHealth(app: AppEntry, prefetched?: PrefetchedData): HealthResult {
+  const systemd = prefetched !== undefined
+    ? prefetched.serviceStatus
+    : (systemdAvailable() ? getServiceStatus(app.serviceName) : null);
+  const allContainers = prefetched !== undefined
+    ? prefetched.containers
+    : listContainers();
 
   const containers: ContainerHealth[] = app.containers.map(name => {
     const c = allContainers.find(ac => ac.name === name);
@@ -68,5 +76,14 @@ export function checkHttp(port: number, healthPath?: string): HealthResult['http
 }
 
 export function checkAllHealth(apps: AppEntry[]): HealthResult[] {
-  return apps.map(app => checkHealth(app));
+  const allContainers = listContainers();
+  const hasSystemd = systemdAvailable();
+  const serviceStatuses = hasSystemd
+    ? getMultipleServiceStatuses(apps.map(a => a.serviceName))
+    : new Map<string, ServiceStatus>();
+
+  return apps.map(app => checkHealth(app, {
+    containers: allContainers,
+    serviceStatus: serviceStatuses.get(app.serviceName) ?? null,
+  }));
 }
