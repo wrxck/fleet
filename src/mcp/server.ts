@@ -17,6 +17,7 @@ import { loadManifest, listSecrets, isInitialized } from '../core/secrets.js';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops.js';
 import { validateApp, validateAll } from '../core/secrets-validate.js';
 import { registerGitTools } from './git-tools.js';
+import { registerSecretsTools } from './secrets-tools.js';
 
 function requireApp(name: string) {
   const reg = load();
@@ -150,14 +151,14 @@ export async function startMcpServer(): Promise<void> {
     return text(JSON.stringify(sites, null, 2));
   });
 
-  server.tool('fleet_secrets_status', 'Show vault initialisation state, sealed/unsealed, counts', async () => {
+  server.tool('fleet_secrets_status', 'Show vault initialisation state, sealed/unsealed, counts. The vault is the encrypted source of truth that survives reboots. Runtime (/run/fleet-secrets/) is the decrypted copy used by apps — it is lost on reboot.', async () => {
     const status = getSecretsStatus();
     return text(JSON.stringify(status, null, 2));
   });
 
   server.tool(
     'fleet_secrets_list',
-    'List managed secrets for an app (masked values)',
+    'List managed secrets for an app (masked values). Shows vault contents — use fleet_secrets_drift to check if runtime differs.',
     { app: z.string().optional().describe('App name (omit for all apps)') },
     async ({ app }) => {
       if (!isInitialized()) return text('Vault not initialised');
@@ -170,7 +171,7 @@ export async function startMcpServer(): Promise<void> {
     }
   );
 
-  server.tool('fleet_secrets_unseal', 'Decrypt vault to /run/fleet-secrets/', async () => {
+  server.tool('fleet_secrets_unseal', 'Decrypt vault to /run/fleet-secrets/. WARNING: This overwrites any runtime changes that were not sealed back to the vault. Use fleet_secrets_drift first to check for unsaved changes.', async () => {
     if (!isInitialized()) return text('Vault not initialised');
     unsealAll();
     return text('Unsealed all secrets to /run/fleet-secrets/');
@@ -178,7 +179,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fleet_secrets_validate',
-    'Validate compose secrets match vault. Returns missing/extra secrets per app.',
+    'Validate compose secrets match vault. Returns missing/extra secrets per app. This checks that docker-compose secret references have matching entries in the vault.',
     { app: z.string().optional().describe('App name (omit for all apps)') },
     async ({ app }) => {
       if (!isInitialized()) return text('Vault not initialised');
@@ -240,6 +241,7 @@ export async function startMcpServer(): Promise<void> {
   );
 
   registerGitTools(server);
+  registerSecretsTools(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
