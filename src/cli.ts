@@ -47,6 +47,8 @@ Commands:
   secrets unseal      Decrypt vault to /run/fleet-secrets/
   secrets rotate      New age key, re-encrypt everything
   secrets validate [app]  Check compose secrets vs vault
+  secrets drift [app]     Detect vault vs runtime differences
+  secrets restore <app>   Restore vault from backup
   secrets status      Vault state and counts
   git status [app]    Git state for one/all apps
   git onboard <app>   Create GitHub repo, push, protect branches
@@ -57,6 +59,7 @@ Commands:
   git pr create <app> --title "..."  Create PR
   git pr list <app>   List open PRs
   git release <app>   Create develop->main PR
+  tui, dashboard      Interactive terminal dashboard
   init                Auto-discover all existing apps
   watchdog            Health check all services, alert on failure
   install-mcp         Install fleet as Claude Code MCP server
@@ -103,6 +106,11 @@ export async function run(argv: string[]): Promise<void> {
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
     case 'mcp': return startMcpServer();
+    case 'tui':
+    case 'dashboard': {
+      const { launchTui } = await import('./tui/app.js');
+      return launchTui();
+    }
     default:
       error(`Unknown command: ${command}`);
       process.stdout.write(HELP);
