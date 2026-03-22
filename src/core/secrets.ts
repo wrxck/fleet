@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, chmodSync, statSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, chmodSync, statSync, rmSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 
@@ -79,6 +79,37 @@ export function saveManifest(manifest: Manifest): void {
   writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
 }
 
+export function backupVaultFile(app: string): string | null {
+  const manifest = loadManifest();
+  const entry = manifest.apps[app];
+  if (!entry) return null;
+  const src = join(VAULT_DIR, entry.encryptedFile);
+  if (!existsSync(src)) return null;
+  const bak = src + '.bak';
+  copyFileSync(src, bak);
+  return bak;
+}
+
+export function restoreVaultFile(app: string): boolean {
+  const manifest = loadManifest();
+  const entry = manifest.apps[app];
+  if (!entry) return false;
+  const src = join(VAULT_DIR, entry.encryptedFile);
+  const bak = src + '.bak';
+  if (!existsSync(bak)) return false;
+  copyFileSync(bak, src);
+  rmSync(bak, { force: true });
+  return true;
+}
+
+export function removeBackup(app: string): void {
+  const manifest = loadManifest();
+  const entry = manifest.apps[app];
+  if (!entry) return;
+  const bak = join(VAULT_DIR, entry.encryptedFile) + '.bak';
+  rmSync(bak, { force: true });
+}
+
 export function ageEncrypt(plaintext: string): string {
   const pubkey = getPublicKey();
   return execSync(`age -r ${pubkey} --armor`, {
@@ -88,9 +119,16 @@ export function ageEncrypt(plaintext: string): string {
   });
 }
 
-export function ageDecrypt(ciphertext: string): string {
+export function ageDecrypt(ciphertext: string | Buffer): string {
   return execSync(`age -d -i ${KEY_PATH}`, {
     input: ciphertext,
+    encoding: 'utf-8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
+export function ageDecryptFile(filePath: string): string {
+  return execSync(`age -d -i ${KEY_PATH} "${filePath}"`, {
     encoding: 'utf-8',
     maxBuffer: 10 * 1024 * 1024,
   });
@@ -140,8 +178,7 @@ export function decryptApp(app: string): string {
   const manifest = loadManifest();
   const entry = manifest.apps[app];
   if (!entry) throw new SecretsError(`No secrets found for app: ${app}`);
-  const ciphertext = readFileSync(join(VAULT_DIR, entry.encryptedFile), 'utf-8');
-  return ageDecrypt(ciphertext);
+  return ageDecryptFile(join(VAULT_DIR, entry.encryptedFile));
 }
 
 export function parseSecretsBundle(bundle: string): Record<string, string> {
