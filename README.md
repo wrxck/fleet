@@ -5,8 +5,8 @@
 **Docker production management CLI + MCP server**
 
 [![CI](https://github.com/wrxck/fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/wrxck/fleet/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/fleet-cli)](https://www.npmjs.com/package/fleet-cli)
-[![Node](https://img.shields.io/node/v/fleet-cli)](https://nodejs.org)
+[![npm](https://img.shields.io/npm/v/@matthesketh/fleet)](https://www.npmjs.com/package/@matthesketh/fleet)
+[![Node](https://img.shields.io/node/v/@matthesketh/fleet)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/github/license/wrxck/fleet)](LICENSE)
 
@@ -48,7 +48,7 @@ Each Docker Compose app is registered in fleet's registry with its compose path,
 ### From npm
 
 ```bash
-npm install -g fleet-cli
+npm install -g @matthesketh/fleet
 ```
 
 ### From source
