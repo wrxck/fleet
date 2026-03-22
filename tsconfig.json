@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "declaration": true,
     "sourceMap": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "jsx": "react-jsx"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
