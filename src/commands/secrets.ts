@@ -8,7 +8,9 @@ import { initVault, getPublicKey, loadManifest, listSecrets } from '../core/secr
 import {
   setSecret, getSecret, importEnvFile, importDbSecrets,
   exportApp, unsealAll, sealFromRuntime, rotateKey, getStatus,
+  detectDrift,
 } from '../core/secrets-ops.js';
+import { restoreVaultFile } from '../core/secrets.js';
 import { generateUnsealService } from '../templates/unseal.js';
 import { validateApp, validateAll } from '../core/secrets-validate.js';
 import { confirm } from '../ui/confirm.js';
@@ -32,8 +34,11 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'rotate': return secretsRotate(rest);
     case 'validate': return secretsValidate(rest);
     case 'status': return secretsStatus(rest);
+    case 'drift': return secretsDrift(rest);
+    case 'restore': return secretsRestore(rest);
+    case 'seal-runtime': return secretsSeal(rest);
     default:
-      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|validate|status>');
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|validate|status|drift|restore>');
       process.exit(1);
   }
 }
@@ -246,4 +251,61 @@ function secretsStatus(args: string[]): void {
   info(`Runtime: ${status.runtimeDir}`);
   info(`Apps: ${status.appCount} | Keys: ${status.totalKeys}`);
   process.stdout.write('\n');
+}
+
+function secretsDrift(args: string[]): void {
+  const json = args.includes('--json');
+  const appName = args.find(a => !a.startsWith('-')) || undefined;
+
+  const results = detectDrift(appName);
+
+  if (json) {
+    process.stdout.write(JSON.stringify(results, null, 2) + '\n');
+    return;
+  }
+
+  heading('Vault / Runtime Drift');
+  let hasDrift = false;
+
+  for (const r of results) {
+    if (r.status === 'in-sync') {
+      info(`${c.green}in-sync${c.reset}  ${r.app}`);
+      continue;
+    }
+
+    if (r.status === 'missing-runtime') {
+      warn(`${r.app}: no runtime secrets (sealed or never unsealed)`);
+      continue;
+    }
+
+    hasDrift = true;
+    error(`${r.app}: drifted`);
+    if (r.addedKeys.length > 0) info(`  added at runtime: ${r.addedKeys.join(', ')}`);
+    if (r.removedKeys.length > 0) info(`  removed at runtime: ${r.removedKeys.join(', ')}`);
+    if (r.changedKeys.length > 0) info(`  changed at runtime: ${r.changedKeys.join(', ')}`);
+  }
+
+  process.stdout.write('\n');
+  if (hasDrift) {
+    warn('Run "fleet secrets seal" to persist runtime changes to vault');
+    warn('Run "fleet secrets unseal" to revert runtime to vault state');
+  } else {
+    success('No drift detected');
+  }
+}
+
+function secretsRestore(args: string[]): void {
+  const app = args.find(a => !a.startsWith('-'));
+  if (!app) {
+    error('Usage: fleet secrets restore <app>');
+    process.exit(1);
+  }
+
+  const ok = restoreVaultFile(app);
+  if (!ok) {
+    error(`No backup found for ${app}`);
+    process.exit(1);
+  }
+  success(`Restored vault backup for ${app}`);
+  info('Run "fleet secrets unseal" to apply to runtime');
 }

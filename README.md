@@ -1,6 +1,20 @@
+<![CDATA[<div align="center">
+
 # fleet
 
-Docker production management CLI + MCP server. Manages Docker Compose applications on a single server with systemd orchestration, nginx configuration, encrypted secrets, Git/GitHub workflows, health monitoring, and Telegram alerts.
+**Docker production management CLI + MCP server**
+
+[![CI](https://github.com/wrxck/fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/wrxck/fleet/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@wrxck/fleet)](https://www.npmjs.com/package/@wrxck/fleet)
+[![Node](https://img.shields.io/node/v/@wrxck/fleet)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/github/license/wrxck/fleet)](LICENSE)
+
+Manages Docker Compose applications on a single server with systemd orchestration, nginx configuration, encrypted secrets, Git/GitHub workflows, health monitoring, and Telegram alerts.
+
+</div>
+
+---
 
 ## Architecture
 
@@ -31,11 +45,20 @@ Each Docker Compose app is registered in fleet's registry with its compose path,
 
 ## Install
 
+### From npm
+
 ```bash
-git clone https://github.com/heskethwebdesign/fleet.git /home/matt/fleet
-cd /home/matt/fleet
+npm install -g @wrxck/fleet
+```
+
+### From source
+
+```bash
+git clone https://github.com/wrxck/fleet.git
+cd fleet
 npm install
 npm run build
+sudo npm link
 ```
 
 ### Install as Claude Code MCP server
@@ -50,8 +73,8 @@ This writes the MCP server config to `~/.claude.json` so all Claude Code session
 {
   "mcpServers": {
     "fleet": {
-      "command": "node",
-      "args": ["/home/matt/fleet/dist/index.js", "mcp"]
+      "command": "fleet",
+      "args": ["mcp"]
     }
   }
 }
@@ -130,6 +153,8 @@ fleet secrets set <app> <KEY> <VALUE>       # Set a single secret
 fleet secrets get <app> <KEY>               # Print a single decrypted value
 fleet secrets seal [app]                    # Re-encrypt from runtime back to vault
 fleet secrets unseal                        # Decrypt vault to /run/fleet-secrets/
+fleet secrets drift [app]                   # Detect vault vs runtime differences
+fleet secrets restore <app>                 # Restore vault from backup
 fleet secrets rotate                        # Generate new age key, re-encrypt everything
 fleet secrets validate [app]                # Check compose env vars vs vault keys
 fleet secrets status                        # Vault state, key counts, seal status
@@ -138,6 +163,14 @@ fleet secrets status                        # Vault state, key counts, seal stat
 Two secret types are supported:
 - **env** -- `.env` files (key=value pairs), encrypted as `<app>.env.age`
 - **secrets-dir** -- directories of secret files (e.g. database passwords), encrypted as `<app>.secrets.age`
+
+#### Vault safety features
+
+All seal operations are protected with:
+- **Automatic backups** -- vault files are backed up before any mutation
+- **Pre-seal validation** -- rejects seal if >50% of keys would be removed (protects against accidental wipes)
+- **Atomic rollback** -- backup is restored automatically if encryption fails
+- **Drift detection** -- compare vault (survives reboot) vs runtime (lost on reboot) to catch unsaved changes
 
 ### Git and GitHub
 
@@ -171,7 +204,7 @@ The `onboard` command handles everything: initialises git if needed, creates a p
 
 Running `fleet mcp` starts a stdio-based [Model Context Protocol](https://modelcontextprotocol.io/) server. This exposes all fleet operations as tools that Claude Code (or any MCP client) can call.
 
-### Available tools (22)
+### Available tools (27)
 
 | Tool | Description |
 |------|-------------|
@@ -185,10 +218,16 @@ Running `fleet mcp` starts a stdio-based [Model Context Protocol](https://modelc
 | `fleet_deploy` | Build and restart an app |
 | `fleet_nginx_add` | Create nginx config for a domain |
 | `fleet_nginx_list` | List nginx site configs |
+| `fleet_register` | Register a new app in the fleet registry |
 | `fleet_secrets_status` | Vault state and counts |
 | `fleet_secrets_list` | List secrets (masked values) |
 | `fleet_secrets_unseal` | Decrypt vault to runtime |
 | `fleet_secrets_validate` | Check compose env vars vs vault |
+| `fleet_secrets_set` | Set a single secret key/value |
+| `fleet_secrets_get` | Get a single decrypted value |
+| `fleet_secrets_seal` | Seal runtime changes back to vault |
+| `fleet_secrets_drift` | Detect vault vs runtime drift |
+| `fleet_secrets_restore` | Restore vault from backup |
 | `fleet_git_status` | Git state for one/all apps |
 | `fleet_git_onboard` | GitHub setup: repo, push, protect |
 | `fleet_git_branch` | Create and push a feature branch |
@@ -244,13 +283,14 @@ src/
 │   ├── health.ts            Health check logic
 │   ├── nginx.ts             Nginx file operations
 │   ├── registry.ts          App registry (data/registry.json)
-│   ├── secrets.ts           Vault primitives (age encrypt/decrypt)
-│   ├── secrets-ops.ts       High-level secrets operations
+│   ├── secrets.ts           Vault primitives (age encrypt/decrypt, backup/restore)
+│   ├── secrets-ops.ts       High-level secrets operations (safe seal, drift, validation)
 │   ├── secrets-validate.ts  Compose vs vault validation
 │   └── systemd.ts           systemctl operations
 ├── mcp/
 │   ├── server.ts            MCP server setup + tool registration
-│   └── git-tools.ts         Git-related MCP tools
+│   ├── git-tools.ts         Git-related MCP tools
+│   └── secrets-tools.ts     Secrets MCP tools (set, get, seal, drift, restore)
 ├── templates/
 │   ├── gitignore.ts         .gitignore generator
 │   ├── nginx.ts             Nginx config generator
@@ -272,3 +312,8 @@ npm run dev                  # Run with tsx (no build needed)
 npm run build                # Compile TypeScript to dist/
 npm test                     # Run tests with vitest
 ```
+
+## License
+
+MIT
+]]>
