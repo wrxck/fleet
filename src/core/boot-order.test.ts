@@ -4,7 +4,10 @@ import { describe, it, expect } from 'vitest';
 
 import { load } from './registry.js';
 
-describe('boot order - systemd dependencies', () => {
+// These tests read actual systemd service files — skip in CI
+const isCI = !!process.env.CI;
+
+describe.skipIf(isCI)('boot order - systemd dependencies', () => {
   const reg = load();
   const dbApps = reg.apps.filter(a => a.dependsOnDatabases);
 
@@ -31,7 +34,7 @@ describe('boot order - systemd dependencies', () => {
   }
 });
 
-describe('fleet-unseal.service', () => {
+describe.skipIf(isCI)('fleet-unseal.service', () => {
   const path = '/etc/systemd/system/fleet-unseal.service';
 
   it('exists', () => {
@@ -44,7 +47,7 @@ describe('fleet-unseal.service', () => {
   });
 });
 
-describe('fleet-watchdog.timer', () => {
+describe.skipIf(isCI)('fleet-watchdog.timer', () => {
   const timerPath = '/etc/systemd/system/fleet-watchdog.timer';
 
   it('exists', () => {
@@ -52,7 +55,7 @@ describe('fleet-watchdog.timer', () => {
   });
 });
 
-describe('wait-for-healthy.sh', () => {
+describe.skipIf(isCI)('wait-for-healthy.sh', () => {
   it('has timeout >= 180s', () => {
     const content = readFileSync('/home/matt/docker-databases/wait-for-healthy.sh', 'utf-8');
     const match = content.match(/TIMEOUT=(\d+)/);
