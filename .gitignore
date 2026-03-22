@@ -26,8 +26,8 @@ deploy-webhook.service
 # Claude Code local settings
 .claude/
 
-# Lock files
-package-lock.json
+# Lock files (uncomment if not needed)
+# package-lock.json
 
 # OS files
 .DS_Store
