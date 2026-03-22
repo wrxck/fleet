@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 # fleet
 
@@ -316,4 +316,3 @@ npm test                     # Run tests with vitest
 ## License
 
 MIT
-]]>
