@@ -12,8 +12,16 @@ bot/fleet-bot
 *.env
 *.secrets
 
-# Encrypted vault files use .age extension and ARE safe to track
-# Do NOT ignore vault/ or *.env.age
+# Vault — instance-specific encrypted secrets
+vault/*.age
+vault/*.age.bak
+vault/manifest.json
+
+# Instance-specific data
+data/registry.json
+
+# Systemd service files (may contain tokens)
+deploy-webhook.service
 
 # Claude Code local settings
 .claude/
