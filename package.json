@@ -1,5 +1,5 @@
 {
-  "name": "fleet-cli",
+  "name": "@matthesketh/fleet",
   "version": "1.0.0",
   "description": "Docker production management CLI + MCP server for Claude Code",
   "type": "module",
