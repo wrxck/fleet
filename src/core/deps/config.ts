@@ -32,16 +32,16 @@ export function mergeConfig(base: DepsConfig, overrides: Record<string, unknown>
   const result = structuredClone(base);
   for (const [key, value] of Object.entries(overrides)) {
     if (value !== null && typeof value === 'object' && !Array.isArray(value) && key in result) {
-      const baseVal = (result as Record<string, unknown>)[key];
+      const baseVal = (result as unknown as Record<string, unknown>)[key];
       if (baseVal !== null && typeof baseVal === 'object' && !Array.isArray(baseVal)) {
-        (result as Record<string, unknown>)[key] = mergeConfig(
+        (result as unknown as Record<string, unknown>)[key] = mergeConfig(
           baseVal as DepsConfig,
           value as Record<string, unknown>,
         );
         continue;
       }
     }
-    (result as Record<string, unknown>)[key] = value;
+    (result as unknown as Record<string, unknown>)[key] = value;
   }
   return result;
 }
