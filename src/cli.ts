@@ -12,6 +12,7 @@ import { nginxCommand } from './commands/nginx.js';
 import { secretsCommand } from './commands/secrets.js';
 import { gitCommand } from './commands/git.js';
 import { initCommand } from './commands/init.js';
+import { depsCommand } from './commands/deps.js';
 import { watchdogCommand } from './commands/watchdog.js';
 import { installMcpCommand } from './commands/install-mcp.js';
 import { startMcpServer } from './mcp/server.js';
@@ -32,6 +33,12 @@ Commands:
   restart <app>       Restart app via systemctl
   logs <app> [-f]     Container logs (follow mode with -f)
   health [app]        Health checks (systemd + container + HTTP)
+  deps [app]          Dependency health: outdated, CVEs, EOL, Docker
+  deps scan           Run fresh dependency scan
+  deps fix <app>      Create PR for fixable dependency updates
+  deps config         Show/set configuration
+  deps ignore <pkg>   Suppress a finding
+  deps init           Install cron + MOTD for automated scanning
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
@@ -96,6 +103,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'restart': return restartCommand(rest);
     case 'logs': return logsCommand(rest);
     case 'health': return healthCommand(rest);
+    case 'deps': return depsCommand(rest);
     case 'add': return addCommand(rest);
     case 'remove': return removeCommand(rest);
     case 'deploy': return deployCommand(rest);

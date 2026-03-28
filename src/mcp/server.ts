@@ -18,6 +18,7 @@ import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops.js
 import { validateApp, validateAll } from '../core/secrets-validate.js';
 import { registerGitTools } from './git-tools.js';
 import { registerSecretsTools } from './secrets-tools.js';
+import { registerDepsTools } from './deps-tools.js';
 
 function requireApp(name: string) {
   const reg = load();
@@ -242,6 +243,7 @@ export async function startMcpServer(): Promise<void> {
 
   registerGitTools(server);
   registerSecretsTools(server);
+  registerDepsTools(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
