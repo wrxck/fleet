@@ -10,7 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/github/license/wrxck/fleet)](LICENSE)
 
-Manages Docker Compose applications on a single server with systemd orchestration, nginx configuration, encrypted secrets, Git/GitHub workflows, health monitoring, and Telegram alerts.
+Manages Docker Compose applications on a single server with systemd orchestration, nginx configuration, encrypted secrets, Git/GitHub workflows, health monitoring, dependency tracking, and Telegram alerts.
 
 </div>
 
@@ -24,6 +24,7 @@ fleet CLI (TypeScript/Node.js)
 ├── MCP Server        Claude Code integration (fleet mcp)
 ├── Registry          App inventory (data/registry.json)
 ├── Secrets Vault     age-encrypted secrets (vault/*.age)
+├── Deps Monitor      Dependency health scanning + alerting
 └── Templates         systemd, nginx, gitignore generators
 
 fleet-bot (Go)
@@ -126,6 +127,19 @@ fleet watchdog                  # Check all services, send Telegram alert on fai
 }
 ```
 
+### Dependency health
+
+```bash
+fleet deps [app]                    # Summary dashboard or per-app detail
+fleet deps scan                     # Run fresh dependency scan
+fleet deps fix <app> [--dry-run]    # Create PR for fixable dependency updates
+fleet deps config                   # Show/set configuration
+fleet deps ignore <pkg> --reason .. # Suppress a finding
+fleet deps init                     # Install cron + MOTD for automated scanning
+```
+
+Scans all registered apps for outdated packages (npm, Composer, pip), Docker image updates, runtime EOL warnings (via endoflife.date), security vulnerabilities (via OSV API), and open dependency PRs on GitHub. Results are cached and surfaced via CLI, MOTD on SSH login, and Telegram notifications. Runs automatically every 6 hours via cron (configurable).
+
 ### Nginx management
 
 ```bash
@@ -204,7 +218,7 @@ The `onboard` command handles everything: initialises git if needed, creates a p
 
 Running `fleet mcp` starts a stdio-based [Model Context Protocol](https://modelcontextprotocol.io/) server. This exposes all fleet operations as tools that Claude Code (or any MCP client) can call.
 
-### Available tools (27)
+### Available tools (33)
 
 | Tool | Description |
 |------|-------------|
@@ -236,6 +250,12 @@ Running `fleet mcp` starts a stdio-based [Model Context Protocol](https://modelc
 | `fleet_git_pr_create` | Create a pull request |
 | `fleet_git_pr_list` | List pull requests |
 | `fleet_git_release` | Create develop -> main release PR |
+| `fleet_deps_status` | Dependency health summary from cache |
+| `fleet_deps_scan` | Run a fresh dependency scan |
+| `fleet_deps_app` | Dependency findings for a specific app |
+| `fleet_deps_fix` | Create PR with dependency updates (dry-run default) |
+| `fleet_deps_ignore` | Add an ignore rule for a finding |
+| `fleet_deps_config` | Get or set dependency monitoring config |
 
 ## fleet-bot
 
@@ -259,6 +279,7 @@ src/
 ├── commands/                CLI command implementations
 │   ├── add.ts               Register an app
 │   ├── deploy.ts            Full deploy pipeline
+│   ├── deps.ts              Dependency health monitoring
 │   ├── git.ts               Git/GitHub operations
 │   ├── health.ts            Health checks
 │   ├── init.ts              Auto-discover apps
@@ -286,11 +307,13 @@ src/
 │   ├── secrets.ts           Vault primitives (age encrypt/decrypt, backup/restore)
 │   ├── secrets-ops.ts       High-level secrets operations (safe seal, drift, validation)
 │   ├── secrets-validate.ts  Compose vs vault validation
-│   └── systemd.ts           systemctl operations
+│   ├── systemd.ts           systemctl operations
+│   └── deps/                Dependency health (collectors, reporters, actors)
 ├── mcp/
 │   ├── server.ts            MCP server setup + tool registration
 │   ├── git-tools.ts         Git-related MCP tools
-│   └── secrets-tools.ts     Secrets MCP tools (set, get, seal, drift, restore)
+│   ├── secrets-tools.ts     Secrets MCP tools (set, get, seal, drift, restore)
+│   └── deps-tools.ts        Dependency monitoring MCP tools
 ├── templates/
 │   ├── gitignore.ts         .gitignore generator
 │   ├── nginx.ts             Nginx config generator
