@@ -62,4 +62,40 @@ describe("FuzzySelect", () => {
     const frame = lastFrame()!;
     expect(frame).toContain("No matches");
   });
+
+  it("Enter selects item", async () => {
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <FuzzySelect items={items} onSelect={onSelect} />
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onSelect).toHaveBeenCalledWith(items[0]);
+  });
+
+  it("Escape calls onCancel", async () => {
+    const onSelect = vi.fn();
+    const onCancel = vi.fn();
+    const { stdin } = render(
+      <FuzzySelect items={items} onSelect={onSelect} onCancel={onCancel} />
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    stdin.write("\x1b");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("arrow down changes selection", async () => {
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <FuzzySelect items={items} onSelect={onSelect} />
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    stdin.write("\x1b[B");
+    await new Promise((r) => setTimeout(r, 50));
+    stdin.write("\r");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onSelect).toHaveBeenCalledWith(items[1]);
+  });
 });

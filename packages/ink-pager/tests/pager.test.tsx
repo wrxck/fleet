@@ -62,4 +62,23 @@ describe('Pager', () => {
     expect(frame).toContain('e');
     expect(frame).not.toContain('a');
   });
+
+  it('renders empty content', () => {
+    const { lastFrame } = render(
+      <Pager content="" height={4} wrap={false} />
+    );
+    const frame = lastFrame()!;
+    // indicator should show line info
+    expect(frame).toMatch(/Line \d/);
+  });
+
+  it('renders with a very long line', () => {
+    const longLine = 'x'.repeat(200);
+    const { lastFrame } = render(
+      <Pager content={longLine} height={4} wrap={false} />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toBeTruthy();
+    expect(frame).toContain('Line 1');
+  });
 });

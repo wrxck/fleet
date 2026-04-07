@@ -72,4 +72,10 @@ describe('Markdown', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('TITLE');
   });
+
+  it('renders h3 heading with dimColor style', () => {
+    const { lastFrame } = render(<Markdown>{'### Third'}</Markdown>);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Third');
+  });
 });

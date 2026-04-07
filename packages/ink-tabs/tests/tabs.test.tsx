@@ -54,4 +54,11 @@ describe('Tabs', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('(new)');
   });
+
+  it('renders with custom accentColor', () => {
+    const { lastFrame } = render(<Tabs tabs={sampleTabs} activeId="home" accentColor="green" />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Home');
+    expect(frame).toContain(BOX_HORIZONTAL.repeat('Home'.length));
+  });
 });

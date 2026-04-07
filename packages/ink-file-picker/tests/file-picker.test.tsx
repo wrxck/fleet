@@ -4,9 +4,11 @@ import path from 'node:path';
 
 import React from 'react';
 import { render } from 'ink-testing-library';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { FilePicker } from '../src/file-picker.js';
+
+const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 let tmpDir: string;
 
@@ -84,5 +86,34 @@ describe('FilePicker', () => {
       <FilePicker initialPath={tmpDir} showHidden onSelect={() => {}} />,
     );
     expect(lastFrame()!).toContain('.hidden');
+  });
+
+  it('Enter on file calls onSelect', async () => {
+    const onSelect = vi.fn();
+    const { stdin } = render(
+      <FilePicker initialPath={tmpDir} onSelect={onSelect} />,
+    );
+    await delay(100);
+    // navigate past the two directories (alpha, beta) to the first file
+    stdin.write('\x1b[B');
+    await delay(50);
+    stdin.write('\x1b[B');
+    await delay(50);
+    stdin.write('\r');
+    await delay(50);
+    expect(onSelect).toHaveBeenCalled();
+    const selectedPath = onSelect.mock.calls[0]![0] as string;
+    expect(selectedPath).toContain(tmpDir);
+  });
+
+  it('Escape calls onCancel', async () => {
+    const onCancel = vi.fn();
+    const { stdin } = render(
+      <FilePicker initialPath={tmpDir} onSelect={() => {}} onCancel={onCancel} />,
+    );
+    await delay(100);
+    stdin.write('\x1b');
+    await delay(50);
+    expect(onCancel).toHaveBeenCalled();
   });
 });

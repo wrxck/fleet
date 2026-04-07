@@ -61,4 +61,22 @@ describe('Breadcrumb', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('\u203a');
   });
+
+  it('renders with custom activeColor', () => {
+    const { lastFrame } = render(
+      <Breadcrumb path={['Home', 'Settings']} activeColor="green" />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('Home');
+    expect(frame).toContain('Settings');
+  });
+
+  it('renders with custom inactiveColor', () => {
+    const { lastFrame } = render(
+      <Breadcrumb path={['Home', 'Settings']} inactiveColor="white" />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('Home');
+    expect(frame).toContain('Settings');
+  });
 });

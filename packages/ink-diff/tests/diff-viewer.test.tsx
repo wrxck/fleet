@@ -74,4 +74,19 @@ describe('DiffViewer', () => {
     expect(frame).toContain('original');
     expect(frame).toContain('modified');
   });
+
+  it('renders only changed lines with context=0', () => {
+    const oldText = 'a\nb\nc\nd\ne';
+    const newText = 'a\nb\nX\nd\ne';
+    const { lastFrame } = render(
+      <DiffViewer oldText={oldText} newText={newText} context={0} />,
+    );
+    const frame = lastFrame()!;
+    // changed lines should appear
+    expect(frame).toContain('c');
+    expect(frame).toContain('X');
+    // unchanged surrounding lines should be hidden
+    expect(frame).not.toContain('a');
+    expect(frame).not.toContain('e');
+  });
 });

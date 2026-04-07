@@ -59,4 +59,16 @@ describe('KeyBindingHelp', () => {
     expect(output).toContain('action b');
     expect(output).toContain('action c');
   });
+
+  it('renders with custom title', () => {
+    const { lastFrame } = render(<KeyBindingHelp groups={sampleGroups} title="Help" />);
+    const output = lastFrame()!;
+    expect(output).toContain('Help');
+  });
+
+  it('renders with empty groups without crashing', () => {
+    const { lastFrame } = render(<KeyBindingHelp groups={[]} />);
+    const output = lastFrame()!;
+    expect(output).toBeDefined();
+  });
 });

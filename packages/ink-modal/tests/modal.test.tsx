@@ -35,4 +35,36 @@ describe('ink-modal', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('[Enter] Confirm  [Esc] Cancel');
   });
+
+  it('renders children without title when title is omitted', () => {
+    const { lastFrame } = render(
+      <Modal visible={true}>
+        <Text>No title here</Text>
+      </Modal>
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('No title here');
+  });
+
+  it('renders with custom width', () => {
+    const { lastFrame } = render(
+      <Modal visible={true} width={30} title="Narrow">
+        <Text>Small modal</Text>
+      </Modal>
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('Narrow');
+    expect(frame).toContain('Small modal');
+  });
+
+  it('renders with custom borderColor', () => {
+    const { lastFrame } = render(
+      <Modal visible={true} borderColor="red" title="Red border">
+        <Text>Colored</Text>
+      </Modal>
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('Red border');
+    expect(frame).toContain('Colored');
+  });
 });
