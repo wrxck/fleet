@@ -27,4 +27,16 @@ describe('Rule', () => {
     const frame = lastFrame()!;
     expect(frame).toBe('='.repeat(10));
   });
+
+  it('renders with custom color', () => {
+    const { lastFrame } = render(<Rule color="red" width={20} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain(LINE_CHAR);
+  });
+
+  it('handles title longer than width without crashing', () => {
+    const { lastFrame } = render(<Rule title="Very Long Title Here" width={10} />);
+    const frame = lastFrame()!;
+    expect(frame).toBeDefined();
+  });
 });

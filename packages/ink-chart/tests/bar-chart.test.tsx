@@ -67,4 +67,20 @@ describe('BarChart', () => {
     const { lastFrame } = render(<BarChart data={[]} />);
     expect(lastFrame()).toBe('');
   });
+
+  it('respects custom height prop', () => {
+    const { lastFrame } = render(
+      <BarChart
+        data={[
+          { label: 'A', value: 10 },
+          { label: 'B', value: 5 },
+        ]}
+        height={5}
+      />,
+    );
+    const frame = lastFrame()!;
+    // bars portion (lines containing block chars) should be at most 5 lines
+    const barLines = frame.split('\n').filter((l) => l.includes(FULL_BLOCK));
+    expect(barLines.length).toBeLessThanOrEqual(5);
+  });
 });

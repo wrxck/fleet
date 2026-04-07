@@ -65,4 +65,25 @@ describe('Timeline', () => {
     expect(frame).toContain('Plain event');
     expect(frame).not.toContain('[');
   });
+
+  it('renders with custom typeColor override', () => {
+    const events: TimelineEvent[] = [
+      { time: '11:00', title: 'Custom color event', type: 'deploy', typeColor: 'magenta' },
+    ];
+    const { lastFrame } = render(<Timeline events={events} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Custom color event');
+    expect(frame).toContain('[DEPLOY]');
+  });
+
+  it('renders events with Date objects', () => {
+    const events: TimelineEvent[] = [
+      { time: new Date('2026-01-15T10:00:00'), title: 'Date event one' },
+      { time: new Date('2026-01-15T11:30:00'), title: 'Date event two' },
+    ];
+    const { lastFrame } = render(<Timeline events={events} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Date event one');
+    expect(frame).toContain('Date event two');
+  });
 });

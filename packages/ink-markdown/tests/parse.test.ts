@@ -127,3 +127,16 @@ describe('parseMarkdown', () => {
     expect(result[1].type).toBe('paragraph');
   });
 });
+
+describe('parseInline – mixed inline', () => {
+  it('parses bold and inline code together', () => {
+    const result = parseInline('**bold** and `code`');
+    const types = result.map((n) => n.type);
+    expect(types).toContain('bold');
+    expect(types).toContain('code');
+    const boldNode = result.find((n) => n.type === 'bold');
+    const codeNode = result.find((n) => n.type === 'code');
+    expect(boldNode).toHaveProperty('content', 'bold');
+    expect(codeNode).toHaveProperty('content', 'code');
+  });
+});

@@ -135,4 +135,32 @@ describe('ink-pipeline', () => {
 
     expect(frame).not.toContain('1.2s');
   });
+
+  it('renders with empty steps without crashing', () => {
+    const { lastFrame } = render(<Pipeline steps={[]} />);
+    const frame = lastFrame()!;
+    expect(frame).toBeDefined();
+  });
+
+  it('shows 0% for progress=0', () => {
+    const steps: PipelineStep[] = [
+      { label: 'Upload', status: 'running', progress: 0 },
+    ];
+
+    const { lastFrame } = render(<Pipeline steps={steps} />);
+    const frame = lastFrame()!;
+
+    expect(frame).toContain('0%');
+  });
+
+  it('shows 100% for progress=1', () => {
+    const steps: PipelineStep[] = [
+      { label: 'Upload', status: 'running', progress: 1 },
+    ];
+
+    const { lastFrame } = render(<Pipeline steps={steps} />);
+    const frame = lastFrame()!;
+
+    expect(frame).toContain('100%');
+  });
 });

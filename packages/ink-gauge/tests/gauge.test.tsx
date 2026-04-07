@@ -60,4 +60,25 @@ describe('Gauge', () => {
     expect(frame).toContain('0%');
     expect(frame).toContain('\u2591'.repeat(10));
   });
+
+  it('renders custom filledChar and emptyChar', () => {
+    const { lastFrame } = render(<Gauge value={50} width={10} filledChar="#" emptyChar="." />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('#');
+    expect(frame).toContain('.');
+  });
+
+  it('renders no filled chars at value=0', () => {
+    const { lastFrame } = render(<Gauge value={0} width={10} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('0%');
+    expect(frame).not.toContain('\u2588');
+  });
+
+  it('renders no empty chars at value=100', () => {
+    const { lastFrame } = render(<Gauge value={100} width={10} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('100%');
+    expect(frame).not.toContain('\u2591');
+  });
 });

@@ -121,4 +121,23 @@ describe('Tree', () => {
     // should show more below indicator
     expect(frame).toMatch(/below|more/i);
   });
+
+  it('renders empty nodes array without crash', () => {
+    const { lastFrame } = render(
+      <Tree nodes={[]} expandedIds={new Set()} />,
+    );
+    const frame = lastFrame()!;
+    expect(frame).toBeDefined();
+  });
+
+  it('renders with custom indent', () => {
+    const expanded = new Set(['root']);
+    const { lastFrame } = render(
+      <Tree nodes={tree} expandedIds={expanded} indent={4} />,
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('Root');
+    expect(frame).toContain('Alpha');
+    expect(frame).toContain('Bravo');
+  });
 });

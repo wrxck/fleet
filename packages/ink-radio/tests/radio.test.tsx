@@ -48,4 +48,12 @@ describe('RadioGroup', () => {
     expect(lines[0]).toContain('Banana');
     expect(lines[0]).toContain('Cherry');
   });
+
+  it('renders with custom color and selected value', () => {
+    const { lastFrame } = render(<RadioGroup options={options} value="apple" color="green" />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('\u25C9 Apple');
+    expect(frame).toContain('Banana');
+    expect(frame).toContain('Cherry');
+  });
 });

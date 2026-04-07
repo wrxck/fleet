@@ -74,4 +74,11 @@ describe('ink-task-list', () => {
     expect(frame).toContain('Compile');
     expect(frame).not.toContain('Compiled 42 files');
   });
+
+  it('renders empty tasks array without crash', () => {
+    const tasks: Task[] = [];
+    const { lastFrame } = render(<TaskList tasks={tasks} />);
+    const frame = lastFrame()!;
+    expect(frame).toBeDefined();
+  });
 });

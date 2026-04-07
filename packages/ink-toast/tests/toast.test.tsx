@@ -3,7 +3,7 @@ import { render } from 'ink-testing-library';
 import { Text } from 'ink';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { ToastProvider } from '../src/context.js';
+import { ToastProvider, ToastContext } from '../src/context.js';
 import { ToastContainer } from '../src/toast-container.js';
 import { useToast } from '../src/use-toast.js';
 
@@ -106,5 +106,45 @@ describe('ink-toast', () => {
     expect(frame).not.toContain('second');
     expect(frame).toContain('third');
     expect(frame).toContain('fourth');
+  });
+
+  it('removeToast removes immediately', async () => {
+    let removeRef: ((id: string) => void) | null = null;
+    let toastIdRef: string | null = null;
+
+    function RemoveTrigger(): React.JSX.Element {
+      const ctx = React.useContext(ToastContext);
+      if (ctx) {
+        removeRef = ctx.removeToast;
+      }
+      React.useEffect(() => {
+        if (!ctx) return;
+        ctx.addToast('removable', 'info', 60000);
+      }, []);
+      return <Text>remove-trigger</Text>;
+    }
+
+    function IdCapture(): React.JSX.Element {
+      const ctx = React.useContext(ToastContext);
+      if (ctx && ctx.toasts.length > 0) {
+        toastIdRef = ctx.toasts[0]!.id;
+      }
+      return <Text></Text>;
+    }
+
+    const { lastFrame } = render(
+      <ToastProvider>
+        <RemoveTrigger />
+        <IdCapture />
+        <ToastContainer />
+      </ToastProvider>
+    );
+
+    await delay(50);
+    expect(lastFrame()).toContain('removable');
+
+    removeRef!(toastIdRef!);
+    await delay(50);
+    expect(lastFrame()).not.toContain('removable');
   });
 });

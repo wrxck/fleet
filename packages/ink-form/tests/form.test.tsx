@@ -68,4 +68,15 @@ describe('ink-form', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('*');
   });
+
+  it('Escape calls onCancel', async () => {
+    const onCancel = vi.fn();
+    const { stdin } = render(
+      <Form fields={baseFields} onSubmit={vi.fn()} onCancel={onCancel} />
+    );
+    await new Promise((r) => setTimeout(r, 100));
+    stdin.write('\x1b');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(onCancel).toHaveBeenCalled();
+  });
 });
