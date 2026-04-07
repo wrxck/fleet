@@ -1,25 +1,44 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { Tabs } from '@matthesketh/ink-tabs';
+import { Breadcrumb } from '@matthesketh/ink-breadcrumb';
+
 import { useAppState } from '../state.js';
 import { colors } from '../theme.js';
 import type { View } from '../types.js';
 
-const TABS: Array<{ view: View; label: string }> = [
-  { view: 'dashboard', label: 'Dashboard' },
-  { view: 'health', label: 'Health' },
-  { view: 'secrets', label: 'Secrets' },
+const TAB_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'health', label: 'Health' },
+  { id: 'secrets', label: 'Secrets' },
 ];
 
-interface VaultIndicatorProps {
-  sealed: boolean;
+const TOP_VIEWS = new Set<View>(['dashboard', 'health', 'secrets']);
+
+function resolveActiveTab(view: View, previousView: View | null): string {
+  if (TOP_VIEWS.has(view)) return view;
+  if (view === 'app-detail' || view === 'logs') return 'dashboard';
+  if (view === 'secret-edit') return 'secrets';
+  return previousView ?? 'dashboard';
 }
 
-function VaultIndicator({ sealed }: VaultIndicatorProps): React.JSX.Element {
-  return (
-    <Text color={sealed ? colors.warning : colors.success}>
-      {sealed ? '[SEALED]' : '[UNSEALED]'}
-    </Text>
-  );
+function buildBreadcrumb(view: View, selectedApp: string | null): string[] {
+  switch (view) {
+    case 'dashboard':
+      return ['Dashboard'];
+    case 'health':
+      return ['Health'];
+    case 'secrets':
+      return ['Secrets'];
+    case 'app-detail':
+      return ['Dashboard', selectedApp ?? '...'];
+    case 'logs':
+      return ['Dashboard', selectedApp ?? '...', 'Logs'];
+    case 'secret-edit':
+      return ['Secrets', selectedApp ?? '...', 'Edit'];
+    default:
+      return ['Dashboard'];
+  }
 }
 
 interface HeaderProps {
@@ -27,27 +46,29 @@ interface HeaderProps {
 }
 
 export function Header({ vaultSealed }: HeaderProps): React.JSX.Element {
-  const { currentView, redacted } = useAppState();
+  const { currentView, previousView, selectedApp, redacted } = useAppState();
+  const activeTab = resolveActiveTab(currentView, previousView);
+  const breadcrumb = buildBreadcrumb(currentView, selectedApp);
 
   return (
-    <Box borderStyle="single" borderBottom paddingX={1} justifyContent="space-between">
-      <Box gap={1}>
-        <Text bold color={colors.primary}>Fleet</Text>
-        <Text color={colors.muted}>|</Text>
-        {TABS.map(tab => (
-          <Text
-            key={tab.view}
-            bold={currentView === tab.view || currentView === 'app-detail' && tab.view === 'dashboard' || currentView === 'secret-edit' && tab.view === 'secrets' || currentView === 'logs' && tab.view === 'dashboard'}
-            color={currentView === tab.view ? colors.primary : colors.muted}
-          >
-            {tab.label}
+    <Box flexDirection="column">
+      <Box borderStyle="single" borderBottom paddingX={1} justifyContent="space-between">
+        <Box gap={1} alignItems="center">
+          <Text bold color={colors.primary}>Fleet</Text>
+          <Tabs tabs={TAB_ITEMS} activeId={activeTab} accentColor={colors.primary} />
+        </Box>
+        <Box gap={1}>
+          {redacted && <Text color="magenta" bold>[REDACTED]</Text>}
+          <Text color={vaultSealed ? colors.warning : colors.success}>
+            {vaultSealed ? '[SEALED]' : '[UNSEALED]'}
           </Text>
-        ))}
+        </Box>
       </Box>
-      <Box gap={1}>
-        {redacted && <Text color="magenta" bold>[REDACTED]</Text>}
-        <VaultIndicator sealed={vaultSealed} />
-      </Box>
+      {breadcrumb.length > 1 && (
+        <Box paddingX={1}>
+          <Breadcrumb path={breadcrumb} activeColor={colors.primary} />
+        </Box>
+      )}
     </Box>
   );
 }
