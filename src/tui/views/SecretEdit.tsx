@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
-import { useRegisterHandler } from '@wrxck/ink-input-dispatcher';
-import type { InputHandler } from '@wrxck/ink-input-dispatcher';
+import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
+import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
 import { useAppState, useAppDispatch } from '../state.js';
 import { useSecrets } from '../hooks/use-secrets.js';

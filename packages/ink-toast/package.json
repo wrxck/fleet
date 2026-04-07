@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-toast",
+  "name": "@matthesketh/ink-toast",
   "version": "0.1.0",
   "description": "Timed ephemeral toast notifications for Ink 5 apps",
   "type": "module",

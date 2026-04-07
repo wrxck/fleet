@@ -1,4 +1,4 @@
-# @wrxck/ink-markdown
+# @matthesketh/ink-markdown
 
 Render markdown in the terminal for Ink 5.
 
@@ -7,13 +7,13 @@ Handles headings, bold, italic, code blocks, inline code, lists (bullet and orde
 ## Install
 
 ```
-npm install @wrxck/ink-markdown
+npm install @matthesketh/ink-markdown
 ```
 
 ## Usage
 
 ```tsx
-import { Markdown } from '@wrxck/ink-markdown';
+import { Markdown } from '@matthesketh/ink-markdown';
 
 function App() {
   const text = `

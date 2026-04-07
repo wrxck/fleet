@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-keybinding-help",
+  "name": "@matthesketh/ink-keybinding-help",
   "version": "0.1.0",
   "description": "Auto-formatted keybinding reference overlay for Ink 5",
   "type": "module",

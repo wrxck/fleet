@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-markdown",
+  "name": "@matthesketh/ink-markdown",
   "version": "0.1.0",
   "description": "Render markdown in the terminal for Ink 5 — headings, bold, italic, code blocks, lists, links, blockquotes, and horizontal rules",
   "type": "module",

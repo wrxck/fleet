@@ -1,11 +1,11 @@
-# @wrxck/ink-viewport
+# @matthesketh/ink-viewport
 
 Terminal size hook and viewport-aware layout for Ink 5 apps.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-viewport
+npm install @matthesketh/ink-viewport
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-viewport
 ### useTerminalSize()
 
 ```tsx
-import { useTerminalSize } from '@wrxck/ink-viewport';
+import { useTerminalSize } from '@matthesketh/ink-viewport';
 
 function MyComponent() {
   const { rows, columns } = useTerminalSize();
@@ -24,7 +24,7 @@ function MyComponent() {
 ### Viewport + useAvailableHeight()
 
 ```tsx
-import { Viewport, useAvailableHeight } from '@wrxck/ink-viewport';
+import { Viewport, useAvailableHeight } from '@matthesketh/ink-viewport';
 
 function App() {
   return (

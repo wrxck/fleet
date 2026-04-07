@@ -1,17 +1,17 @@
-# @wrxck/ink-scrollable-list
+# @matthesketh/ink-scrollable-list
 
 Windowed scrollable list component for Ink 5. Renders only visible items, follows the cursor, shows scroll indicators.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-scrollable-list
+npm install @matthesketh/ink-scrollable-list
 ```
 
 ## Usage
 
 ```tsx
-import { ScrollableList } from '@wrxck/ink-scrollable-list';
+import { ScrollableList } from '@matthesketh/ink-scrollable-list';
 
 function MyList() {
   const [selectedIndex, setSelectedIndex] = useState(0);

@@ -1,11 +1,11 @@
-# @wrxck/ink-tree
+# @matthesketh/ink-tree
 
 A collapsible tree view component for [Ink 5](https://github.com/vadimdemedes/ink). Displays hierarchical data with expand/collapse, keyboard navigation, and custom rendering.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-tree
+npm install @matthesketh/ink-tree
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-tree
 ```tsx
 import React, { useState } from 'react';
 import { render } from 'ink';
-import { Tree, type TreeNode } from '@wrxck/ink-tree';
+import { Tree, type TreeNode } from '@matthesketh/ink-tree';
 
 const data: TreeNode[] = [
   {

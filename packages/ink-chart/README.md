@@ -1,11 +1,11 @@
-# @wrxck/ink-chart
+# @matthesketh/ink-chart
 
 Terminal charts for Ink 5 — sparklines, bar charts, and line charts using Unicode block characters.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-chart
+npm install @matthesketh/ink-chart
 ```
 
 ## Components
@@ -15,7 +15,7 @@ npm install @wrxck/ink-chart
 Single-row visualization using Unicode block characters (`▁▂▃▄▅▆▇█`).
 
 ```tsx
-import { Sparkline } from '@wrxck/ink-chart';
+import { Sparkline } from '@matthesketh/ink-chart';
 
 <Sparkline data={[1, 5, 2, 8, 3, 7]} color="green" />
 ```
@@ -33,7 +33,7 @@ import { Sparkline } from '@wrxck/ink-chart';
 Vertical bar chart with labels and values.
 
 ```tsx
-import { BarChart } from '@wrxck/ink-chart';
+import { BarChart } from '@matthesketh/ink-chart';
 
 <BarChart
   data={[
@@ -57,7 +57,7 @@ import { BarChart } from '@wrxck/ink-chart';
 Multi-row line chart with optional axes.
 
 ```tsx
-import { LineChart } from '@wrxck/ink-chart';
+import { LineChart } from '@matthesketh/ink-chart';
 
 <LineChart data={[1, 3, 2, 5, 4, 7, 6]} width={40} height={10} />
 ```

@@ -1,1 +1,1 @@
-export { useTerminalSize, useAvailableHeight } from '@wrxck/ink-viewport';
+export { useTerminalSize, useAvailableHeight } from '@matthesketh/ink-viewport';

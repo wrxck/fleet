@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-log-viewer",
+  "name": "@matthesketh/ink-log-viewer",
   "version": "0.1.0",
   "description": "Rolling log display component for Ink 5 with auto-scroll, filtering, and timestamps",
   "type": "module",

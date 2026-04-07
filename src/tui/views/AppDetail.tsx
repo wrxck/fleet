@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import { useRegisterHandler } from '@wrxck/ink-input-dispatcher';
-import type { InputHandler } from '@wrxck/ink-input-dispatcher';
+import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
+import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
 import { useAppState, useAppDispatch, useRedact } from '../state.js';
 import { runFleetCommand } from '../exec-bridge.js';

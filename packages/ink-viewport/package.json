@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-viewport",
+  "name": "@matthesketh/ink-viewport",
   "version": "0.1.0",
   "description": "Terminal size hook and viewport-aware layout for Ink 5",
   "type": "module",
