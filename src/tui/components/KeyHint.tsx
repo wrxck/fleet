@@ -1,19 +1,16 @@
 import React from 'react';
-import { Box, Text } from 'ink';
+import { StatusBar } from '@wrxck/ink-status-bar';
+import type { KeyHint as KeyHintItem } from '@wrxck/ink-status-bar';
+
 import { useAppState } from '../state.js';
-import { colors } from '../theme.js';
 import type { View } from '../types.js';
 
-interface Hint {
-  key: string;
-  label: string;
-}
-
-const viewHints: Record<View, Hint[]> = {
+const viewHints: Record<View, KeyHintItem[]> = {
   dashboard: [
     { key: 'j/k', label: 'navigate' },
     { key: 'Enter', label: 'select' },
     { key: 'Tab', label: 'switch view' },
+    { key: '?', label: 'help' },
     { key: 'x', label: 'redact' },
     { key: 'q', label: 'quit' },
   ],
@@ -38,7 +35,6 @@ const viewHints: Record<View, Hint[]> = {
     { key: 'a', label: 'add' },
     { key: 'd', label: 'delete' },
     { key: 'r', label: 'reveal' },
-    { key: 'x', label: 'redact' },
     { key: 'Esc', label: 'back' },
     { key: 'q', label: 'quit' },
   ],
@@ -61,14 +57,5 @@ export function KeyHint(): React.JSX.Element {
     ? [{ key: 'y', label: 'confirm' }, { key: 'n', label: 'cancel' }]
     : viewHints[currentView] ?? [];
 
-  return (
-    <Box borderStyle="single" borderTop paddingX={1} gap={2}>
-      {hints.map(hint => (
-        <Box key={hint.key} gap={0}>
-          <Text bold color={colors.primary}>{hint.key}</Text>
-          <Text color={colors.muted}> {hint.label}</Text>
-        </Box>
-      ))}
-    </Box>
-  );
+  return <StatusBar items={hints} />;
 }
