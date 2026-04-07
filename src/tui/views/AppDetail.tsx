@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useState, useEffect } from 'react';
+import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
+import { useRegisterHandler } from '@wrxck/ink-input-dispatcher';
+import type { InputHandler } from '@wrxck/ink-input-dispatcher';
+
 import { useAppState, useAppDispatch, useRedact } from '../state.js';
 import { runFleetCommand } from '../exec-bridge.js';
 import { colors } from '../theme.js';
 import { load, findApp } from '../../core/registry.js';
+import type { AppEntry } from '../../core/registry.js';
 
 interface ActionItem {
   key: string;
@@ -22,28 +26,50 @@ const ACTIONS: ActionItem[] = [
 ];
 
 export function AppDetail(): React.JSX.Element {
-  const { selectedApp, redacted } = useAppState();
+  const { selectedApp, redacted, appDetailIndex } = useAppState();
   const dispatch = useAppDispatch();
   const redact = useRedact();
-  const [actionIndex, setActionIndex] = useState(0);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; output: string } | null>(null);
+  const [app, setApp] = useState<AppEntry | undefined>(undefined);
 
-  const reg = load();
-  const app = selectedApp ? findApp(reg, selectedApp) : undefined;
+  useEffect(() => {
+    if (selectedApp) {
+      try {
+        const reg = load();
+        setApp(findApp(reg, selectedApp));
+      } catch {
+        setApp(undefined);
+      }
+    }
+  }, [selectedApp]);
 
-  useInput((input, key) => {
-    if (running) return;
+  function executeAction(action: ActionItem) {
+    if (!selectedApp) return;
+    setRunning(true);
+    setResult(null);
+    runFleetCommand([...action.command, selectedApp]).then(res => {
+      setResult(res);
+      setRunning(false);
+    });
+  }
+
+  const handler: InputHandler = (input, key) => {
+    if (running) return false;
 
     if (input === 'j' || key.downArrow) {
-      setActionIndex(prev => Math.min(prev + 1, ACTIONS.length - 1));
-    } else if (input === 'k' || key.upArrow) {
-      setActionIndex(prev => Math.max(prev - 1, 0));
-    } else if (key.return) {
-      const action = ACTIONS[actionIndex];
+      dispatch({ type: 'SET_INDEX', view: 'appDetail', index: Math.min(appDetailIndex + 1, ACTIONS.length - 1) });
+      return true;
+    }
+    if (input === 'k' || key.upArrow) {
+      dispatch({ type: 'SET_INDEX', view: 'appDetail', index: Math.max(appDetailIndex - 1, 0) });
+      return true;
+    }
+    if (key.return) {
+      const action = ACTIONS[appDetailIndex];
       if (action.command[0] === 'logs') {
         dispatch({ type: 'NAVIGATE', view: 'logs' });
-        return;
+        return true;
       }
       if (action.destructive) {
         dispatch({
@@ -57,18 +83,12 @@ export function AppDetail(): React.JSX.Element {
       } else {
         executeAction(action);
       }
+      return true;
     }
-  });
+    return false;
+  };
 
-  function executeAction(action: ActionItem) {
-    if (!selectedApp) return;
-    setRunning(true);
-    setResult(null);
-    runFleetCommand([...action.command, selectedApp]).then(res => {
-      setResult(res);
-      setRunning(false);
-    });
-  }
+  useRegisterHandler(handler);
 
   if (!app) {
     return (
@@ -100,7 +120,7 @@ export function AppDetail(): React.JSX.Element {
       <Text bold>Actions</Text>
       <Box flexDirection="column" marginTop={1}>
         {ACTIONS.map((action, i) => {
-          const selected = i === actionIndex;
+          const selected = i === appDetailIndex;
           return (
             <Text key={action.key}>
               <Text color={colors.primary}>{selected ? '> ' : '  '}</Text>

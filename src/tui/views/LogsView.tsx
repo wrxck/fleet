@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
+import { useRegisterHandler } from '@wrxck/ink-input-dispatcher';
+import { useAvailableHeight } from '@wrxck/ink-viewport';
+import type { InputHandler } from '@wrxck/ink-input-dispatcher';
+
 import { useAppState, useAppDispatch, useRedact } from '../state.js';
 import { runFleetCommand, streamFleetCommand, type StreamHandle } from '../exec-bridge.js';
 import { colors } from '../theme.js';
 
-const MAX_LINES = 100;
+const MAX_LINES = 200;
 
 export function LogsView(): React.JSX.Element {
   const { selectedApp } = useAppState();
   const dispatch = useAppDispatch();
   const redact = useRedact();
+  const availableHeight = useAvailableHeight();
   const [lines, setLines] = useState<string[]>([]);
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -36,17 +41,15 @@ export function LogsView(): React.JSX.Element {
     };
   }, [selectedApp]);
 
-  useInput((input, key) => {
+  const handler: InputHandler = (input, key) => {
     if (input === 'f') {
       if (following) {
-        // Stop following
         if (streamRef.current) {
           streamRef.current.kill();
           streamRef.current = null;
         }
         setFollowing(false);
       } else if (selectedApp) {
-        // Start following
         setFollowing(true);
         const handle = streamFleetCommand(['logs', selectedApp, '-f']);
         streamRef.current = handle;
@@ -54,14 +57,20 @@ export function LogsView(): React.JSX.Element {
           setLines(prev => [...prev.slice(-MAX_LINES + 1), line]);
         });
       }
-    } else if (key.escape) {
+      return true;
+    }
+    if (key.escape) {
       if (streamRef.current) {
         streamRef.current.kill();
         streamRef.current = null;
       }
       dispatch({ type: 'GO_BACK' });
+      return true;
     }
-  });
+    return false;
+  };
+
+  useRegisterHandler(handler);
 
   if (loading) {
     return (
@@ -71,8 +80,8 @@ export function LogsView(): React.JSX.Element {
     );
   }
 
-  // Show last N lines that fit in terminal
-  const visibleLines = lines.slice(-30);
+  const visibleCount = Math.max(5, availableHeight - 3);
+  const visibleLines = lines.slice(-visibleCount);
 
   return (
     <Box flexDirection="column" padding={1}>
