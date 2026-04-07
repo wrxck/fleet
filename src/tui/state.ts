@@ -12,6 +12,11 @@ export const initialState: TuiState = {
   loading: false,
   error: null,
   confirmAction: null,
+  dashboardIndex: 0,
+  healthIndex: 0,
+  secretsIndex: 0,
+  secretsSubView: 'app-list',
+  appDetailIndex: 0,
 };
 
 export function reducer(state: TuiState, action: Action): TuiState {
@@ -30,6 +35,7 @@ export function reducer(state: TuiState, action: Action): TuiState {
         currentView: state.previousView ?? 'dashboard',
         previousView: null,
         selectedSecret: null,
+        secretsSubView: 'app-list',
         error: null,
         confirmAction: null,
       };
@@ -47,6 +53,15 @@ export function reducer(state: TuiState, action: Action): TuiState {
       return { ...state, confirmAction: action.action };
     case 'CANCEL_CONFIRM':
       return { ...state, confirmAction: null };
+    case 'SET_INDEX': {
+      const key = `${action.view}Index` as keyof TuiState;
+      if (key in state) {
+        return { ...state, [key]: action.index };
+      }
+      return state;
+    }
+    case 'SET_SECRETS_SUBVIEW':
+      return { ...state, secretsSubView: action.subView, secretsIndex: 0 };
     default:
       return state;
   }
