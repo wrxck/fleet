@@ -1,17 +1,17 @@
-# @wrxck/ink-pager
+# @matthesketh/ink-pager
 
 A less-like scrollable content viewer for Ink 5. Displays multi-line text content with keyboard scrolling, line numbers, and search.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-pager
+npm install @matthesketh/ink-pager
 ```
 
 ## Usage
 
 ```tsx
-import { Pager } from '@wrxck/ink-pager';
+import { Pager } from '@matthesketh/ink-pager';
 
 function App() {
   const [offset, setOffset] = useState(0);

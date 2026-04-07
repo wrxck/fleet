@@ -1,4 +1,4 @@
-# @wrxck/ink-input-dispatcher
+# @matthesketh/ink-input-dispatcher
 
 Single-point input routing for Ink 5 apps. Eliminates the "multiple useInput handlers fighting" problem.
 
@@ -13,14 +13,14 @@ One `useInput` call at the root. Views register their handlers, and only the act
 ## Install
 
 ```bash
-npm install @wrxck/ink-input-dispatcher
+npm install @matthesketh/ink-input-dispatcher
 ```
 
 ## Usage
 
 ```tsx
-import { InputDispatcher, useRegisterHandler } from '@wrxck/ink-input-dispatcher';
-import type { InputHandler } from '@wrxck/ink-input-dispatcher';
+import { InputDispatcher, useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
+import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
 function App() {
   const globalHandler: InputHandler = (input, key) => {

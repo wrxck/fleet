@@ -1,11 +1,11 @@
-# @wrxck/ink-task-list
+# @matthesketh/ink-task-list
 
 A step/task progress display component for [Ink 5](https://github.com/vadimdemedes/ink). Shows a list of tasks with status indicators (spinner, checkmark, error, pending).
 
 ## Install
 
 ```sh
-npm install @wrxck/ink-task-list
+npm install @matthesketh/ink-task-list
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-task-list
 ```tsx
 import React from 'react';
 import { render } from 'ink';
-import { TaskList } from '@wrxck/ink-task-list';
+import { TaskList } from '@matthesketh/ink-task-list';
 
 function App() {
   return (

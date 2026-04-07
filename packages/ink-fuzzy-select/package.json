@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-fuzzy-select",
+  "name": "@matthesketh/ink-fuzzy-select",
   "version": "0.1.0",
   "description": "Filterable select input with fuzzy matching for Ink 5",
   "type": "module",

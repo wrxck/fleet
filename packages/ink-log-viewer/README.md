@@ -1,11 +1,11 @@
-# @wrxck/ink-log-viewer
+# @matthesketh/ink-log-viewer
 
 A rolling log display component for [Ink 5](https://github.com/vadimdemedes/ink) with auto-scroll, filtering, and timestamps. Like blessed-contrib's rolling log but for Ink.
 
 ## Install
 
 ```sh
-npm install @wrxck/ink-log-viewer
+npm install @matthesketh/ink-log-viewer
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-log-viewer
 ```tsx
 import React, { useState } from 'react';
 import { render } from 'ink';
-import { LogViewer, type LogLine } from '@wrxck/ink-log-viewer';
+import { LogViewer, type LogLine } from '@matthesketh/ink-log-viewer';
 
 function App() {
   const [lines] = useState<LogLine[]>([

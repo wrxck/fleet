@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-file-picker",
+  "name": "@matthesketh/ink-file-picker",
   "version": "0.1.0",
   "description": "Filesystem navigator and file picker for Ink 5",
   "type": "module",

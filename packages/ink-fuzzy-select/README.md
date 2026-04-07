@@ -1,4 +1,4 @@
-# @wrxck/ink-fuzzy-select
+# @matthesketh/ink-fuzzy-select
 
 Filterable select input with fuzzy matching for [Ink 5](https://github.com/vadimdemedes/ink). Type to filter, arrow keys to navigate, enter to select.
 
@@ -7,7 +7,7 @@ All existing fuzzy-select packages for Ink target Ink 0.x or 2.x and are no long
 ## Install
 
 ```bash
-npm install @wrxck/ink-fuzzy-select
+npm install @matthesketh/ink-fuzzy-select
 ```
 
 ## Usage
@@ -15,7 +15,7 @@ npm install @wrxck/ink-fuzzy-select
 ```tsx
 import React from "react";
 import { render } from "ink";
-import { FuzzySelect } from "@wrxck/ink-fuzzy-select";
+import { FuzzySelect } from "@matthesketh/ink-fuzzy-select";
 
 const items = [
   { label: "JavaScript", value: "js" },
@@ -88,7 +88,7 @@ Higher-scoring matches appear first in the filtered list.
 You can also import the matcher directly:
 
 ```ts
-import { fuzzyMatch } from "@wrxck/ink-fuzzy-select";
+import { fuzzyMatch } from "@matthesketh/ink-fuzzy-select";
 
 const result = fuzzyMatch("ts", "TypeScript");
 // { matches: true, score: 3, indices: [0, 5] }

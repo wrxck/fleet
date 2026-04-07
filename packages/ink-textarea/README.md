@@ -1,4 +1,4 @@
-# @wrxck/ink-textarea
+# @matthesketh/ink-textarea
 
 A multi-line text input component for [Ink 5](https://github.com/vadimdemedes/ink) with cursor movement and scrolling.
 
@@ -7,7 +7,7 @@ A multi-line text input component for [Ink 5](https://github.com/vadimdemedes/in
 ## Install
 
 ```sh
-npm install @wrxck/ink-textarea
+npm install @matthesketh/ink-textarea
 ```
 
 ## Usage
@@ -15,7 +15,7 @@ npm install @wrxck/ink-textarea
 ```tsx
 import React, { useState } from 'react';
 import { render } from 'ink';
-import { TextArea } from '@wrxck/ink-textarea';
+import { TextArea } from '@matthesketh/ink-textarea';
 
 function App() {
   const [value, setValue] = useState('');

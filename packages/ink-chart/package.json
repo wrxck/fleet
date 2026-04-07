@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-chart",
+  "name": "@matthesketh/ink-chart",
   "version": "0.1.0",
   "description": "Terminal charts for Ink 5 — sparklines, bar charts, and line charts using Unicode block characters",
   "type": "module",
