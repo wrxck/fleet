@@ -98,4 +98,27 @@ describe('SplitPane', () => {
     const frame = lastFrame()!;
     expect(frame).toContain('|');
   });
+
+  it('renders both panes with extreme size ratio and minSize enforcement', () => {
+    const { lastFrame } = render(
+      <SplitPane sizes={[99, 1]} minSize={10}>
+        <Text>LEFT</Text>
+        <Text>RIGHT</Text>
+      </SplitPane>
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('LEFT');
+    expect(frame).toContain('RIGHT');
+  });
+
+  it('renders divider with custom dividerColor', () => {
+    const { lastFrame } = render(
+      <SplitPane dividerColor="red">
+        <Text>A</Text>
+        <Text>B</Text>
+      </SplitPane>
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('\u2502');
+  });
 });

@@ -97,4 +97,23 @@ describe('LogViewer', () => {
     expect(frame).toContain('Line 4');
     expect(frame).not.toContain('Line 5');
   });
+
+  it('renders with empty lines array', () => {
+    const { lastFrame } = render(
+      <LogViewer lines={[]} height={5} />
+    );
+    const frame = lastFrame();
+    expect(frame).toBeDefined();
+  });
+
+  it('renders with wrap=false', () => {
+    const lines: LogLine[] = [
+      { text: 'A very long line that should not wrap around in the terminal output' },
+    ];
+    const { lastFrame } = render(
+      <LogViewer lines={lines} height={5} wrap={false} />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('A very long line');
+  });
 });

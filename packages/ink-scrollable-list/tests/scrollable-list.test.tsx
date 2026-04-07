@@ -98,4 +98,43 @@ describe('ScrollableList', () => {
     expect(frame).toContain('Item 19');
     expect(frame).toContain('Item 15');
   });
+
+  it('handles selectedIndex out of bounds without crashing', () => {
+    const { lastFrame } = render(
+      <ScrollableList
+        items={items}
+        selectedIndex={999}
+        maxVisible={5}
+        renderItem={(item, selected) => (
+          <Text>{selected ? '> ' : '  '}{item.label}</Text>
+        )}
+      />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('Item 19');
+  });
+
+  it('shows all items when maxVisible exceeds items.length', () => {
+    const shortItems = [
+      { id: '0', label: 'A' },
+      { id: '1', label: 'B' },
+      { id: '2', label: 'C' },
+    ];
+    const { lastFrame } = render(
+      <ScrollableList
+        items={shortItems}
+        selectedIndex={0}
+        maxVisible={10}
+        renderItem={(item, selected) => (
+          <Text>{selected ? '> ' : '  '}{item.label}</Text>
+        )}
+      />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('A');
+    expect(frame).toContain('B');
+    expect(frame).toContain('C');
+    expect(frame).not.toMatch(/\u2191|above|more/i);
+    expect(frame).not.toMatch(/\u2193|below|more/i);
+  });
 });

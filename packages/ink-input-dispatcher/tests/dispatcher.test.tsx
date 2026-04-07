@@ -73,4 +73,36 @@ describe('InputDispatcher', () => {
     await delay(50);
     expect(lastFrame()).toContain('key:j');
   });
+
+  it('cleans up handler on unmount so it is not called', async () => {
+    let called = false;
+    const handler: InputHandler = () => {
+      called = true;
+      return true;
+    };
+
+    const { stdin, rerender } = render(
+      <InputDispatcher>
+        <TestView handler={handler} />
+      </InputDispatcher>
+    );
+
+    await delay(100);
+    stdin.write('a');
+    await delay(50);
+    expect(called).toBeTruthy();
+
+    // unmount TestView by rerendering without it
+    called = false;
+    rerender(
+      <InputDispatcher>
+        <Text>gone</Text>
+      </InputDispatcher>
+    );
+    await delay(100);
+
+    stdin.write('z');
+    await delay(100);
+    expect(called).toBeFalsy();
+  });
 });

@@ -136,4 +136,15 @@ describe('MaskedInput', () => {
     expect(MASKS.phone).toBe('+99 (999) 999-9999');
     expect(MASKS.mac).toBe('**:**:**:**:**:**');
   });
+
+  it('focus=false ignores input', async () => {
+    const onChange = vi.fn();
+    const { stdin } = render(
+      <MaskedInput mask="999" value="" onChange={onChange} focus={false} />,
+    );
+    await delay(100);
+    stdin.write('5');
+    await delay(50);
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });

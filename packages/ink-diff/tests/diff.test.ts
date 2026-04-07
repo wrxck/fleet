@@ -54,4 +54,11 @@ describe('diffLines', () => {
       { type: 'remove', content: 'b', oldLineNo: 2 },
     ]);
   });
+
+  it('returns all unchanged for identical strings', () => {
+    const lines = ['alpha', 'beta', 'gamma'];
+    const result = diffLines(lines, lines);
+    expect(result.every((r) => r.type === 'unchanged')).toBe(true);
+    expect(result).toHaveLength(3);
+  });
 });

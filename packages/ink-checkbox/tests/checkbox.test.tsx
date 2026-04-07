@@ -28,4 +28,16 @@ describe('Checkbox', () => {
     expect(frame).toContain(UNCHECKED_ICON);
     expect(frame).toContain('Locked');
   });
+
+  it('custom color', () => {
+    const { lastFrame } = render(<Checkbox label="Test" checked={true} color="green" />);
+    const frame = lastFrame()!;
+    expect(frame).toContain(CHECKED_ICON);
+  });
+
+  it('label text', () => {
+    const { lastFrame } = render(<Checkbox label="Accept" checked={false} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('Accept');
+  });
 });

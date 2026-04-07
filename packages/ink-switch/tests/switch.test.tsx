@@ -32,4 +32,17 @@ describe('Switch', () => {
     expect(frame).toContain('(*)--');
     expect(frame).toContain('ON');
   });
+
+  it('custom onLabel/offLabel', () => {
+    const { lastFrame } = render(<Switch value={true} onLabel="YES" offLabel="NO" />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('YES');
+    expect(frame).not.toContain('ON');
+  });
+
+  it('custom onColor/offColor', () => {
+    const { lastFrame } = render(<Switch value={false} onColor="blue" offColor="yellow" />);
+    const frame = lastFrame()!;
+    expect(frame).toContain('OFF');
+  });
 });

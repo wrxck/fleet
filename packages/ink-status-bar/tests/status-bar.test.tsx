@@ -50,4 +50,29 @@ describe('StatusBar', () => {
     expect(frame).toContain('[h]');
     expect(frame).toContain('help');
   });
+
+  it('renders without key hints when items is empty', () => {
+    const { lastFrame } = render(<StatusBar items={[]} />);
+    const frame = lastFrame()!;
+    expect(frame).not.toMatch(/\[.*\]/);
+  });
+
+  it('renders right slot only', () => {
+    const { lastFrame } = render(
+      <StatusBar right={<Text>right-content</Text>} />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('right-content');
+  });
+
+  it('renders both left slot and items together', () => {
+    const items = [{ key: 'j', label: 'down' }];
+    const { lastFrame } = render(
+      <StatusBar left={<Text>MODE</Text>} items={items} />
+    );
+    const frame = lastFrame()!;
+    expect(frame).toContain('MODE');
+    expect(frame).toContain('[j]');
+    expect(frame).toContain('down');
+  });
 });

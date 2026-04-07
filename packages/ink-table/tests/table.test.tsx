@@ -112,4 +112,62 @@ describe('Table', () => {
     expect(output).toContain('    25');
     expect(output).toContain('   Age');
   });
+
+  it('renders without border chars when borderStyle is none', () => {
+    const { lastFrame } = render(
+      <Table data={sampleData} columns={columns} borderStyle="none" />,
+    );
+    const output = lastFrame()!;
+    expect(output).not.toContain('\u2502');
+    expect(output).not.toContain('\u2500');
+    expect(output).toContain('Alice');
+  });
+
+  it('uses custom render function on column', () => {
+    const customColumns: Column<Person>[] = [
+      {
+        key: 'name',
+        header: 'Name',
+        render: (value) => `[${String(value)}]`,
+      },
+      { key: 'age', header: 'Age' },
+      { key: 'city', header: 'City' },
+    ];
+    const { lastFrame } = render(<Table data={sampleData} columns={customColumns} />);
+    const output = lastFrame()!;
+    expect(output).toContain('[Alice]');
+    expect(output).toContain('[Bob]');
+  });
+
+  it('center-aligns column content', () => {
+    const centerColumns: Column<Person>[] = [
+      { key: 'name', header: 'Name', align: 'center', width: 11 },
+      { key: 'age', header: 'Age' },
+      { key: 'city', header: 'City' },
+    ];
+    const { lastFrame } = render(<Table data={sampleData} columns={centerColumns} />);
+    const output = lastFrame()!;
+    // 'Bob' (3 chars) in width 11 => 4 left + 'Bob' + 4 right
+    expect(output).toContain('    Bob    ');
+  });
+
+  it('renders null and undefined cell values as empty', () => {
+    interface Partial {
+      name: string;
+      note: string | undefined;
+    }
+    const data: Partial[] = [
+      { name: 'Alice', note: undefined },
+      { name: 'Bob', note: undefined },
+    ];
+    const cols: Column<Partial>[] = [
+      { key: 'name', header: 'Name' },
+      { key: 'note', header: 'Note', width: 6 },
+    ];
+    const { lastFrame } = render(<Table data={data} columns={cols} />);
+    const output = lastFrame()!;
+    expect(output).toContain('Alice');
+    expect(output).toContain('Name');
+    expect(output).toContain('Note');
+  });
 });

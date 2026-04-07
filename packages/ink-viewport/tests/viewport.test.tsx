@@ -24,4 +24,18 @@ describe('Viewport', () => {
     );
     expect(lastFrame()).toContain('height:34');
   });
+
+  it('defaults chrome=0 so available height equals terminal rows', () => {
+    const { lastFrame } = render(
+      <Viewport>
+        <HeightDisplay />
+      </Viewport>
+    );
+    expect(lastFrame()).toContain('height:40');
+  });
+
+  it('useAvailableHeight returns default 20 outside Viewport', () => {
+    const { lastFrame } = render(<HeightDisplay />);
+    expect(lastFrame()).toContain('height:20');
+  });
 });
