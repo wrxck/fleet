@@ -3,6 +3,9 @@ import { Box, Text } from 'ink';
 import { InputDispatcher } from '@wrxck/ink-input-dispatcher';
 import type { InputHandler } from '@wrxck/ink-input-dispatcher';
 import { Viewport } from '@wrxck/ink-viewport';
+import { ToastProvider } from '@wrxck/ink-toast';
+import { ToastContainer } from '@wrxck/ink-toast';
+import { KeyBindingHelp } from '@wrxck/ink-keybinding-help';
 
 import { reducer, initialState, AppStateContext, AppDispatchContext, nextTopView } from './state.js';
 import { Header } from './components/Header.js';
@@ -16,6 +19,36 @@ import { HealthView } from './views/HealthView.js';
 import { LogsView } from './views/LogsView.js';
 import { isSealed, isInitialized } from '../core/secrets.js';
 import type { View } from './types.js';
+
+const HELP_GROUPS = [
+  {
+    title: 'Navigation',
+    bindings: [
+      { key: 'j/k', description: 'move up/down' },
+      { key: 'Enter', description: 'select / confirm' },
+      { key: 'Tab', description: 'switch view' },
+      { key: 'Esc', description: 'go back' },
+    ],
+  },
+  {
+    title: 'Actions',
+    bindings: [
+      { key: 'x', description: 'toggle redaction' },
+      { key: 'f', description: 'follow logs' },
+      { key: 'q', description: 'quit' },
+    ],
+  },
+  {
+    title: 'Secrets',
+    bindings: [
+      { key: 'u', description: 'unseal vault' },
+      { key: 'l', description: 'seal vault' },
+      { key: 'a', description: 'add secret' },
+      { key: 'd', description: 'delete secret' },
+      { key: 'r', description: 'reveal / hide' },
+    ],
+  },
+];
 
 function ViewRouter(): React.JSX.Element {
   const state = React.useContext(AppStateContext);
@@ -43,6 +76,7 @@ const CHROME_ROWS = 6;
 export function App(): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [vaultSealed, setVaultSealed] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     try {
@@ -68,6 +102,11 @@ export function App(): React.JSX.Element {
   }, []);
 
   const globalHandler: InputHandler = useCallback((input, key) => {
+    if (showHelp) {
+      setShowHelp(false);
+      return true;
+    }
+
     if (state.confirmAction) {
       if (input === 'y' || input === 'Y') {
         state.confirmAction.onConfirm();
@@ -75,6 +114,11 @@ export function App(): React.JSX.Element {
       } else if (input === 'n' || input === 'N' || key.escape) {
         dispatch({ type: 'CANCEL_CONFIRM' });
       }
+      return true;
+    }
+
+    if (input === '?' && state.currentView !== 'secret-edit') {
+      setShowHelp(true);
       return true;
     }
 
@@ -103,28 +147,40 @@ export function App(): React.JSX.Element {
     }
 
     return false;
-  }, [state.confirmAction, state.currentView, state.previousView]);
+  }, [state.confirmAction, state.currentView, state.previousView, showHelp]);
 
   return (
     <AppStateContext.Provider value={state}>
       <AppDispatchContext.Provider value={dispatch}>
-        <InputDispatcher globalHandler={globalHandler}>
-          <Viewport chrome={CHROME_ROWS}>
-            <Header vaultSealed={vaultSealed} />
-            <Box flexGrow={1} flexDirection="column">
-              <ViewRouter />
-              <Confirm />
-              {state.error && (
-                <Box paddingX={1}>
-                  <Box borderStyle="round" borderColor="red" paddingX={1}>
-                    <Text color="red">{state.error}</Text>
-                  </Box>
-                </Box>
-              )}
-            </Box>
-            <KeyHint />
-          </Viewport>
-        </InputDispatcher>
+        <ToastProvider>
+          <InputDispatcher globalHandler={globalHandler}>
+            <Viewport chrome={CHROME_ROWS}>
+              <Header vaultSealed={vaultSealed} />
+              <Box flexGrow={1} flexDirection="column">
+                {showHelp ? (
+                  <KeyBindingHelp
+                    groups={HELP_GROUPS}
+                    title="Fleet TUI — Keyboard Shortcuts"
+                  />
+                ) : (
+                  <>
+                    <ViewRouter />
+                    <Confirm />
+                    {state.error && (
+                      <Box paddingX={1}>
+                        <Box borderStyle="round" borderColor="red" paddingX={1}>
+                          <Text color="red">{state.error}</Text>
+                        </Box>
+                      </Box>
+                    )}
+                  </>
+                )}
+              </Box>
+              <ToastContainer />
+              <KeyHint />
+            </Viewport>
+          </InputDispatcher>
+        </ToastProvider>
       </AppDispatchContext.Provider>
     </AppStateContext.Provider>
   );
