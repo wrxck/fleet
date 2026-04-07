@@ -1,11 +1,11 @@
-# @wrxck/ink-gauge
+# @matthesketh/ink-gauge
 
 A progress gauge and donut visualisation component for Ink 5 terminal dashboards.
 
 ## Install
 
 ```sh
-npm install @wrxck/ink-gauge
+npm install @matthesketh/ink-gauge
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-gauge
 ### Gauge (horizontal bar)
 
 ```tsx
-import { Gauge } from '@wrxck/ink-gauge';
+import { Gauge } from '@matthesketh/ink-gauge';
 
 <Gauge value={75} />
 
@@ -31,7 +31,7 @@ import { Gauge } from '@wrxck/ink-gauge';
 ### Donut
 
 ```tsx
-import { Donut } from '@wrxck/ink-gauge';
+import { Donut } from '@matthesketh/ink-gauge';
 
 <Donut value={40} />
 

@@ -1,11 +1,11 @@
-# @wrxck/ink-modal
+# @matthesketh/ink-modal
 
 An overlay dialog component for [Ink 5](https://github.com/vadimdemedes/ink). Since Ink's Yoga layout doesn't support true z-index, this renders a bordered box that visually appears as an overlay by being placed in the component tree above other content.
 
 ## Install
 
 ```sh
-npm install @wrxck/ink-modal
+npm install @matthesketh/ink-modal
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-modal
 ```tsx
 import React from 'react';
 import { render, Text } from 'ink';
-import { Modal } from '@wrxck/ink-modal';
+import { Modal } from '@matthesketh/ink-modal';
 
 function App() {
   const [open, setOpen] = React.useState(true);

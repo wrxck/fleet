@@ -1,11 +1,11 @@
-# @wrxck/ink-status-bar
+# @matthesketh/ink-status-bar
 
 A fixed-position status bar component for [Ink 5](https://github.com/vadimdemedes/ink). Renders a single-row bar at the bottom of your terminal UI with key hints, mode indicators, and context info -- the kind you see in vim, htop, or nano.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-status-bar
+npm install @matthesketh/ink-status-bar
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-status-bar
 ```tsx
 import React from 'react';
 import { render, Text } from 'ink';
-import { StatusBar } from '@wrxck/ink-status-bar';
+import { StatusBar } from '@matthesketh/ink-status-bar';
 
 function App() {
   return (

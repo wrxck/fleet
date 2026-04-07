@@ -1,11 +1,11 @@
-# @wrxck/ink-file-picker
+# @matthesketh/ink-file-picker
 
 A filesystem navigator and file picker for [Ink 5](https://github.com/vadimdemedes/ink). Navigate directories, select files, and filter by extension.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-file-picker
+npm install @matthesketh/ink-file-picker
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-file-picker
 ```tsx
 import React from 'react';
 import { render } from 'ink';
-import { FilePicker } from '@wrxck/ink-file-picker';
+import { FilePicker } from '@matthesketh/ink-file-picker';
 
 function App() {
   return (

@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
-import { useRegisterHandler } from '@wrxck/ink-input-dispatcher';
-import { ScrollableList } from '@wrxck/ink-scrollable-list';
-import { useAvailableHeight } from '@wrxck/ink-viewport';
-import type { InputHandler } from '@wrxck/ink-input-dispatcher';
+import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
+import { ScrollableList } from '@matthesketh/ink-scrollable-list';
+import { useAvailableHeight } from '@matthesketh/ink-viewport';
+import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
 import { useHealth } from '../hooks/use-health.js';
 import { StatusBadge } from '../components/StatusBadge.js';

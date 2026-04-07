@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-status-bar",
+  "name": "@matthesketh/ink-status-bar",
   "version": "0.1.0",
   "description": "Fixed-position status bar component for Ink 5 with key hints, mode indicators, and slot layout",
   "type": "module",

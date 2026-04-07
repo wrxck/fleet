@@ -1,6 +1,6 @@
 import React from 'react';
-import { StatusBar } from '@wrxck/ink-status-bar';
-import type { KeyHint as KeyHintItem } from '@wrxck/ink-status-bar';
+import { StatusBar } from '@matthesketh/ink-status-bar';
+import type { KeyHint as KeyHintItem } from '@matthesketh/ink-status-bar';
 
 import { useAppState } from '../state.js';
 import type { View } from '../types.js';

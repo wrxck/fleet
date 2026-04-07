@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-input-dispatcher",
+  "name": "@matthesketh/ink-input-dispatcher",
   "version": "0.1.0",
   "description": "Single-point input routing for Ink 5 apps — no more competing useInput handlers",
   "type": "module",

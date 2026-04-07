@@ -1,11 +1,11 @@
-# @wrxck/ink-keybinding-help
+# @matthesketh/ink-keybinding-help
 
 Auto-formatted keybinding reference overlay for Ink 5. Renders a bordered help panel from a config object, similar to pressing `?` in vim or htop.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-keybinding-help
+npm install @matthesketh/ink-keybinding-help
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-keybinding-help
 ```tsx
 import React, { useState } from 'react';
 import { render, useInput } from 'ink';
-import { KeyBindingHelp } from '@wrxck/ink-keybinding-help';
+import { KeyBindingHelp } from '@matthesketh/ink-keybinding-help';
 
 function App() {
   const [showHelp, setShowHelp] = useState(false);

@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-gauge",
+  "name": "@matthesketh/ink-gauge",
   "version": "0.1.0",
   "description": "A progress gauge and donut visualisation component for Ink 5 terminal dashboards",
   "type": "module",

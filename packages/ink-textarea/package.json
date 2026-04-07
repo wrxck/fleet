@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-textarea",
+  "name": "@matthesketh/ink-textarea",
   "version": "0.1.0",
   "description": "Multi-line text input component for Ink 5 with cursor movement and scrolling",
   "type": "module",

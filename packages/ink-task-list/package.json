@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-task-list",
+  "name": "@matthesketh/ink-task-list",
   "version": "0.1.0",
   "description": "A step/task progress display component for Ink 5",
   "type": "module",

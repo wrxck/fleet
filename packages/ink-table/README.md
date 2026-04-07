@@ -1,4 +1,4 @@
-# @wrxck/ink-table
+# @matthesketh/ink-table
 
 Modern table component for [Ink 5](https://github.com/vadimdemedes/ink) with column alignment, truncation, row selection highlighting, and windowed scrolling.
 
@@ -7,7 +7,7 @@ The existing `ink-table` on npm targets Ink 3.x and is no longer maintained. Thi
 ## Install
 
 ```bash
-npm install @wrxck/ink-table
+npm install @matthesketh/ink-table
 ```
 
 ## Usage
@@ -15,7 +15,7 @@ npm install @wrxck/ink-table
 ```tsx
 import React, { useState } from 'react';
 import { render } from 'ink';
-import { Table, type Column } from '@wrxck/ink-table';
+import { Table, type Column } from '@matthesketh/ink-table';
 
 interface Service {
   name: string;

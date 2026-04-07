@@ -1,5 +1,5 @@
 {
-  "name": "@wrxck/ink-scrollable-list",
+  "name": "@matthesketh/ink-scrollable-list",
   "version": "0.1.0",
   "description": "Windowed scrollable list component for Ink 5 with follow-cursor scrolling",
   "type": "module",

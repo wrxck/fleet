@@ -1,11 +1,11 @@
-# @wrxck/ink-toast
+# @matthesketh/ink-toast
 
 Timed ephemeral toast notifications for Ink 5 apps. Like toast notifications in web apps, but for the terminal.
 
 ## Install
 
 ```bash
-npm install @wrxck/ink-toast
+npm install @matthesketh/ink-toast
 ```
 
 ## Usage
@@ -13,7 +13,7 @@ npm install @wrxck/ink-toast
 ```tsx
 import React from 'react';
 import { render, Text } from 'ink';
-import { ToastProvider, ToastContainer, useToast } from '@wrxck/ink-toast';
+import { ToastProvider, ToastContainer, useToast } from '@matthesketh/ink-toast';
 
 function App() {
   const { toast } = useToast();
