@@ -13,6 +13,7 @@
     "LICENSE",
     "README.md"
   ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
