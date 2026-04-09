@@ -1,6 +1,6 @@
 {
   "name": "@matthesketh/fleet",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Docker production management CLI + MCP server for Claude Code",
   "type": "module",
   "main": "dist/index.js",
@@ -13,6 +13,7 @@
     "LICENSE",
     "README.md"
   ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -48,6 +49,21 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.8.0",
+    "@matthesketh/ink-breadcrumb": "*",
+    "@matthesketh/ink-gauge": "*",
+    "@matthesketh/ink-input-dispatcher": "*",
+    "@matthesketh/ink-keybinding-help": "*",
+    "@matthesketh/ink-log-viewer": "*",
+    "@matthesketh/ink-modal": "*",
+    "@matthesketh/ink-pipeline": "*",
+    "@matthesketh/ink-rule": "*",
+    "@matthesketh/ink-scrollable-list": "*",
+    "@matthesketh/ink-split-pane": "*",
+    "@matthesketh/ink-status-bar": "*",
+    "@matthesketh/ink-table": "*",
+    "@matthesketh/ink-tabs": "*",
+    "@matthesketh/ink-toast": "*",
+    "@matthesketh/ink-viewport": "*",
     "ink": "^5.2.1",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
