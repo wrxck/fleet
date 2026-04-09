@@ -20,8 +20,8 @@ describe('Tabs', () => {
     expect(frame).toContain('Home');
     expect(frame).toContain('Logs');
     expect(frame).toContain('Settings');
-    // active tab should have underline indicator
-    expect(frame).toContain(BOX_HORIZONTAL.repeat('Home'.length));
+    // active tab should have bracket indicator
+    expect(frame).toContain('[Home]');
   });
 
   it('shows badge after label', () => {
@@ -58,7 +58,6 @@ describe('Tabs', () => {
   it('renders with custom accentColor', () => {
     const { lastFrame } = render(<Tabs tabs={sampleTabs} activeId="home" accentColor="green" />);
     const frame = lastFrame()!;
-    expect(frame).toContain('Home');
-    expect(frame).toContain(BOX_HORIZONTAL.repeat('Home'.length));
+    expect(frame).toContain('[Home]');
   });
 });
