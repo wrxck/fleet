@@ -14,6 +14,7 @@ export interface FuzzySelectProps {
   onCancel?: () => void;
   placeholder?: string;
   maxVisible?: number;
+  isActive?: boolean;
   renderItem?: (
     item: FuzzySelectItem,
     selected: boolean,
@@ -62,6 +63,7 @@ export function FuzzySelect({
   onCancel,
   placeholder = "Type to filter...",
   maxVisible = 10,
+  isActive = true,
   renderItem,
 }: FuzzySelectProps): React.ReactNode {
   const [query, setQuery] = useState("");
@@ -141,7 +143,8 @@ export function FuzzySelect({
         }
       },
       [filtered, clampedIndex, onSelect, onCancel]
-    )
+    ),
+    { isActive }
   );
 
   return (

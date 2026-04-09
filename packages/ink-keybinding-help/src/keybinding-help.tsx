@@ -33,10 +33,11 @@ export function KeyBindingHelp({
     return group.bindings.reduce((m, b) => Math.max(m, b.key.length), max);
   }, 0);
 
-  // distribute groups across columns
-  const columnGroups: KeyBindingGroup[][] = Array.from({ length: columns }, () => []);
+  // distribute groups across columns (no more columns than groups)
+  const effectiveColumns = Math.min(columns, groups.length);
+  const columnGroups: KeyBindingGroup[][] = Array.from({ length: effectiveColumns }, () => []);
   groups.forEach((group, i) => {
-    columnGroups[i % columns]!.push(group);
+    columnGroups[i % effectiveColumns]!.push(group);
   });
 
   return (
@@ -46,7 +47,7 @@ export function KeyBindingHelp({
       </Box>
       <Box flexDirection="row">
         {columnGroups.map((colGroups, colIndex) => (
-          <Box key={colIndex} flexDirection="column" marginRight={colIndex < columns - 1 ? 2 : 0} flexGrow={1}>
+          <Box key={colIndex} flexDirection="column" marginRight={colIndex < effectiveColumns - 1 ? 2 : 0} flexGrow={1}>
             {colGroups.map((group) => (
               <Box key={group.title} flexDirection="column" marginBottom={1}>
                 <Text bold underline>{group.title}</Text>
