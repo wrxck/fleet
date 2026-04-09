@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
+import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
+
 import { useAppState, useAppDispatch } from '../state.js';
 import { useSecrets } from '../hooks/use-secrets.js';
 import { getSecret as getCoreSecret } from '../../core/secrets-ops.js';
@@ -26,7 +29,7 @@ export function SecretEdit(): React.JSX.Element {
         // ignore
       }
     }
-  }, []);
+  }, [isNew, selectedApp, selectedSecret]);
 
   const save = () => {
     if (!selectedApp || !keyName) return;
@@ -41,11 +44,15 @@ export function SecretEdit(): React.JSX.Element {
     }
   };
 
-  useInput((input, key) => {
+  const handler: InputHandler = (_input, key) => {
     if (key.escape) {
       dispatch({ type: 'GO_BACK' });
+      return true;
     }
-  });
+    return false;
+  };
+
+  useRegisterHandler(handler);
 
   return (
     <Box flexDirection="column" padding={1}>

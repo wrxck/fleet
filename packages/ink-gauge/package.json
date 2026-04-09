@@ -1,0 +1,32 @@
+{
+  "name": "@matthesketh/ink-gauge",
+  "version": "0.1.0",
+  "description": "A progress gauge and donut visualisation component for Ink 5 terminal dashboards",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "ink": "5.2.1",
+    "react": "18.3.1"
+  },
+  "devDependencies": {
+    "ink": "5.2.1",
+    "react": "18.3.1",
+    "ink-testing-library": "4.0.0",
+    "vitest": "4.0.18",
+    "typescript": "5.6.3"
+  },
+  "keywords": ["ink", "ink-component", "terminal", "gauge", "donut", "progress", "tui", "cli"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wrxck/fleet.git",
+    "directory": "packages/ink-gauge"
+  }
+}
