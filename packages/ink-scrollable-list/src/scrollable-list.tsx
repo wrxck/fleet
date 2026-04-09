@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 
 import { Box, Text } from 'ink';
 
@@ -17,15 +17,19 @@ export function ScrollableList<T>({
   renderItem,
   emptyText = 'No items',
 }: ScrollableListProps<T>): React.JSX.Element {
+  const prevOffsetRef = useRef(0);
+
   const { visibleItems, scrollOffset, hasAbove, hasBelow } = useMemo(() => {
     if (items.length === 0) {
+      prevOffsetRef.current = 0;
       return { visibleItems: [] as T[], scrollOffset: 0, hasAbove: false, hasBelow: false };
     }
 
     const clampedIndex = Math.min(selectedIndex, items.length - 1);
     const displayRows = Math.min(maxVisible, items.length);
 
-    let offset = 0;
+    // start from previous offset to maintain scroll position
+    let offset = prevOffsetRef.current;
 
     // follow cursor: ensure selectedIndex is visible
     if (clampedIndex >= offset + displayRows) {
@@ -37,6 +41,8 @@ export function ScrollableList<T>({
 
     // clamp offset
     offset = Math.max(0, Math.min(offset, items.length - displayRows));
+
+    prevOffsetRef.current = offset;
 
     return {
       visibleItems: items.slice(offset, offset + displayRows),

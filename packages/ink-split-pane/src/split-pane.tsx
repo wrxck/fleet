@@ -47,18 +47,9 @@ export function SplitPane({
   if (isHorizontal) {
     return (
       <Box flexDirection="row" width={totalColumns}>
-        <Box width={size1} overflow="hidden">
+        <Box width={size1} borderRight={showDivider} borderColor={dividerColor} overflow="hidden">
           {children[0]}
         </Box>
-        {showDivider && (
-          <Box flexDirection="column" width={1}>
-            {Array.from({ length: totalRows }).map((_, i) => (
-              <Text key={i} color={dividerColor}>
-                {char}
-              </Text>
-            ))}
-          </Box>
-        )}
         <Box width={size2} overflow="hidden">
           {children[1]}
         </Box>

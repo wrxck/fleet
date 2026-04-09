@@ -31,23 +31,15 @@ export function Tabs({
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeId;
         const badgeSuffix = tab.badge != null ? ` (${tab.badge})` : '';
-        const underlineLen = tab.label.length + badgeSuffix.length;
         return (
           <React.Fragment key={tab.id}>
             {index > 0 && <Text dimColor>{separator}</Text>}
-            <Box flexDirection="column">
-              <Box>
-                <Text bold={isActive} color={isActive ? accentColor : undefined} dimColor={!isActive}>
-                  {tab.label}
-                </Text>
-                {tab.badge != null && (
-                  <Text color="yellow">{badgeSuffix}</Text>
-                )}
-              </Box>
-              {isActive && (
-                <Text color={accentColor}>{BOX_HORIZONTAL.repeat(underlineLen)}</Text>
-              )}
-            </Box>
+            <Text bold={isActive} color={isActive ? accentColor : undefined} dimColor={!isActive}>
+              {isActive ? `[${tab.label}]` : ` ${tab.label} `}
+            </Text>
+            {tab.badge != null && (
+              <Text color="yellow">{badgeSuffix}</Text>
+            )}
           </React.Fragment>
         );
       })}
