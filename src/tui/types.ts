@@ -6,6 +6,8 @@ export type View =
   | 'secret-edit'
   | 'logs';
 
+export type SecretsSubView = 'app-list' | 'secret-list';
+
 export interface TuiState {
   currentView: View;
   previousView: View | null;
@@ -15,6 +17,11 @@ export interface TuiState {
   loading: boolean;
   error: string | null;
   confirmAction: ConfirmAction | null;
+  dashboardIndex: number;
+  healthIndex: number;
+  secretsIndex: number;
+  secretsSubView: SecretsSubView;
+  appDetailIndex: number;
 }
 
 export interface ConfirmAction {
@@ -32,4 +39,6 @@ export type Action =
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'TOGGLE_REDACT' }
   | { type: 'CONFIRM'; action: ConfirmAction }
-  | { type: 'CANCEL_CONFIRM' };
+  | { type: 'CANCEL_CONFIRM' }
+  | { type: 'SET_INDEX'; view: string; index: number }
+  | { type: 'SET_SECRETS_SUBVIEW'; subView: SecretsSubView };
