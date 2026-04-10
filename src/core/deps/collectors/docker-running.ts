@@ -1,4 +1,4 @@
-import { exec } from '../../exec.js';
+import { execSafe } from '../../exec.js';
 import type { AppEntry } from '../../registry.js';
 import type { Collector, Finding, DepsConfig } from '../types.js';
 
@@ -23,7 +23,7 @@ export class DockerRunningCollector implements Collector {
     const findings: Finding[] = [];
 
     for (const container of app.containers) {
-      const result = exec(`docker inspect ${container}`, { timeout: 10_000 });
+      const result = execSafe('docker', ['inspect', container], { timeout: 10_000 });
       if (!result.ok) continue;
 
       const info = this.parseInspectOutput(result.stdout);

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { exec } from '../../exec.js';
+import { execSafe } from '../../exec.js';
 import type { AppEntry } from '../../registry.js';
 import type { Finding } from '../types.js';
 
@@ -95,9 +95,9 @@ export function createDepsPr(
   }
 
   const sshEnv = { SSH_AUTH_SOCK: '/tmp/fleet-ssh-agent.sock' };
-  exec('git checkout develop', { cwd: app.composePath });
-  exec('git pull', { cwd: app.composePath, env: sshEnv });
-  exec(`git checkout -b ${branch}`, { cwd: app.composePath });
+  execSafe('git', ['checkout', 'develop'], { cwd: app.composePath });
+  execSafe('git', ['pull'], { cwd: app.composePath, env: sshEnv });
+  execSafe('git', ['checkout', '-b', branch], { cwd: app.composePath });
 
   for (const bump of bumps) {
     const filePath = join(app.composePath, bump.file);
@@ -108,23 +108,22 @@ export function createDepsPr(
   }
 
   const files = [...new Set(bumps.map(b => b.file))];
-  exec(`git add ${files.join(' ')}`, { cwd: app.composePath });
+  execSafe('git', ['add', ...files], { cwd: app.composePath });
 
   const commitMsg = bumps.length === 1
     ? `chore(deps): update ${fixable[0].package} from ${fixable[0].currentVersion} to ${fixable[0].latestVersion}`
     : `chore(deps): update ${bumps.length} dependencies`;
-  exec(`git commit -m "${commitMsg}"`, { cwd: app.composePath });
+  execSafe('git', ['commit', '-m', commitMsg], { cwd: app.composePath });
 
-  exec(`git push -u origin ${branch}`, { cwd: app.composePath, env: sshEnv });
+  execSafe('git', ['push', '-u', 'origin', branch], { cwd: app.composePath, env: sshEnv });
 
   if (!app.gitRepo) return { branch, bumps };
 
   const prBody = buildPrBody(fixable);
   const prTitle = `chore(deps): update dependencies (${date})`;
-  const prResult = exec(
-    `gh pr create --repo ${app.gitRepo} --title "${prTitle}" --body "${prBody.replace(/"/g, '\\"')}" --base develop`,
-    { cwd: app.composePath, env: sshEnv }
-  );
+  const prResult = execSafe('gh', [
+    'pr', 'create', '--repo', app.gitRepo, '--title', prTitle, '--body', prBody, '--base', 'develop',
+  ], { cwd: app.composePath, env: sshEnv });
 
   const prUrl = prResult.ok ? prResult.stdout.trim() : undefined;
 

@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 
 import { load } from './registry.js';
 
-// These tests read actual systemd service files — skip in CI
+// these tests read actual systemd service files — skip in CI
 const isCI = !!process.env.CI;
 
 describe.skipIf(isCI)('boot order - systemd dependencies', () => {
@@ -12,19 +12,20 @@ describe.skipIf(isCI)('boot order - systemd dependencies', () => {
   const dbApps = reg.apps.filter(a => a.dependsOnDatabases);
 
   for (const app of dbApps) {
-    describe(app.serviceName, () => {
-      const servicePath = `/etc/systemd/system/${app.serviceName}.service`;
+    const servicePath = `/etc/systemd/system/${app.serviceName}.service`;
+    const serviceExists = existsSync(servicePath);
 
+    describe(app.serviceName, () => {
       it('has a systemd service file', () => {
         expect(existsSync(servicePath)).toBeTruthy();
       });
 
-      it('requires docker-databases.service', () => {
+      it.skipIf(!serviceExists)('requires docker-databases.service', () => {
         const content = readFileSync(servicePath, 'utf-8');
         expect(content).toContain('docker-databases.service');
       });
 
-      it('has docker-databases.service in After', () => {
+      it.skipIf(!serviceExists)('has docker-databases.service in After', () => {
         const content = readFileSync(servicePath, 'utf-8');
         const afterLine = content.match(/^After=(.+)$/m);
         expect(afterLine).not.toBeNull();
