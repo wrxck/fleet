@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AppEntry } from './registry.js';
 
 vi.mock('./exec.js', () => ({
-  exec: vi.fn(),
+  execSafe: vi.fn(),
+}));
+
+vi.mock('./validate.js', () => ({
+  assertHealthPath: vi.fn(),
 }));
 
 vi.mock('./systemd.js', () => ({
@@ -16,12 +20,12 @@ vi.mock('./docker.js', () => ({
   listContainers: vi.fn(),
 }));
 
-import { exec } from './exec.js';
+import { execSafe } from './exec.js';
 import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable } from './systemd.js';
 import { listContainers } from './docker.js';
 import { checkHealth, checkHttp, checkAllHealth } from './health.js';
 
-const mockedExec = vi.mocked(exec);
+const mockedExec = vi.mocked(execSafe);
 const mockedGetServiceStatus = vi.mocked(getServiceStatus);
 const mockedGetMultipleServiceStatuses = vi.mocked(getMultipleServiceStatuses);
 const mockedSystemdAvailable = vi.mocked(systemdAvailable);
@@ -61,7 +65,8 @@ describe('checkHttp', () => {
   it('uses /health by default', () => {
     checkHttp(3000);
     expect(mockedExec).toHaveBeenCalledWith(
-      expect.stringContaining('http://127.0.0.1:3000/health'),
+      'curl',
+      expect.arrayContaining(['http://127.0.0.1:3000/health']),
       expect.any(Object),
     );
   });
@@ -69,16 +74,17 @@ describe('checkHttp', () => {
   it('uses custom healthPath when provided', () => {
     checkHttp(8000, '/api/health');
     expect(mockedExec).toHaveBeenCalledWith(
-      expect.stringContaining('http://127.0.0.1:8000/api/health'),
+      'curl',
+      expect.arrayContaining(['http://127.0.0.1:8000/api/health']),
       expect.any(Object),
     );
   });
 
   it('does not use -f flag in curl command', () => {
     checkHttp(3000);
-    const cmd = mockedExec.mock.calls[0][0];
-    expect(cmd).not.toMatch(/curl\s+-[^\s]*f/);
-    expect(cmd).toContain('curl -s');
+    const args = mockedExec.mock.calls[0][1] as string[];
+    expect(args).not.toContain('-f');
+    expect(args).toContain('-s');
   });
 
   it('returns ok for HTTP 200', () => {
@@ -135,7 +141,8 @@ describe('checkHealth', () => {
   it('passes healthPath to checkHttp', () => {
     checkHealth(makeApp({ port: 8000, healthPath: '/api/health' }));
     expect(mockedExec).toHaveBeenCalledWith(
-      expect.stringContaining('/api/health'),
+      'curl',
+      expect.arrayContaining(['http://127.0.0.1:8000/api/health']),
       expect.any(Object),
     );
   });

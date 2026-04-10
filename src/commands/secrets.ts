@@ -1,6 +1,6 @@
 import { writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSafe } from '../core/exec.js';
 
 import { SecretsError } from '../core/errors.js';
 import { load, findApp } from '../core/registry.js';
@@ -51,8 +51,8 @@ function secretsInit(): void {
   const serviceContent = generateUnsealService();
   const servicePath = '/etc/systemd/system/fleet-unseal.service';
   writeFileSync(servicePath, serviceContent);
-  execSync('systemctl daemon-reload');
-  execSync('systemctl enable fleet-unseal');
+  execSafe('systemctl', ['daemon-reload']);
+  execSafe('systemctl', ['enable', 'fleet-unseal']);
   success('Installed fleet-unseal.service');
 }
 

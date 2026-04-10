@@ -20,6 +20,8 @@ export function LogsView(): React.JSX.Element {
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const streamRef = useRef<StreamHandle | null>(null);
+  const lineBufferRef = useRef<string[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!selectedApp) return;
@@ -38,6 +40,10 @@ export function LogsView(): React.JSX.Element {
         streamRef.current.kill();
         streamRef.current = null;
       }
+      if (flushTimerRef.current) {
+        clearInterval(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
     };
   }, [selectedApp]);
 
@@ -48,14 +54,30 @@ export function LogsView(): React.JSX.Element {
           streamRef.current.kill();
           streamRef.current = null;
         }
+        if (flushTimerRef.current) {
+          clearInterval(flushTimerRef.current);
+          flushTimerRef.current = null;
+        }
+        // flush any remaining buffered lines
+        if (lineBufferRef.current.length > 0) {
+          const buf = lineBufferRef.current;
+          lineBufferRef.current = [];
+          setLines(prev => [...prev, ...buf].slice(-MAX_LINES));
+        }
         setFollowing(false);
       } else if (selectedApp) {
         setFollowing(true);
         const handle = streamFleetCommand(['logs', selectedApp, '-f']);
         streamRef.current = handle;
         handle.onData((line) => {
-          setLines(prev => [...prev.slice(-MAX_LINES + 1), line]);
+          lineBufferRef.current.push(line);
         });
+        flushTimerRef.current = setInterval(() => {
+          const buf = lineBufferRef.current;
+          if (buf.length === 0) return;
+          lineBufferRef.current = [];
+          setLines(prev => [...prev, ...buf].slice(-MAX_LINES));
+        }, 50);
       }
       return true;
     }
