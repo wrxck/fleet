@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
-import { exec } from './exec.js';
+import { execSafe } from './exec.js';
+import { assertServiceName } from './validate.js';
 
 let _systemdAvailable: boolean | null = null;
 
 export function systemdAvailable(): boolean {
   if (_systemdAvailable === null) {
-    const result = exec('systemctl is-system-running');
+    const result = execSafe('systemctl', ['is-system-running']);
     // Returns "running", "degraded", etc. when systemd is PID 1.
     // Returns "offline" when not booted with systemd.
     _systemdAvailable = result.ok || result.stdout === 'degraded';
@@ -34,9 +35,11 @@ function parseSystemctlShow(output: string): Record<string, string> {
 }
 
 export function getServiceStatus(serviceName: string): ServiceStatus {
-  const result = exec(
-    `systemctl show ${serviceName}.service --property=ActiveState,UnitFileState,Description --no-pager`,
-  );
+  assertServiceName(serviceName);
+  const result = execSafe('systemctl', [
+    'show', `${serviceName}.service`,
+    '--property=ActiveState,UnitFileState,Description', '--no-pager',
+  ]);
   const props = parseSystemctlShow(result.stdout);
 
   return {
@@ -51,11 +54,12 @@ export function getServiceStatus(serviceName: string): ServiceStatus {
 export function getMultipleServiceStatuses(serviceNames: string[]): Map<string, ServiceStatus> {
   if (serviceNames.length === 0) return new Map();
 
-  const args = serviceNames.map(n => `${n}.service`).join(' ');
-  const result = exec(
-    `systemctl show ${args} --property=Id,ActiveState,UnitFileState,Description --no-pager`,
-    { timeout: 15_000 },
-  );
+  for (const n of serviceNames) assertServiceName(n);
+  const units = serviceNames.map(n => `${n}.service`);
+  const result = execSafe('systemctl', [
+    'show', ...units,
+    '--property=Id,ActiveState,UnitFileState,Description', '--no-pager',
+  ], { timeout: 15_000 });
 
   const map = new Map<string, ServiceStatus>();
   if (!result.stdout) return map;
@@ -80,29 +84,34 @@ export function getMultipleServiceStatuses(serviceNames: string[]): Map<string, 
 }
 
 export function startService(serviceName: string): boolean {
-  return exec(`systemctl start ${serviceName}.service`, { timeout: 60_000 }).ok;
+  assertServiceName(serviceName);
+  return execSafe('systemctl', ['start', `${serviceName}.service`], { timeout: 60_000 }).ok;
 }
 
 export function stopService(serviceName: string): boolean {
-  return exec(`systemctl stop ${serviceName}.service`, { timeout: 60_000 }).ok;
+  assertServiceName(serviceName);
+  return execSafe('systemctl', ['stop', `${serviceName}.service`], { timeout: 60_000 }).ok;
 }
 
 export function restartService(serviceName: string): boolean {
-  return exec(`systemctl restart ${serviceName}.service`, { timeout: 120_000 }).ok;
+  assertServiceName(serviceName);
+  return execSafe('systemctl', ['restart', `${serviceName}.service`], { timeout: 120_000 }).ok;
 }
 
 export function enableService(serviceName: string): boolean {
-  return exec(`systemctl enable ${serviceName}.service`).ok;
+  assertServiceName(serviceName);
+  return execSafe('systemctl', ['enable', `${serviceName}.service`]).ok;
 }
 
 export function disableService(serviceName: string): boolean {
-  return exec(`systemctl disable ${serviceName}.service`).ok;
+  assertServiceName(serviceName);
+  return execSafe('systemctl', ['disable', `${serviceName}.service`]).ok;
 }
 
 export function installServiceFile(serviceName: string, content: string): void {
   const path = `/etc/systemd/system/${serviceName}.service`;
   writeFileSync(path, content);
-  exec('systemctl daemon-reload');
+  execSafe('systemctl', ['daemon-reload']);
 }
 
 export function readServiceFile(serviceName: string): string | null {
@@ -112,10 +121,9 @@ export function readServiceFile(serviceName: string): string | null {
 }
 
 export function discoverServices(): string[] {
-  const result = exec(
-    'systemctl list-units --type=service --state=active --no-legend --no-pager',
-    { timeout: 10_000 }
-  );
+  const result = execSafe('systemctl', [
+    'list-units', '--type=service', '--state=active', '--no-legend', '--no-pager',
+  ], { timeout: 10_000 });
   if (!result.ok) return [];
 
   return result.stdout.split('\n')

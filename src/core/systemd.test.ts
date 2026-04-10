@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./exec.js', () => ({
-  exec: vi.fn(),
+  execSafe: vi.fn(),
 }));
 
-import { exec } from './exec.js';
+vi.mock('./validate.js', () => ({
+  assertServiceName: vi.fn(),
+}));
+
+import { execSafe } from './exec.js';
 import { getServiceStatus, getMultipleServiceStatuses } from './systemd.js';
 
-const mockedExec = vi.mocked(exec);
+const mockedExec = vi.mocked(execSafe);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,8 +37,8 @@ describe('getServiceStatus', () => {
     });
     expect(mockedExec).toHaveBeenCalledTimes(1);
     expect(mockedExec).toHaveBeenCalledWith(
-      expect.stringContaining('systemctl show my-app.service'),
-      // no opts required
+      'systemctl',
+      expect.arrayContaining(['show', 'my-app.service']),
     );
   });
 
@@ -170,7 +174,8 @@ describe('getMultipleServiceStatuses', () => {
 
     expect(mockedExec).toHaveBeenCalledTimes(1);
     expect(mockedExec).toHaveBeenCalledWith(
-      expect.stringContaining('s1.service s2.service s3.service'),
+      'systemctl',
+      expect.arrayContaining(['show', 's1.service', 's2.service', 's3.service']),
       expect.any(Object),
     );
   });
