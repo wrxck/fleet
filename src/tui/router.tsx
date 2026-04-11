@@ -1,4 +1,4 @@
-import React, { useReducer, useState, useEffect, useCallback } from 'react';
+import React, { useReducer, useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { InputDispatcher } from '@matthesketh/ink-input-dispatcher';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
@@ -77,6 +77,11 @@ export function App(): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [vaultSealed, setVaultSealed] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
+  const confirmRef = useRef(state.confirmAction);
+
+  useEffect(() => {
+    confirmRef.current = state.confirmAction;
+  }, [state.confirmAction]);
 
   useEffect(() => {
     try {
@@ -107,9 +112,9 @@ export function App(): React.JSX.Element {
       return true;
     }
 
-    if (state.confirmAction) {
+    if (confirmRef.current) {
       if (input === 'y' || input === 'Y') {
-        state.confirmAction.onConfirm();
+        confirmRef.current.onConfirm();
         dispatch({ type: 'CANCEL_CONFIRM' });
       } else if (input === 'n' || input === 'N' || key.escape) {
         dispatch({ type: 'CANCEL_CONFIRM' });
@@ -147,7 +152,7 @@ export function App(): React.JSX.Element {
     }
 
     return false;
-  }, [state.confirmAction, state.currentView, state.previousView, showHelp]);
+  }, [state.currentView, state.previousView, showHelp]);
 
   return (
     <AppStateContext.Provider value={state}>
