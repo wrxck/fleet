@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { statusCommand } from './commands/status.js';
 import { listCommand } from './commands/list.js';
 import { startCommand } from './commands/start.js';
@@ -18,7 +22,9 @@ import { installMcpCommand } from './commands/install-mcp.js';
 import { startMcpServer } from './mcp/server.js';
 import { error } from './ui/output.js';
 
-const VERSION = '1.0.0';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+const VERSION = pkg.version as string;
 
 const HELP = `fleet v${VERSION} - Docker production management CLI
 

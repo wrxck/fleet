@@ -40,6 +40,7 @@ export function installConfig(domain: string, content: string): void {
 }
 
 export function removeConfig(domain: string): boolean {
+  assertDomain(domain);
   const filename = `${domain}.conf`;
   const available = `${SITES_AVAILABLE}/${filename}`;
   const enabled = `${SITES_ENABLED}/${filename}`;
@@ -62,6 +63,7 @@ export function reload(): boolean {
 }
 
 export function readConfig(domain: string): string | null {
+  assertDomain(domain);
   const path = `${SITES_AVAILABLE}/${domain}.conf`;
   if (!existsSync(path)) return null;
   return readFileSync(path, 'utf-8');
