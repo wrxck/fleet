@@ -47,7 +47,8 @@ function getHostname(): string {
   }
 }
 
-export async function watchdogCommand(_args: string[]): Promise<void> {
+export async function watchdogCommand(args: string[]): Promise<void> {
+  const isMotd = args.includes('--motd');
   const failures: string[] = [];
   const hostname = getHostname();
 
@@ -84,6 +85,9 @@ export async function watchdogCommand(_args: string[]): Promise<void> {
   for (const f of failures) {
     error(`  ${f}`);
   }
+
+  // MOTD mode: display only, no alerts, always exit 0
+  if (isMotd) return;
 
   // send telegram alert
   const config = loadTelegramConfig();

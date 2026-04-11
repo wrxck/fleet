@@ -84,6 +84,10 @@ export function composeDown(composePath: string, composeFile: string | null): bo
 export function inspectContainer(name: string): Record<string, unknown> | null {
   const result = execSafe('docker', ['inspect', name], { timeout: 10_000 });
   if (!result.ok) return null;
-  const parsed = JSON.parse(result.stdout);
-  return Array.isArray(parsed) ? parsed[0] : parsed;
+  try {
+    const parsed = JSON.parse(result.stdout);
+    return Array.isArray(parsed) ? parsed[0] : parsed;
+  } catch {
+    return null;
+  }
 }
