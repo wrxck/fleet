@@ -60,6 +60,7 @@ export function SecretsView(): React.JSX.Element {
         return true;
       }
     } else if (subView === 'secret-list') {
+      if (secrets.secrets.length === 0) return false;
       if (input === 'j' || key.downArrow) {
         dispatch({ type: 'SET_INDEX', view: 'secrets', index: Math.min(selectedIndex + 1, secrets.secrets.length - 1) });
         return true;
@@ -84,15 +85,16 @@ export function SecretsView(): React.JSX.Element {
       }
       if (input === 'd' && selectedApp && secrets.secrets[selectedIndex]) {
         const secretKey = secrets.secrets[selectedIndex].key;
+        const appName = selectedApp;
         dispatch({
           type: 'CONFIRM',
           action: {
             label: `Delete secret "${secretKey}"?`,
-            description: `This will remove ${secretKey} from ${redact(selectedApp)}'s vault.`,
+            description: `This will remove ${secretKey} from ${redact(appName)}'s vault.`,
             onConfirm: () => {
-              const result = secrets.deleteSecret(selectedApp, secretKey);
+              const result = secrets.deleteSecret(appName, secretKey);
               if (result.ok) {
-                secrets.loadAppSecrets(selectedApp);
+                secrets.loadAppSecrets(appName);
                 secrets.refresh();
               } else {
                 dispatch({ type: 'SET_ERROR', error: result.error ?? 'Delete failed' });

@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 
 export interface ExecResult {
   stdout: string;
@@ -7,25 +7,33 @@ export interface ExecResult {
   ok: boolean;
 }
 
-export function exec(cmd: string, opts: { timeout?: number; cwd?: string; env?: Record<string, string> } = {}): ExecResult {
-  try {
-    const stdout = execSync(cmd, {
-      timeout: opts.timeout ?? 30_000,
-      cwd: opts.cwd,
-      env: opts.env ? { ...process.env, ...opts.env } : undefined,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    return { stdout: stdout.trim(), stderr: '', exitCode: 0, ok: true };
-  } catch (err: unknown) {
-    const e = err as { stdout?: Buffer | string; stderr?: Buffer | string; status?: number };
+export function execSafe(
+  cmd: string,
+  args: string[],
+  opts: { timeout?: number; cwd?: string; env?: Record<string, string>; input?: string } = {},
+): ExecResult {
+  const result = spawnSync(cmd, args, {
+    timeout: opts.timeout ?? 30_000,
+    cwd: opts.cwd,
+    env: opts.env ? { ...process.env, ...opts.env } : undefined,
+    encoding: 'utf-8',
+    stdio: 'pipe',
+    input: opts.input,
+  });
+  if (result.error) {
     return {
-      stdout: (e.stdout ?? '').toString().trim(),
-      stderr: (e.stderr ?? '').toString().trim(),
-      exitCode: e.status ?? 1,
+      stdout: '',
+      stderr: result.error.message,
+      exitCode: 1,
       ok: false,
     };
   }
+  return {
+    stdout: (result.stdout ?? '').trim(),
+    stderr: (result.stderr ?? '').trim(),
+    exitCode: result.status ?? 1,
+    ok: result.status === 0,
+  };
 }
 
 export function execLive(cmd: string, args: string[], opts: { cwd?: string } = {}): number {
