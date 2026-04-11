@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import { exec } from '../core/exec.js';
 import { load, save } from '../core/registry.js';
 import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd.js';
 import { listContainers, getContainersByCompose } from '../core/docker.js';

@@ -1,4 +1,5 @@
-import { exec } from './exec.js';
+import { execSafe } from './exec.js';
+import { assertHealthPath } from './validate.js';
 import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable, type ServiceStatus } from './systemd.js';
 import { listContainers, type ContainerInfo } from './docker.js';
 import type { AppEntry } from './registry.js';
@@ -63,10 +64,11 @@ export function checkHealth(app: AppEntry, prefetched?: PrefetchedData): HealthR
 
 export function checkHttp(port: number, healthPath?: string): HealthResult['http'] {
   const path = healthPath ?? '/health';
-  const result = exec(
-    `curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:${port}${path}`,
-    { timeout: 10_000 }
-  );
+  assertHealthPath(path);
+  const result = execSafe('curl', [
+    '-s', '-o', '/dev/null', '-w', '%{http_code}',
+    '--max-time', '5', `http://127.0.0.1:${port}${path}`,
+  ], { timeout: 10_000 });
 
   const status = parseInt(result.stdout, 10);
   if (!isNaN(status) && status > 0) {

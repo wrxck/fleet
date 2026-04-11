@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
@@ -19,6 +19,13 @@ export function SecretEdit(): React.JSX.Element {
   const [value, setValue] = useState('');
   const [phase, setPhase] = useState<'key' | 'value'>(isNew ? 'key' : 'value');
   const [status, setStatus] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isNew && selectedApp && selectedSecret) {
@@ -36,7 +43,7 @@ export function SecretEdit(): React.JSX.Element {
     const result = secrets.saveSecret(selectedApp, keyName, value);
     if (result.ok) {
       setStatus('Saved and re-sealed');
-      setTimeout(() => {
+      timerRef.current = setTimeout(() => {
         dispatch({ type: 'GO_BACK' });
       }, 500);
     } else {

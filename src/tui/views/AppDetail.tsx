@@ -48,10 +48,9 @@ export function AppDetail(): React.JSX.Element {
     if (!selectedApp) return;
     setRunning(true);
     setResult(null);
-    runFleetCommand([...action.command, selectedApp]).then(res => {
-      setResult(res);
-      setRunning(false);
-    });
+    runFleetCommand([...action.command, selectedApp])
+      .then(res => setResult(res))
+      .finally(() => setRunning(false));
   }
 
   const handler: InputHandler = (input, key) => {
