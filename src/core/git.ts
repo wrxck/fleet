@@ -1,9 +1,10 @@
 import { existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 
-import { exec } from './exec.js';
+import { execSafe } from './exec.js';
 import { GitError } from './errors.js';
 import { detectProjectType, generateGitignore } from '../templates/gitignore.js';
+import { assertBranch, assertFilePath } from './validate.js';
 
 const SSH_AGENT_SOCK = '/tmp/fleet-ssh-agent.sock';
 if (existsSync(SSH_AGENT_SOCK)) {
@@ -31,11 +32,11 @@ export interface GitLogEntry {
 }
 
 export function isGitRepo(cwd: string): boolean {
-  return exec('git rev-parse --is-inside-work-tree', { cwd }).ok;
+  return execSafe('git', ['rev-parse', '--is-inside-work-tree'], { cwd }).ok;
 }
 
 export function hasCommits(cwd: string): boolean {
-  return exec('git rev-parse HEAD', { cwd }).ok;
+  return execSafe('git', ['rev-parse', 'HEAD'], { cwd }).ok;
 }
 
 export function getGitStatus(cwd: string): GitStatus {
@@ -46,19 +47,19 @@ export function getGitStatus(cwd: string): GitStatus {
     };
   }
 
-  const branch = exec('git rev-parse --abbrev-ref HEAD', { cwd }).stdout || '';
-  const branchResult = exec('git branch --list --no-color', { cwd });
+  const branch = execSafe('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd }).stdout || '';
+  const branchResult = execSafe('git', ['branch', '--list', '--no-color'], { cwd });
   const branches = branchResult.stdout
     .split('\n')
     .map(b => b.replace(/^\*?\s+/, '').trim())
     .filter(Boolean);
 
-  const remoteName = exec('git remote', { cwd }).stdout.split('\n')[0] || '';
+  const remoteName = execSafe('git', ['remote'], { cwd }).stdout.split('\n')[0] || '';
   const remoteUrl = remoteName
-    ? exec(`git remote get-url ${remoteName}`, { cwd }).stdout
+    ? execSafe('git', ['remote', 'get-url', remoteName], { cwd }).stdout
     : '';
 
-  const porcelain = exec('git status --porcelain', { cwd }).stdout;
+  const porcelain = execSafe('git', ['status', '--porcelain'], { cwd }).stdout;
   const lines = porcelain ? porcelain.split('\n') : [];
   let staged = 0, modified = 0, untracked = 0;
   for (const line of lines) {
@@ -70,7 +71,7 @@ export function getGitStatus(cwd: string): GitStatus {
 
   let ahead = 0, behind = 0;
   if (remoteName && hasCommits(cwd)) {
-    const abResult = exec(`git rev-list --left-right --count HEAD...${remoteName}/${branch}`, { cwd });
+    const abResult = execSafe('git', ['rev-list', '--left-right', '--count', `HEAD...${remoteName}/${branch}`], { cwd });
     if (abResult.ok) {
       const parts = abResult.stdout.split(/\s+/);
       ahead = parseInt(parts[0], 10) || 0;
@@ -85,7 +86,7 @@ export function getGitStatus(cwd: string): GitStatus {
 }
 
 export function getLog(cwd: string, count = 10): GitLogEntry[] {
-  const result = exec(`git log --oneline --format="%H|%s|%ci" -${count}`, { cwd });
+  const result = execSafe('git', ['log', '--oneline', '--format=%H|%s|%ci', `-${count}`], { cwd });
   if (!result.ok) return [];
   return result.stdout.split('\n').filter(Boolean).map(line => {
     const [hash, subject, ...dateParts] = line.split('|');
@@ -103,7 +104,8 @@ export function readGitignore(cwd: string): string {
 }
 
 export function branchExists(cwd: string, branch: string): boolean {
-  return exec(`git show-ref --verify --quiet refs/heads/${branch}`, { cwd }).ok;
+  assertBranch(branch);
+  return execSafe('git', ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], { cwd }).ok;
 }
 
 // walk up from composePath to find git root
@@ -134,44 +136,47 @@ export function getProjectRoot(composePath: string): string {
 }
 
 export function gitInit(cwd: string): void {
-  const r = exec('git init -b main', { cwd });
+  const r = execSafe('git', ['init', '-b', 'main'], { cwd });
   if (!r.ok) throw new GitError(`git init failed: ${r.stderr}`);
 }
 
 export function gitAdd(cwd: string, paths: string[] = ['.']): void {
-  const r = exec(`git add ${paths.join(' ')}`, { cwd });
+  for (const p of paths) if (p !== '.') assertFilePath(p);
+  const r = execSafe('git', ['add', ...paths], { cwd });
   if (!r.ok) throw new GitError(`git add failed: ${r.stderr}`);
 }
 
 export function gitCommit(cwd: string, message: string): void {
-  const r = exec(`git commit -m "${message.replace(/"/g, '\\"')}"`, { cwd });
+  const r = execSafe('git', ['commit', '-m', message], { cwd });
   if (!r.ok) throw new GitError(`git commit failed: ${r.stderr}`);
 }
 
 export function gitCheckout(cwd: string, branch: string, create = false): void {
-  const flag = create ? '-b' : '';
-  const r = exec(`git checkout ${flag} ${branch}`, { cwd });
+  assertBranch(branch);
+  const args = create ? ['checkout', '-b', branch] : ['checkout', branch];
+  const r = execSafe('git', args, { cwd });
   if (!r.ok) throw new GitError(`git checkout failed: ${r.stderr}`);
 }
 
 export function gitPush(cwd: string, branch: string, setUpstream = false): void {
-  const flag = setUpstream ? '-u origin' : '';
-  const r = exec(`git push ${flag} ${branch}`, { cwd, timeout: 60_000 });
+  assertBranch(branch);
+  const args = setUpstream ? ['push', '-u', 'origin', branch] : ['push', branch];
+  const r = execSafe('git', args, { cwd, timeout: 60_000 });
   if (!r.ok) throw new GitError(`git push failed: ${r.stderr}`);
 }
 
 export function gitPushAll(cwd: string): void {
-  const r = exec('git push --all origin', { cwd, timeout: 60_000 });
+  const r = execSafe('git', ['push', '--all', 'origin'], { cwd, timeout: 60_000 });
   if (!r.ok) throw new GitError(`git push --all failed: ${r.stderr}`);
 }
 
 export function gitSetRemoteUrl(cwd: string, url: string): void {
-  const r = exec(`git remote set-url origin ${url}`, { cwd });
+  const r = execSafe('git', ['remote', 'set-url', 'origin', url], { cwd });
   if (!r.ok) throw new GitError(`git remote set-url failed: ${r.stderr}`);
 }
 
 export function gitAddRemote(cwd: string, name: string, url: string): void {
-  const r = exec(`git remote add ${name} ${url}`, { cwd });
+  const r = execSafe('git', ['remote', 'add', name, url], { cwd });
   if (!r.ok) throw new GitError(`git remote add failed: ${r.stderr}`);
 }
 

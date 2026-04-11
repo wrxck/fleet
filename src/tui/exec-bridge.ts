@@ -1,4 +1,4 @@
-import { fork, execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -43,28 +43,41 @@ export interface StreamHandle {
 }
 
 export function streamFleetCommand(args: string[]): StreamHandle {
-  const child = execFile('node', [FLEET_BIN, ...args], {
-    maxBuffer: 10 * 1024 * 1024,
+  const child = spawn('node', [FLEET_BIN, ...args], {
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
   const callbacks: Array<(line: string) => void> = [];
+  const buffered: string[] = [];
+  const MAX_BUFFER = 1000;
 
-  child.stdout?.on('data', (chunk: Buffer) => {
-    const lines = chunk.toString().split('\n').filter(Boolean);
-    for (const line of lines) {
+  function dispatch(line: string) {
+    if (callbacks.length === 0) {
+      if (buffered.length >= MAX_BUFFER) buffered.shift();
+      buffered.push(line);
+    } else {
       for (const cb of callbacks) cb(line);
+    }
+  }
+
+  child.stdout.on('data', (chunk: Buffer) => {
+    for (const line of chunk.toString().split('\n').filter(Boolean)) {
+      dispatch(line);
     }
   });
 
-  child.stderr?.on('data', (chunk: Buffer) => {
-    const lines = chunk.toString().split('\n').filter(Boolean);
-    for (const line of lines) {
-      for (const cb of callbacks) cb(line);
+  child.stderr.on('data', (chunk: Buffer) => {
+    for (const line of chunk.toString().split('\n').filter(Boolean)) {
+      dispatch(line);
     }
   });
 
   return {
     kill: () => child.kill(),
-    onData: (cb) => callbacks.push(cb),
+    onData: (cb) => {
+      callbacks.push(cb);
+      for (const line of buffered) cb(line);
+      buffered.length = 0;
+    },
   };
 }

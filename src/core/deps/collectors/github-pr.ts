@@ -1,4 +1,4 @@
-import { exec } from '../../exec.js';
+import { execSafe } from '../../exec.js';
 import type { AppEntry } from '../../registry.js';
 import type { Collector, Finding } from '../types.js';
 
@@ -19,10 +19,10 @@ export class GitHubPrCollector implements Collector {
   async collect(app: AppEntry): Promise<Finding[]> {
     if (!app.gitRepo) return [];
 
-    const result = exec(
-      `gh pr list --repo ${app.gitRepo} --state open --json number,title,url,labels --limit 50`,
-      { timeout: 15_000 }
-    );
+    const result = execSafe('gh', [
+      'pr', 'list', '--repo', app.gitRepo!, '--state', 'open',
+      '--json', 'number,title,url,labels', '--limit', '50',
+    ], { timeout: 15_000 });
 
     if (!result.ok) return [];
 

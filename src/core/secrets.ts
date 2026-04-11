@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, chmodSync, statSync, rmSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
-
 import { SecretsError, VaultNotInitializedError } from './errors.js';
+import { execSafe } from './exec.js';
+import { assertAppName, assertFilePath } from './validate.js';
 
 export const VAULT_DIR = '/home/matt/fleet/vault';
 export const KEY_PATH = '/etc/fleet/age.key';
@@ -25,9 +25,7 @@ export interface Manifest {
 }
 
 export function ensureAge(): void {
-  try {
-    execSync('which age', { stdio: 'pipe' });
-  } catch {
+  if (!execSafe('which', ['age']).ok) {
     throw new SecretsError('age not found. Install with: apt install age');
   }
 }
@@ -46,7 +44,9 @@ function requireInit(): void {
 
 export function getPublicKey(): string {
   requireInit();
-  return execSync(`age-keygen -y ${KEY_PATH}`, { encoding: 'utf-8' }).trim();
+  const r = execSafe('age-keygen', ['-y', KEY_PATH]);
+  if (!r.ok) throw new SecretsError(`Failed to read public key: ${r.stderr}`);
+  return r.stdout;
 }
 
 export function initVault(): string {
@@ -58,7 +58,8 @@ export function initVault(): string {
     mkdirSync(keyDir, { recursive: true, mode: 0o700 });
   }
 
-  execSync(`age-keygen -o ${KEY_PATH} 2>/dev/null`);
+  const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
+  if (!keygen.ok) throw new SecretsError(`Failed to generate key: ${keygen.stderr}`);
   chmodSync(KEY_PATH, 0o600);
 
   if (!existsSync(VAULT_DIR)) {
@@ -112,30 +113,27 @@ export function removeBackup(app: string): void {
 
 export function ageEncrypt(plaintext: string): string {
   const pubkey = getPublicKey();
-  return execSync(`age -r ${pubkey} --armor`, {
-    input: plaintext,
-    encoding: 'utf-8',
-    maxBuffer: 10 * 1024 * 1024,
-  });
+  const r = execSafe('age', ['-r', pubkey, '--armor'], { input: plaintext });
+  if (!r.ok) throw new SecretsError(`age encrypt failed: ${r.stderr}`);
+  return r.stdout;
 }
 
 export function ageDecrypt(ciphertext: string | Buffer): string {
-  return execSync(`age -d -i ${KEY_PATH}`, {
-    input: ciphertext,
-    encoding: 'utf-8',
-    maxBuffer: 10 * 1024 * 1024,
-  });
+  const r = execSafe('age', ['-d', '-i', KEY_PATH], { input: ciphertext.toString() });
+  if (!r.ok) throw new SecretsError(`age decrypt failed: ${r.stderr}`);
+  return r.stdout;
 }
 
 export function ageDecryptFile(filePath: string): string {
-  return execSync(`age -d -i ${KEY_PATH} "${filePath}"`, {
-    encoding: 'utf-8',
-    maxBuffer: 10 * 1024 * 1024,
-  });
+  assertFilePath(filePath);
+  const r = execSafe('age', ['-d', '-i', KEY_PATH, filePath]);
+  if (!r.ok) throw new SecretsError(`age decrypt file failed: ${r.stderr}`);
+  return r.stdout;
 }
 
 export function sealApp(app: string, envContent: string, sourceFile: string): void {
   requireInit();
+  assertAppName(app);
   const encrypted = ageEncrypt(envContent);
   const encFile = `${app}.env.age`;
   writeFileSync(join(VAULT_DIR, encFile), encrypted);
@@ -154,6 +152,7 @@ export function sealApp(app: string, envContent: string, sourceFile: string): vo
 
 export function sealDbSecrets(app: string, secretsMap: Record<string, string>, sourceDir: string): void {
   requireInit();
+  assertAppName(app);
   const filenames = Object.keys(secretsMap).sort();
   const parts = filenames.map(f => `${SECRET_DELIMITER}${f}---\n${secretsMap[f]}`);
   const bundle = parts.join('\n');
