@@ -1,8 +1,10 @@
-import { existsSync, readFileSync, writeFileSync, readdirSync, chmodSync, mkdirSync, rmSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { execSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, readdirSync, chmodSync, mkdirSync, rmSync, statSync, copyFileSync } from 'node:fs';
+import { join, basename } from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
 
 import { validateAll } from './secrets-validate.js';
+import { execSafe } from './exec.js';
+import { assertAppName, assertFilePath } from './validate.js';
 import { SecretsError } from './errors.js';
 import {
   KEY_PATH, VAULT_DIR, RUNTIME_DIR,
@@ -12,7 +14,14 @@ import {
   backupVaultFile, restoreVaultFile, removeBackup,
 } from './secrets.js';
 
-// --- Helpers ---
+// --- helpers ---
+
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 function parseEnvKeys(content: string): string[] {
   return content.split('\n')
@@ -101,6 +110,7 @@ export function safeSealDbSecrets(app: string, secretsMap: Record<string, string
 }
 
 export function setSecret(app: string, key: string, value: string): void {
+  assertAppName(app);
   const plaintext = decryptApp(app);
   const manifest = loadManifest();
   const entry = manifest.apps[app];
@@ -220,7 +230,7 @@ export function detectDrift(app?: string): DriftResult[] {
 
       const addedKeys = Object.keys(runtimeMap).filter(k => !(k in vaultMap));
       const removedKeys = Object.keys(vaultMap).filter(k => !(k in runtimeMap));
-      const changedKeys = Object.keys(vaultMap).filter(k => k in runtimeMap && vaultMap[k] !== runtimeMap[k]);
+      const changedKeys = Object.keys(vaultMap).filter(k => k in runtimeMap && !safeEqual(vaultMap[k], runtimeMap[k]));
 
       const status = (addedKeys.length || removedKeys.length || changedKeys.length) ? 'drifted' : 'in-sync';
       results.push({ app: a, status, addedKeys, removedKeys, changedKeys });
@@ -241,7 +251,7 @@ export function detectDrift(app?: string): DriftResult[] {
 
       const addedKeys = runtimeFiles.filter(f => !(f in vaultFiles));
       const removedKeys = Object.keys(vaultFiles).filter(f => !(f in runtimeMap));
-      const changedKeys = Object.keys(vaultFiles).filter(f => f in runtimeMap && vaultFiles[f] !== runtimeMap[f]);
+      const changedKeys = Object.keys(vaultFiles).filter(f => f in runtimeMap && !safeEqual(vaultFiles[f], runtimeMap[f]));
 
       const status = (addedKeys.length || removedKeys.length || changedKeys.length) ? 'drifted' : 'in-sync';
       results.push({ app: a, status, addedKeys, removedKeys, changedKeys });
@@ -306,11 +316,15 @@ export function unsealAll(): void {
       if (!existsSync(secretsDir)) mkdirSync(secretsDir, { recursive: true, mode: 0o755 });
       const parsed = parseSecretsBundle(plaintext);
       for (const [filename, content] of Object.entries(parsed)) {
-        const fpath = join(secretsDir, filename);
+        const safe = basename(filename);
+        if (safe !== filename || filename.includes('..')) {
+          throw new SecretsError(`Invalid secret filename: ${filename}`);
+        }
+        const fpath = join(secretsDir, safe);
         writeFileSync(fpath, content);
-        // 0644: docker compose secrets bind-mounts files into containers where
-        // non-root processes (e.g. mongodb uid 999) need read access
-        chmodSync(fpath, 0o644);
+        // 0640: docker compose secrets bind-mounts files into containers where
+        // non-root processes (e.g. mongodb uid 999) need read access via group
+        chmodSync(fpath, 0o640);
       }
     }
   }
@@ -355,8 +369,9 @@ export function rotateKey(): { oldPubkey: string; newPubkey: string; appsRotated
   }
 
   const backupPath = KEY_PATH + '.old';
-  execSync(`cp ${KEY_PATH} ${backupPath}`);
-  execSync(`age-keygen -o ${KEY_PATH} 2>/dev/null`);
+  copyFileSync(KEY_PATH, backupPath);
+  const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
+  if (!keygen.ok) throw new SecretsError(`Failed to generate new key: ${keygen.stderr}`);
   chmodSync(KEY_PATH, 0o600);
   const newPubkey = getPublicKey();
 

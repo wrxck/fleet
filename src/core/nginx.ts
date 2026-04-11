@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 
-import { exec } from './exec.js';
+import { execSafe } from './exec.js';
+import { assertDomain } from './validate.js';
 
 const SITES_AVAILABLE = '/etc/nginx/sites-available';
 const SITES_ENABLED = '/etc/nginx/sites-enabled';
@@ -29,15 +30,17 @@ export function listSites(): NginxSite[] {
 }
 
 export function installConfig(domain: string, content: string): void {
+  assertDomain(domain);
   const filename = `${domain}.conf`;
   writeFileSync(`${SITES_AVAILABLE}/${filename}`, content);
   const enabledPath = `${SITES_ENABLED}/${filename}`;
   if (!existsSync(enabledPath)) {
-    exec(`ln -sf ${SITES_AVAILABLE}/${filename} ${enabledPath}`);
+    execSafe('ln', ['-sf', `${SITES_AVAILABLE}/${filename}`, enabledPath]);
   }
 }
 
 export function removeConfig(domain: string): boolean {
+  assertDomain(domain);
   const filename = `${domain}.conf`;
   const available = `${SITES_AVAILABLE}/${filename}`;
   const enabled = `${SITES_ENABLED}/${filename}`;
@@ -51,15 +54,16 @@ export function removeConfig(domain: string): boolean {
 }
 
 export function testConfig(): { ok: boolean; output: string } {
-  const result = exec('nginx -t 2>&1', { timeout: 10_000 });
+  const result = execSafe('nginx', ['-t'], { timeout: 10_000 });
   return { ok: result.ok || result.stderr.includes('successful'), output: result.stderr || result.stdout };
 }
 
 export function reload(): boolean {
-  return exec('systemctl reload nginx', { timeout: 10_000 }).ok;
+  return execSafe('systemctl', ['reload', 'nginx'], { timeout: 10_000 }).ok;
 }
 
 export function readConfig(domain: string): string | null {
+  assertDomain(domain);
   const path = `${SITES_AVAILABLE}/${domain}.conf`;
   if (!existsSync(path)) return null;
   return readFileSync(path, 'utf-8');

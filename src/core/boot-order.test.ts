@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 
 import { load } from './registry.js';
 
-// These tests read actual systemd service files — skip in CI
+// these tests read actual systemd service files — skip in CI
 const isCI = !!process.env.CI;
 
 describe.skipIf(isCI)('boot order - systemd dependencies', () => {

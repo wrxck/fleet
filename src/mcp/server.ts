@@ -1,10 +1,12 @@
-import { z } from 'zod';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 
 import { getStatusData } from '../commands/status.js';
-import { existsSync } from 'node:fs';
 import { load, findApp, save, addApp, type AppEntry } from '../core/registry.js';
 import { startService, stopService, restartService } from '../core/systemd.js';
 import { getContainerLogs, getContainersByCompose } from '../core/docker.js';
@@ -32,9 +34,12 @@ function text(msg: string) {
 }
 
 export async function startMcpServer(): Promise<void> {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
+
   const server = new McpServer({
     name: 'fleet',
-    version: '1.0.0',
+    version: pkg.version,
   });
 
   server.tool('fleet_status', 'Dashboard data for all apps: systemd state, containers, health', async () => {

@@ -2,8 +2,9 @@ import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { exec } from './exec.js';
+import { execSafe } from './exec.js';
 import { GitError } from './errors.js';
+import { assertAppName } from './validate.js';
 
 export const GITHUB_ORG = 'heskethwebdesign';
 
@@ -17,7 +18,7 @@ export interface PullRequest {
 }
 
 export function isGhAuthenticated(): boolean {
-  return exec('gh auth status', { timeout: 10_000 }).ok;
+  return execSafe('gh', ['auth', 'status'], { timeout: 10_000 }).ok;
 }
 
 export function requireGhAuth(): void {
@@ -27,16 +28,15 @@ export function requireGhAuth(): void {
 }
 
 export function repoExists(name: string): boolean {
-  return exec(`gh repo view ${GITHUB_ORG}/${name} --json name`, { timeout: 15_000 }).ok;
+  assertAppName(name);
+  return execSafe('gh', ['repo', 'view', `${GITHUB_ORG}/${name}`, '--json', 'name'], { timeout: 15_000 }).ok;
 }
 
 export function createRepo(name: string): void {
   requireGhAuth();
+  assertAppName(name);
   if (repoExists(name)) return;
-  const r = exec(
-    `gh repo create ${GITHUB_ORG}/${name} --private`,
-    { timeout: 30_000 },
-  );
+  const r = execSafe('gh', ['repo', 'create', `${GITHUB_ORG}/${name}`, '--private'], { timeout: 30_000 });
   if (!r.ok) throw new GitError(`failed to create repo: ${r.stderr}`);
 }
 
@@ -49,11 +49,15 @@ export function createPullRequest(
   opts: { title: string; body?: string; head: string; base: string },
 ): PullRequest {
   requireGhAuth();
-  const bodyFlag = opts.body ? `--body "${opts.body.replace(/"/g, '\\"')}"` : '--body ""';
-  const r = exec(
-    `gh pr create --repo ${GITHUB_ORG}/${repo} --title "${opts.title.replace(/"/g, '\\"')}" ${bodyFlag} --head ${opts.head} --base ${opts.base} --json number,title,url,headRefName,baseRefName,state`,
-    { timeout: 30_000 },
-  );
+  const r = execSafe('gh', [
+    'pr', 'create',
+    '--repo', `${GITHUB_ORG}/${repo}`,
+    '--title', opts.title,
+    '--body', opts.body ?? '',
+    '--head', opts.head,
+    '--base', opts.base,
+    '--json', 'number,title,url,headRefName,baseRefName,state',
+  ], { timeout: 30_000 });
   if (!r.ok) throw new GitError(`failed to create PR: ${r.stderr}`);
 
   try {
@@ -75,10 +79,12 @@ export function createPullRequest(
 
 export function listPullRequests(repo: string, state: 'open' | 'closed' | 'all' = 'open'): PullRequest[] {
   requireGhAuth();
-  const r = exec(
-    `gh pr list --repo ${GITHUB_ORG}/${repo} --state ${state} --json number,title,url,headRefName,baseRefName,state`,
-    { timeout: 15_000 },
-  );
+  const r = execSafe('gh', [
+    'pr', 'list',
+    '--repo', `${GITHUB_ORG}/${repo}`,
+    '--state', state,
+    '--json', 'number,title,url,headRefName,baseRefName,state',
+  ], { timeout: 15_000 });
   if (!r.ok) return [];
 
   try {
@@ -111,10 +117,11 @@ export function protectBranch(repo: string, branch: string): boolean {
   const tmpFile = join(tmpdir(), `fleet-protect-${repo}-${branch}.json`);
   writeFileSync(tmpFile, protection);
   try {
-    const r = exec(
-      `gh api -X PUT repos/${GITHUB_ORG}/${repo}/branches/${branch}/protection --input ${tmpFile}`,
-      { timeout: 15_000 },
-    );
+    const r = execSafe('gh', [
+      'api', '-X', 'PUT',
+      `repos/${GITHUB_ORG}/${repo}/branches/${branch}/protection`,
+      '--input', tmpFile,
+    ], { timeout: 15_000 });
     return r.ok;
   } finally {
     try { unlinkSync(tmpFile); } catch {}

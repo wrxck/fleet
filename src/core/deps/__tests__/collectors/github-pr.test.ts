@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../exec.js', () => ({
-  exec: vi.fn(),
+  execSafe: vi.fn(),
 }));
 
-import { exec } from '../../../exec.js';
+import { execSafe } from '../../../exec.js';
 import type { AppEntry } from '../../../registry.js';
 import { GitHubPrCollector } from '../../collectors/github-pr.js';
 
-const mockExec = vi.mocked(exec);
+const mockExec = vi.mocked(execSafe);
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
