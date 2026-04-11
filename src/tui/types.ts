@@ -40,5 +40,5 @@ export type Action =
   | { type: 'TOGGLE_REDACT' }
   | { type: 'CONFIRM'; action: ConfirmAction }
   | { type: 'CANCEL_CONFIRM' }
-  | { type: 'SET_INDEX'; view: string; index: number }
+  | { type: 'SET_INDEX'; view: 'dashboard' | 'health' | 'secrets' | 'appDetail'; index: number }
   | { type: 'SET_SECRETS_SUBVIEW'; subView: SecretsSubView };
