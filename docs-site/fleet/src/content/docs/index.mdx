@@ -1,0 +1,33 @@
+---
+title: Fleet
+description: Docker production management CLI + MCP server
+template: splash
+hero:
+  tagline: Manage Docker Compose applications in production with systemd orchestration, age-encrypted secrets, health monitoring, and Telegram alerts.
+  actions:
+    - text: Get Started
+      link: /getting-started/what-is-fleet/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/wrxck/fleet
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="CLI" icon="terminal">
+    A full-featured command-line tool for managing apps, secrets, nginx, health checks, and more.
+  </Card>
+  <Card title="MCP Server" icon="puzzle">
+    Expose fleet operations as Model Context Protocol tools so Claude Code can manage your production environment directly.
+  </Card>
+  <Card title="Bot" icon="rocket">
+    A Telegram bot that delivers real-time alerts and lets you control your apps from your phone.
+  </Card>
+  <Card title="Secrets Vault" icon="seti:lock">
+    age-encrypted secrets vault with per-app isolation, drift detection, and safe seal/unseal operations.
+  </Card>
+</CardGrid>
