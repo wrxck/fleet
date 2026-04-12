@@ -13,6 +13,7 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       # Bot config (specific files only — age.key intentionally excluded)
+      - /etc/fleet/bot.json:/etc/fleet/bot.json:ro
       - /etc/fleet/telegram.json:/etc/fleet/telegram.json:ro
       # Nginx configs (for fleet nginx list)
       - /etc/nginx:/etc/nginx:ro
