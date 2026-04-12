@@ -73,7 +73,11 @@ export function initVault(): string {
 export function loadManifest(): Manifest {
   requireInit();
   if (!existsSync(MANIFEST_PATH)) return { version: 1, apps: {} };
-  return JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+  try {
+    return JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+  } catch {
+    return { apps: {} } as Manifest;
+  }
 }
 
 export function saveManifest(manifest: Manifest): void {

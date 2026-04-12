@@ -7,7 +7,7 @@ interface SystemdOpts {
 }
 
 export function generateServiceFile(opts: SystemdOpts): string {
-  const fileFlag = opts.composeFile ? ` -f ${opts.composeFile}` : '';
+  const fileFlag = opts.composeFile ? ` -f "${opts.composeFile}"` : '';
   const dbDep = opts.dependsOnDatabases ? ' docker-databases.service' : '';
 
   return `[Unit]

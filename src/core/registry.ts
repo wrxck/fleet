@@ -23,6 +23,8 @@ export interface AppEntry {
   gitRemoteUrl?: string;
   gitOnboardedAt?: string;
   registeredAt: string;
+  frozenAt?: string;
+  frozenReason?: string;
 }
 
 export interface Registry {
@@ -48,7 +50,12 @@ function defaultRegistry(): Registry {
 export function load(): Registry {
   if (!existsSync(REGISTRY_PATH)) return defaultRegistry();
   const raw = readFileSync(REGISTRY_PATH, 'utf-8');
-  return JSON.parse(raw) as Registry;
+  try {
+    return JSON.parse(raw) as Registry;
+  } catch {
+    process.stderr.write(`[registry] Warning: failed to parse registry, using default\n`);
+    return defaultRegistry();
+  }
 }
 
 export function save(reg: Registry): void {
