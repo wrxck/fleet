@@ -6,8 +6,9 @@ import { GitError } from './errors.js';
 import { detectProjectType, generateGitignore } from '../templates/gitignore.js';
 import { assertBranch, assertFilePath } from './validate.js';
 
-const SSH_AGENT_SOCK = '/tmp/fleet-ssh-agent.sock';
-if (existsSync(SSH_AGENT_SOCK)) {
+// Use SSH_AUTH_SOCK from environment, or check for fleet-specific socket
+const SSH_AGENT_SOCK = process.env.FLEET_SSH_SOCK || '/tmp/fleet-ssh-agent.sock';
+if (!process.env.SSH_AUTH_SOCK && existsSync(SSH_AGENT_SOCK)) {
   process.env.SSH_AUTH_SOCK = SSH_AGENT_SOCK;
 }
 
