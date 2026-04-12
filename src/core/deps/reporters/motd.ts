@@ -59,7 +59,7 @@ fi
 }
 
 function formatAge(isoDate: string): string {
-  const ms = Date.now() - new Date(isoDate).getTime();
+  const ms = Math.max(0, Date.now() - new Date(isoDate).getTime());
   const mins = Math.floor(ms / 60_000);
   if (mins < 1) return 'just now';
   if (mins < 60) return `${mins}m ago`;

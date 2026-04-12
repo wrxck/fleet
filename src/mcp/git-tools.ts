@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { load, findApp } from '../core/registry.js';
-import { getGitStatus, getProjectRoot, gitAdd, gitCommit, gitCheckout, gitPush } from '../core/git.js';
+import { getGitStatus, getProjectRoot, gitAddTracked, gitCommit, gitCheckout, gitPush } from '../core/git.js';
 import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard.js';
 import * as github from '../core/github.js';
 import { AppNotFoundError } from '../core/errors.js';
@@ -95,7 +95,7 @@ export function registerGitTools(server: McpServer): void {
 
   server.tool(
     'fleet_git_commit',
-    'Stage all changes and commit',
+    'Stage tracked file changes and commit',
     {
       app: z.string().describe('App name'),
       message: z.string().describe('Commit message'),
@@ -107,9 +107,9 @@ export function registerGitTools(server: McpServer): void {
       if (hint) return text(hint);
       const root = getProjectRoot(app.composePath);
 
-      if (dryRun) return text(`Would stage all and commit: "${message}"`);
+      if (dryRun) return text(`Would stage tracked changes and commit: "${message}"`);
 
-      gitAdd(root);
+      gitAddTracked(root);
       gitCommit(root, message);
       return text(`Committed: ${message}`);
     },

@@ -95,6 +95,10 @@ export function registerDepsTools(server: McpServer): void {
     }
   );
 
+  const ALLOWED_CONFIG_KEYS = new Set([
+    'scanIntervalHours', 'concurrency',
+  ]);
+
   server.tool(
     'fleet_deps_config',
     'Get or set dependency monitoring configuration',
@@ -102,7 +106,11 @@ export function registerDepsTools(server: McpServer): void {
     async ({ key, value }) => {
       const config = loadConfig();
       if (!key) return text(JSON.stringify(config, null, 2));
-      if (!value) return text(JSON.stringify((config as unknown as Record<string, unknown>)[key], null, 2));
+      if (!value) {
+        if (!ALLOWED_CONFIG_KEYS.has(key)) return text(`Unknown config key: ${key}`);
+        return text(JSON.stringify((config as unknown as Record<string, unknown>)[key], null, 2));
+      }
+      if (!ALLOWED_CONFIG_KEYS.has(key)) return text(`Cannot set key: ${key}. Allowed: ${[...ALLOWED_CONFIG_KEYS].join(', ')}`);
       (config as unknown as Record<string, unknown>)[key] = value === 'true' ? true : value === 'false' ? false : isNaN(Number(value)) ? value : Number(value);
       saveConfig(config);
       return text(`Set ${key} = ${value}`);
