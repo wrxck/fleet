@@ -23,6 +23,8 @@ export interface AppEntry {
   gitRemoteUrl?: string;
   gitOnboardedAt?: string;
   registeredAt: string;
+  frozenAt?: string;
+  frozenReason?: string;
 }
 
 export interface Registry {
