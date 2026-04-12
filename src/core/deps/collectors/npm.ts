@@ -32,15 +32,18 @@ export class NpmCollector implements Collector {
     };
 
     const findings: Finding[] = [];
-    const results = await Promise.allSettled(
-      Object.entries(allDeps).map(([name, version]) =>
-        this.checkPackage(app.name, name, version)
-      )
-    );
+    const entries = Object.entries(allDeps);
+    const BATCH_SIZE = 10;
 
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
-        findings.push(result.value);
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+      const batch = entries.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(([name, version]) => this.checkPackage(app.name, name, version))
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          findings.push(result.value);
+        }
       }
     }
 
@@ -52,7 +55,7 @@ export class NpmCollector implements Collector {
     name: string,
     currentRaw: string,
   ): Promise<Finding | null> {
-    const current = currentRaw.replace(/^[\^~>=<]/, '');
+    const current = currentRaw.replace(/^[^\d]*/, '');
 
     try {
       const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`);

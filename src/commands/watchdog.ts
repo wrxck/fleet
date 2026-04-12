@@ -1,43 +1,10 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 import { load } from '../core/registry.js';
 import { checkAllHealth } from '../core/health.js';
 import { getServiceStatus } from '../core/systemd.js';
+import { loadTelegramConfig, sendTelegram } from '../core/telegram.js';
 import { error, success, warn } from '../ui/output.js';
-
-const TELEGRAM_CONFIG_PATH = '/etc/fleet/telegram.json';
-
-interface TelegramConfig {
-  botToken: string;
-  chatId: string;
-}
-
-function loadTelegramConfig(): TelegramConfig | null {
-  if (!existsSync(TELEGRAM_CONFIG_PATH)) return null;
-  try {
-    return JSON.parse(readFileSync(TELEGRAM_CONFIG_PATH, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-async function sendTelegram(config: TelegramConfig, message: string): Promise<boolean> {
-  try {
-    const url = `https://api.telegram.org/bot${config.botToken}/sendMessage`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: config.chatId,
-        text: message,
-        parse_mode: 'HTML',
-      }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 function getHostname(): string {
   try {
