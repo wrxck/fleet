@@ -179,9 +179,15 @@ async function depsConfig(args: string[]): Promise<void> {
     return;
   }
 
+  const ALLOWED_KEYS = new Set(['scanIntervalHours', 'concurrency']);
+
   if (args[0] === 'set' && args.length >= 3) {
     const key = args[1];
     const value = args[2];
+    if (!ALLOWED_KEYS.has(key)) {
+      error(`Cannot set key: ${key}. Allowed: ${[...ALLOWED_KEYS].join(', ')}`);
+      process.exit(1);
+    }
     const parsed = value === 'true' ? true : value === 'false' ? false : isNaN(Number(value)) ? value : Number(value);
     (config as unknown as Record<string, unknown>)[key] = parsed;
     saveConfig(config);
