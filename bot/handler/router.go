@@ -31,10 +31,14 @@ type Router struct {
 }
 
 func NewRouter(b *bot.Bot, cfg *config.Config) *Router {
-	alerts := NewAlertMonitor(b, cfg.ChatID)
-	pings := NewPingMonitor(b, cfg.ChatID)
+	var alertChatID int64
+	if tg := cfg.Adapters.Telegram; tg != nil && len(tg.AlertChatIDs) > 0 {
+		alertChatID = tg.AlertChatIDs[0]
+	}
+	alerts := NewAlertMonitor(b, alertChatID)
+	pings := NewPingMonitor(b, alertChatID)
 	uptime := NewUptimeTracker()
-	digest := NewDigestManager(b, cfg.ChatID, uptime, alerts, pings)
+	digest := NewDigestManager(b, alertChatID, uptime, alerts, pings)
 
 	r := &Router{
 		commands:  make(map[string]CommandFunc),
