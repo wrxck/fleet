@@ -32,7 +32,7 @@ beforeEach(() => {
       {
         name: 'myapp',
         displayName: 'My App',
-        composePath: '/home/matt/myapp',
+        composePath: '/opt/apps/myapp',
         composeFile: null,
         serviceName: 'myapp',
         domains: [],
@@ -45,7 +45,7 @@ beforeEach(() => {
       },
     ],
     infrastructure: {
-      databases: { serviceName: 'docker-databases', composePath: '/home/matt/docker-databases' },
+      databases: { serviceName: 'docker-databases', composePath: '/opt/apps/docker-databases' },
       nginx: { configPath: '/etc/nginx' },
     },
   });

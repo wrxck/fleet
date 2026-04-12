@@ -20,8 +20,8 @@ services:
       # WAF config (rw for whitelist/rate changes) and logs
       - /etc/truewaf:/etc/truewaf
       - /var/log/truewaf:/var/log/truewaf:ro
-      # Home dir: fleet source, claude binary, app directories
-      - /home/matt:/home/matt
+      # Home dir: claude binary, app directories (set HOST_HOME env var or edit path)
+      - ${HOST_HOME:-/root}:${HOST_HOME:-/root}
       # Node.js runtime for fleet CLI
       - /usr/local/bin/node:/usr/local/bin/node:ro
       - /usr/local/lib/node_modules:/usr/local/lib/node_modules:ro
@@ -32,8 +32,8 @@ services:
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
-      - PATH=/home/matt/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-      - HOME=/home/matt
+      - PATH=${HOST_HOME:-/root}/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      - HOME=${HOST_HOME:-/root}
     security_opt:
       - no-new-privileges:true
     healthcheck:
