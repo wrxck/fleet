@@ -146,6 +146,11 @@ export function gitAdd(cwd: string, paths: string[] = ['.']): void {
   if (!r.ok) throw new GitError(`git add failed: ${r.stderr}`);
 }
 
+export function gitAddTracked(cwd: string): void {
+  const r = execSafe('git', ['add', '-u'], { cwd });
+  if (!r.ok) throw new GitError(`git add -u failed: ${r.stderr}`);
+}
+
 export function gitCommit(cwd: string, message: string): void {
   const r = execSafe('git', ['commit', '-m', message], { cwd });
   if (!r.ok) throw new GitError(`git commit failed: ${r.stderr}`);
