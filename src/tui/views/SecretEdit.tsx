@@ -90,6 +90,7 @@ export function SecretEdit(): React.JSX.Element {
               value={value}
               onChange={setValue}
               onSubmit={save}
+              mask="*"
             />
           ) : (
             <Text color={colors.muted}>(press Enter on key first)</Text>
