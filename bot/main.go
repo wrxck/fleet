@@ -24,7 +24,19 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	b := bot.New(cfg.BotToken, cfg.ChatID)
+	var botToken string
+	var alertChatID int64
+	if tg := cfg.Adapters.Telegram; tg != nil {
+		botToken = tg.BotToken
+		if len(tg.AlertChatIDs) > 0 {
+			alertChatID = tg.AlertChatIDs[0]
+		}
+	}
+	if botToken == "" {
+		log.Fatal("config: telegram adapter not configured or botToken missing")
+	}
+
+	b := bot.New(botToken, alertChatID)
 	router := handler.NewRouter(b, cfg)
 
 	// Handle shutdown signals
