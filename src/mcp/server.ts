@@ -18,6 +18,7 @@ import { AppNotFoundError } from '../core/errors.js';
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets.js';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops.js';
 import { validateApp, validateAll } from '../core/secrets-validate.js';
+import { freezeApp, unfreezeApp } from '../commands/freeze.js';
 import { registerGitTools } from './git-tools.js';
 import { registerSecretsTools } from './secrets-tools.js';
 import { registerDepsTools } from './deps-tools.js';
@@ -243,6 +244,29 @@ export async function startMcpServer(): Promise<void> {
 
       const action = existing ? 'Updated' : 'Registered';
       return text(`${action} app "${params.name}":\n${JSON.stringify(entry, null, 2)}`);
+    }
+  );
+
+  server.tool(
+    'fleet_freeze',
+    'Freeze a crash-looping service: stop it, disable it, and mark it frozen in the registry. Requires manual unfreezing.',
+    {
+      app: z.string().describe('App name'),
+      reason: z.string().optional().describe('Reason for freezing'),
+    },
+    async ({ app, reason }) => {
+      freezeApp(app, reason);
+      return text(`Frozen ${app}${reason ? `: ${reason}` : ''}`);
+    }
+  );
+
+  server.tool(
+    'fleet_unfreeze',
+    'Unfreeze a frozen service: clear frozen state, enable and start the service.',
+    { app: z.string().describe('App name') },
+    async ({ app }) => {
+      unfreezeApp(app);
+      return text(`Unfrozen ${app} — service enabled and started`);
     }
   );
 

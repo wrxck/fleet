@@ -35,7 +35,9 @@ export function getStatusData(): StatusData {
     const allRunning = appContainers.every(ct => ct.status.startsWith('Up'));
 
     let health: string;
-    if (svc && !svc.active) {
+    if (app.frozenAt) {
+      health = 'frozen';
+    } else if (svc && !svc.active) {
       // systemd says service is not active — it's down
       health = 'down';
     } else if (appContainers.length === 0) {
@@ -77,6 +79,7 @@ export function statusCommand(args: string[]): void {
 
   const rows = data.apps.map(app => {
     const healthIcon = app.health === 'healthy' ? icon.ok
+      : app.health === 'frozen' ? icon.info
       : app.health === 'degraded' ? icon.warn
       : icon.err;
     const systemdColor = app.systemd === 'active' ? c.green : c.red;
