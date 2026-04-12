@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { load } from '../core/registry.js';
 import { checkAllHealth } from '../core/health.js';
 import { getServiceStatus } from '../core/systemd.js';
-import { loadTelegramConfig, sendTelegram } from '../core/telegram.js';
+import { loadNotifyConfig, sendNotification } from '../core/notify.js';
 import { error, success, warn } from '../ui/output.js';
 
 function getHostname(): string {
@@ -56,26 +56,26 @@ export async function watchdogCommand(args: string[]): Promise<void> {
   // MOTD mode: display only, no alerts, always exit 0
   if (isMotd) return;
 
-  // send telegram alert
-  const config = loadTelegramConfig();
+  // send alert via notify adapters
+  const config = loadNotifyConfig();
   if (!config) {
-    warn('No telegram config at /etc/fleet/telegram.json — alert not sent');
+    warn('No notify config at /etc/fleet/notify.json — alert not sent');
     process.exit(1);
   }
 
   const message = [
-    `<b>fleet watchdog alert</b>`,
-    `<b>host:</b> ${hostname}`,
-    `<b>failures:</b> ${failures.length}`,
+    `fleet watchdog alert`,
+    `host: ${hostname}`,
+    `failures: ${failures.length}`,
     '',
     ...failures.map(f => `- ${f}`),
   ].join('\n');
 
-  const sent = await sendTelegram(config, message);
+  const sent = await sendNotification(config, message);
   if (sent) {
-    success('Telegram alert sent');
+    success('Alert sent');
   } else {
-    error('Failed to send Telegram alert');
+    error('Failed to send alert');
   }
 
   process.exit(1);
