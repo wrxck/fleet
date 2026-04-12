@@ -58,7 +58,8 @@ export function validateApp(appName: string): ValidationResult {
   let composeFile: string | null = null;
 
   if (appName === 'docker-databases') {
-    composePath = '/home/matt/docker-databases';
+    const reg = load();
+    composePath = reg.infrastructure.databases.composePath;
   } else {
     const reg = load();
     const app = reg.apps.find(a => a.name === appName);
