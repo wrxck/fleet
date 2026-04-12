@@ -19,6 +19,7 @@ import { initCommand } from './commands/init.js';
 import { depsCommand } from './commands/deps.js';
 import { watchdogCommand } from './commands/watchdog.js';
 import { installMcpCommand } from './commands/install-mcp.js';
+import { patchSystemdCommand } from './commands/patch-systemd.js';
 import { startMcpServer } from './mcp/server.js';
 import { error } from './ui/output.js';
 
@@ -77,6 +78,7 @@ Commands:
   watchdog            Health check all services, alert on failure
   install-mcp         Install fleet as Claude Code MCP server
   mcp                 Start as MCP server
+  patch-systemd       Add StartLimitBurst/StartLimitIntervalSec to all service files
 
 Global flags:
   --json              Output as JSON
@@ -119,6 +121,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'init': return initCommand(rest);
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
+    case 'patch-systemd': return patchSystemdCommand(rest);
     case 'mcp': return startMcpServer();
     case 'tui':
     case 'dashboard': {
