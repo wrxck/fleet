@@ -56,7 +56,7 @@ describe('formatMotd', () => {
 
 describe('generateMotdScript', () => {
   it('generates a bash script', () => {
-    const script = generateMotdScript('/home/matt/fleet/data/deps-cache.json');
+    const script = generateMotdScript('/var/lib/fleet/deps-cache.json');
     expect(script).toContain('#!/bin/bash');
     expect(script).toContain('deps-cache.json');
     expect(script).toContain('fleet deps');

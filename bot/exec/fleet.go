@@ -3,19 +3,29 @@ package exec
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 )
 
 const (
 	FleetBin      = "/usr/local/bin/node"
-	FleetScript   = "/home/matt/fleet/dist/index.js"
 	ReadTimeout   = 30 * time.Second
 	MutateTimeout = 5 * time.Minute
 )
 
+// fleetScript returns the path to the fleet CLI script.
+// Defaults to /usr/local/lib/node_modules/@wrxck/fleet/dist/index.js but
+// can be overridden via FLEET_SCRIPT env var for local development.
+func fleetScript() string {
+	if s := os.Getenv("FLEET_SCRIPT"); s != "" {
+		return s
+	}
+	return "/usr/local/lib/node_modules/@wrxck/fleet/dist/index.js"
+}
+
 // Fleet runs a fleet CLI command and returns the raw result.
 func Fleet(timeout time.Duration, args ...string) (*Result, error) {
-	args = append([]string{FleetScript}, args...)
+	args = append([]string{fleetScript()}, args...)
 	return Run(timeout, FleetBin, args...)
 }
 

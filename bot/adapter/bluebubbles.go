@@ -89,8 +89,7 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 		var payload struct {
 			Type string `json:"type"`
 			Data struct {
-				IsFromMe bool `json:"isFromMe"`
-				Handle   struct {
+				Handle struct {
 					Address string `json:"address"`
 				} `json:"handle"`
 				Text string `json:"text"`
@@ -103,11 +102,6 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 		}
 
 		if payload.Type != "new-message" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if payload.Data.IsFromMe {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
