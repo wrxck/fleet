@@ -141,6 +141,13 @@ export async function startMcpServer(): Promise<void> {
       type: z.enum(['proxy', 'spa', 'nextjs']).optional().default('proxy').describe('Config type'),
     },
     async ({ domain, port, type }) => {
+      const DANGEROUS_PORTS = [5432, 3306, 27017, 6379, 9000];
+      if (port < 1024 || port > 65535) {
+        return text(`Invalid port ${port}: must be in range 1024-65535`);
+      }
+      if (DANGEROUS_PORTS.includes(port)) {
+        return text(`Port ${port} is not allowed (reserved for internal services)`);
+      }
       const config = generateNginxConfig({ domain, port, type });
       installConfig(domain, config);
       const test = testConfig();
