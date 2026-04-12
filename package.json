@@ -1,5 +1,5 @@
 {
-  "name": "@matthesketh/fleet",
+  "name": "@wrxck/fleet",
   "version": "1.4.0",
   "description": "Docker production management CLI + MCP server for Claude Code",
   "type": "module",
