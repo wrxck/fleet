@@ -95,7 +95,7 @@ export function registerGitTools(server: McpServer): void {
 
   server.tool(
     'fleet_git_commit',
-    'Stage all changes and commit',
+    'Stage tracked file changes and commit',
     {
       app: z.string().describe('App name'),
       message: z.string().describe('Commit message'),
