@@ -94,7 +94,7 @@ export function createDepsPr(
     return { branch, bumps };
   }
 
-  const sshEnv = { SSH_AUTH_SOCK: '/tmp/fleet-ssh-agent.sock' };
+  const sshEnv: Record<string, string> = process.env.SSH_AUTH_SOCK ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {};
   execSafe('git', ['checkout', 'develop'], { cwd: app.composePath });
   execSafe('git', ['pull'], { cwd: app.composePath, env: sshEnv });
   execSafe('git', ['checkout', '-b', branch], { cwd: app.composePath });
