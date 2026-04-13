@@ -13,6 +13,28 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/wrxck/fleet/edit/feat/docs-site/docs-site/fleet/',
       },
+      head: [
+        {
+          tag: 'script',
+          attrs: { type: 'module' },
+          content: `
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default',
+            });
+            // Convert mermaid code blocks to rendered diagrams
+            document.querySelectorAll('pre > code.language-mermaid').forEach(async (el) => {
+              const pre = el.parentElement;
+              const container = document.createElement('div');
+              container.classList.add('mermaid');
+              container.textContent = el.textContent;
+              pre.replaceWith(container);
+            });
+            await mermaid.run({ querySelector: '.mermaid' });
+          `,
+        },
+      ],
       sidebar: [
         {
           label: 'Getting Started',
