@@ -23,13 +23,14 @@ export default defineConfig({
               startOnLoad: false,
               theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default',
             });
-            // Convert mermaid code blocks to rendered diagrams
-            document.querySelectorAll('pre > code.language-mermaid').forEach(async (el) => {
-              const pre = el.parentElement;
+            document.querySelectorAll('pre[data-language="mermaid"]').forEach((pre) => {
+              const figure = pre.closest('figure.frame');
+              const btn = figure?.querySelector('button[data-code]');
+              const code = btn?.getAttribute('data-code') || pre.textContent;
               const container = document.createElement('div');
               container.classList.add('mermaid');
-              container.textContent = el.textContent;
-              pre.replaceWith(container);
+              container.textContent = code;
+              (figure || pre).replaceWith(container);
             });
             await mermaid.run({ querySelector: '.mermaid' });
           `,
