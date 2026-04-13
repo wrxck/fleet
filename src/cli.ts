@@ -111,6 +111,17 @@ export async function run(argv: string[]): Promise<void> {
     return launchTui();
   }
 
+  // Commands that require root privileges
+  const ROOT_COMMANDS = new Set([
+    'start', 'stop', 'restart', 'deploy', 'freeze', 'unfreeze',
+    'nginx', 'secrets', 'patch-systemd', 'init', 'watchdog',
+  ]);
+
+  if (ROOT_COMMANDS.has(command) && process.getuid && process.getuid() !== 0) {
+    error(`'fleet ${command}' requires root privileges. Run with sudo.`);
+    process.exit(1);
+  }
+
   switch (command) {
     case 'status': return statusCommand(rest);
     case 'list': return listCommand(rest);
