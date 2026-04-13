@@ -10,21 +10,30 @@
 
 const http = require("http");
 const crypto = require("crypto");
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 const MAX_BODY = 1024 * 1024; // 1MB
 
-const PORT = 9876;
-const HOST = "127.0.0.1";
+const PORT = parseInt(process.env.DEPLOY_WEBHOOK_PORT ?? "9876", 10);
+const HOST = process.env.DEPLOY_WEBHOOK_HOST ?? "127.0.0.1";
 const TOKEN = process.env.DEPLOY_WEBHOOK_TOKEN;
 
-const ALLOWED_APPS = new Set([
-  "we-teach-academy",
-  "we-teach-academy-staging",
-]);
+// Comma-separated list of app names allowed to be deployed via this webhook.
+// e.g. DEPLOY_WEBHOOK_APPS=myapp,myapp-staging
+const ALLOWED_APPS = new Set(
+  (process.env.DEPLOY_WEBHOOK_APPS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
 
 if (!TOKEN) {
   console.error("DEPLOY_WEBHOOK_TOKEN env var is required");
+  process.exit(1);
+}
+
+if (ALLOWED_APPS.size === 0) {
+  console.error("DEPLOY_WEBHOOK_APPS env var is required (comma-separated app names)");
   process.exit(1);
 }
 

@@ -3,6 +3,8 @@ const DOMAIN_RE = /^[a-zA-Z0-9][a-zA-Z0-9.-]*$/;
 const BRANCH_RE = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/;
 const HEALTH_PATH_RE = /^\/[a-zA-Z0-9/_.-]*$/;
 const SERVICE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9@._-]*$/;
+// Secret keys must be valid env var names (alphanumeric + underscore, no leading digit)
+const SECRET_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 function assert(value: string, label: string, pattern: RegExp): void {
   if (!pattern.test(value)) {
@@ -40,4 +42,8 @@ export function assertHealthPath(path: string): void {
 
 export function assertFilePath(path: string): void {
   assertNoTraversal(path, 'file path');
+}
+
+export function assertSecretKey(key: string): void {
+  assert(key, 'secret key', SECRET_KEY_RE);
 }
