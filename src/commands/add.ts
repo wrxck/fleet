@@ -99,12 +99,5 @@ function findComposePath(dir: string): { path: string; file: string | null } {
     return { path: `${dir}/server`, file: null };
   }
 
-  const customFiles = ['docker-compose.imagemerger.yml'];
-  for (const f of customFiles) {
-    if (existsSync(`${dir}/${f}`)) {
-      return { path: dir, file: f };
-    }
-  }
-
   return { path: '', file: null };
 }

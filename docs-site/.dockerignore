@@ -1,0 +1,8 @@
+node_modules
+fleet/node_modules
+fleet/dist
+fleet/.astro
+guide
+packages
+*.md
+!fleet/src/**/*.md
