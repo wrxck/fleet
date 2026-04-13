@@ -1,4 +1,9 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { load } from '../core/registry.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fleetBin = join(__dirname, '..', '..', 'dist', 'index.js');
 
 export function generateUnsealService(): string {
   const reg = load();
@@ -14,7 +19,7 @@ Before=${allServices}
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/bin/node /home/matt/fleet/dist/index.js secrets unseal
+ExecStart=/usr/bin/node ${fleetBin} secrets unseal
 ExecStop=/bin/rm -rf /run/fleet-secrets
 TimeoutStartSec=30
 

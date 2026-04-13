@@ -1,10 +1,12 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, chmodSync, statSync, rmSync, copyFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SecretsError, VaultNotInitializedError } from './errors.js';
 import { execSafe } from './exec.js';
 import { assertAppName, assertFilePath } from './validate.js';
 
-export const VAULT_DIR = '/home/matt/fleet/vault';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+export const VAULT_DIR = join(__dirname, '..', '..', 'vault');
 export const KEY_PATH = '/etc/fleet/age.key';
 export const RUNTIME_DIR = '/run/fleet-secrets';
 const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');

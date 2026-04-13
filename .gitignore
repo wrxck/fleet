@@ -20,8 +20,6 @@ vault/manifest.json
 # Instance-specific data
 data/registry.json
 
-# Systemd service files (may contain tokens)
-deploy-webhook.service
 
 # Claude Code local settings
 .claude/

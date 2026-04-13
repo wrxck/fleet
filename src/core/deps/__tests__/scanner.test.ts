@@ -7,7 +7,7 @@ import type { Collector, Finding } from '../types.js';
 
 function makeApp(name: string): AppEntry {
   return {
-    name, displayName: name, composePath: `/home/matt/${name}`,
+    name, displayName: name, composePath: `/opt/apps/${name}`,
     composeFile: null, serviceName: name, domains: [], port: 3000,
     usesSharedDb: false, type: 'service', containers: [name],
     dependsOnDatabases: false, registeredAt: '2026-01-01T00:00:00Z',
