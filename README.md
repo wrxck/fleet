@@ -118,7 +118,7 @@ graph TD
 
 ## MCP Server
 
-Fleet exposes 33 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for AI-assisted server management. Run `fleet mcp` to start the stdio server, or install it into Claude Code:
+Fleet exposes 36 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for AI-assisted server management. Run `fleet mcp` to start the stdio server, or install it into Claude Code:
 
 ```bash
 sudo fleet install-mcp
