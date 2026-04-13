@@ -21,6 +21,11 @@ vault/manifest.json
 data/registry.json
 
 
+# Private / instance-specific
+docs/superpowers/
+deploy-webhook.cjs
+packages/
+
 # Claude Code local settings
 .claude/
 
