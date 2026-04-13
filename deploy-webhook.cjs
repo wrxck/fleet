@@ -10,7 +10,7 @@
 
 const http = require("http");
 const crypto = require("crypto");
-const { execSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 const MAX_BODY = 1024 * 1024; // 1MB
 
