@@ -11,7 +11,7 @@ export default defineConfig({
         github: 'https://github.com/wrxck/fleet',
       },
       editLink: {
-        baseUrl: 'https://github.com/wrxck/fleet/edit/develop/docs-site/fleet/',
+        baseUrl: 'https://github.com/wrxck/fleet/edit/feat/docs-site/docs-site/fleet/',
       },
       sidebar: [
         {
