@@ -101,9 +101,14 @@ export async function run(argv: string[]): Promise<void> {
     return;
   }
 
-  if (!command || args.includes('-h') || args.includes('--help')) {
+  if (args.includes('-h') || args.includes('--help')) {
     process.stdout.write(HELP);
     return;
+  }
+
+  if (!command) {
+    const { launchTui } = await import('./tui/app.js');
+    return launchTui();
   }
 
   switch (command) {
