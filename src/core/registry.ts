@@ -41,7 +41,7 @@ function defaultRegistry(): Registry {
     version: 1,
     apps: [],
     infrastructure: {
-      databases: { serviceName: 'docker-databases', composePath: '/home/matt/docker-databases' },
+      databases: { serviceName: 'docker-databases', composePath: '' },
       nginx: { configPath: '/etc/nginx' },
     },
   };

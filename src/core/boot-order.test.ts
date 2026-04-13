@@ -57,7 +57,9 @@ describe.skipIf(isCI)('fleet-watchdog.timer', () => {
 
 describe.skipIf(isCI)('wait-for-healthy.sh', () => {
   it('has timeout >= 180s', () => {
-    const content = readFileSync('/home/matt/docker-databases/wait-for-healthy.sh', 'utf-8');
+    const reg = load();
+    const dbPath = reg.infrastructure.databases.composePath;
+    const content = readFileSync(`${dbPath}/wait-for-healthy.sh`, 'utf-8');
     const match = content.match(/TIMEOUT=(\d+)/);
     expect(match).not.toBeNull();
     expect(parseInt(match![1], 10)).toBeGreaterThanOrEqual(180);

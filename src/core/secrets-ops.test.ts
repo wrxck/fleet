@@ -41,7 +41,7 @@ vi.mock('./secrets.js', async () => {
     isSealed: vi.fn(() => false),
     getPublicKey: vi.fn(() => 'age1testkey'),
     saveManifest: vi.fn(),
-    VAULT_DIR: '/home/matt/fleet/vault',
+    VAULT_DIR: '/etc/fleet/vault',
     KEY_PATH: '/etc/fleet/age.key',
     RUNTIME_DIR: '/run/fleet-secrets',
   };
