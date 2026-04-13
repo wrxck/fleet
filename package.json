@@ -55,7 +55,7 @@
     "@matthesketh/ink-modal": "^0.1.0",
     "@matthesketh/ink-pipeline": "^0.1.0",
     "@matthesketh/ink-rule": "^0.1.0",
-    "@matthesketh/ink-scrollable-list": "^0.1.0",
+    "@matthesketh/ink-scrollable-list": "file:./packages/ink-scrollable-list",
     "@matthesketh/ink-split-pane": "^0.1.0",
     "@matthesketh/ink-status-bar": "^0.1.0",
     "@matthesketh/ink-table": "^0.1.0",
