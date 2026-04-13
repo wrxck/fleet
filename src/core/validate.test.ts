@@ -6,6 +6,7 @@ import {
   assertBranch,
   assertHealthPath,
   assertFilePath,
+  assertSecretKey,
 } from './validate.js';
 
 describe('assertAppName', () => {
@@ -240,5 +241,51 @@ describe('security: combined attacks', () => {
 
   it('assertFilePath handles long traversal chains', () => {
     expect(() => assertFilePath('../../../../../../../../../etc/shadow')).toThrow();
+  });
+});
+
+describe('assertSecretKey', () => {
+  it('accepts valid env var names', () => {
+    expect(() => assertSecretKey('DATABASE_URL')).not.toThrow();
+    expect(() => assertSecretKey('API_KEY')).not.toThrow();
+    expect(() => assertSecretKey('_PRIVATE')).not.toThrow();
+    expect(() => assertSecretKey('a')).not.toThrow();
+    expect(() => assertSecretKey('X')).not.toThrow();
+    expect(() => assertSecretKey('key123')).not.toThrow();
+  });
+
+  it('rejects leading digits', () => {
+    expect(() => assertSecretKey('1KEY')).toThrow();
+    expect(() => assertSecretKey('0_BAD')).toThrow();
+    expect(() => assertSecretKey('9abc')).toThrow();
+  });
+
+  it('rejects shell metacharacters', () => {
+    expect(() => assertSecretKey('KEY;rm -rf /')).toThrow();
+    expect(() => assertSecretKey('KEY$(cmd)')).toThrow();
+    expect(() => assertSecretKey('KEY`cmd`')).toThrow();
+    expect(() => assertSecretKey('KEY|pipe')).toThrow();
+    expect(() => assertSecretKey('KEY&bg')).toThrow();
+    expect(() => assertSecretKey('KEY>file')).toThrow();
+  });
+
+  it('rejects empty strings', () => {
+    expect(() => assertSecretKey('')).toThrow();
+  });
+
+  it('rejects names with spaces', () => {
+    expect(() => assertSecretKey('MY KEY')).toThrow();
+    expect(() => assertSecretKey(' KEY')).toThrow();
+  });
+
+  it('rejects names with special characters', () => {
+    expect(() => assertSecretKey('KEY-NAME')).toThrow();
+    expect(() => assertSecretKey('KEY.NAME')).toThrow();
+    expect(() => assertSecretKey('KEY/NAME')).toThrow();
+    expect(() => assertSecretKey('KEY=VALUE')).toThrow();
+  });
+
+  it('rejects path traversal attempts', () => {
+    expect(() => assertSecretKey('../etc/passwd')).toThrow();
   });
 });

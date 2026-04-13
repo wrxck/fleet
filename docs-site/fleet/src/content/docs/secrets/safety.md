@@ -30,26 +30,26 @@ if (removedRatio > 0.5) {
 
 ## Automatic backups
 
-The `safeSealApp` and `safeSealDbSecrets` functions follow a backup-validate-seal-cleanup pattern:
+The `safeSealApp` and `safeSealDbSecrets` functions follow a validate-backup-seal-cleanup pattern:
 
-1. **Backup** — copy the existing `.age` file to `.age.bak`
-2. **Validate** — run pre-seal validation
+1. **Validate** — run pre-seal validation (cheap, no I/O wasted if it fails)
+2. **Backup** — copy the existing `.age` file to `.age.bak`
 3. **Seal** — encrypt the new content
 4. **Cleanup** — remove the backup on success
 
 If step 3 fails, the backup is automatically restored:
 
 ```typescript
+const validation = validateBeforeSeal(app, content);
+backupVaultFile(app);
 try {
-  backupVaultFile(app);
-  const validation = validateBeforeSeal(app, newContent);
-  // check validation...
-  sealApp(app, newContent);
+  sealApp(app, content, sourceFile);
   removeBackup(app);
 } catch (err) {
   restoreVaultFile(app);
   throw err;
 }
+return validation;
 ```
 
 ## Unseal validation
