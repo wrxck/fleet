@@ -16,7 +16,10 @@ import { validateApp, validateAll } from '../core/secrets-validate.js';
 import { confirm } from '../ui/confirm.js';
 import { c, heading, table, success, error, info, warn } from '../ui/output.js';
 
-const DB_SECRETS_DIR = '/home/matt/docker-databases/secrets';
+function getDbSecretsDir(): string {
+  const reg = load();
+  return join(reg.infrastructure.databases.composePath, 'secrets');
+}
 
 export async function secretsCommand(args: string[]): Promise<void> {
   const sub = args[0];
@@ -127,7 +130,7 @@ function secretsImport(args: string[]): void {
   }
 
   if (app === 'docker-databases') {
-    const dir = pathArg || DB_SECRETS_DIR;
+    const dir = pathArg || getDbSecretsDir();
     const count = importDbSecrets(app, dir);
     success(`Imported ${count} secret files from ${dir}`);
     return;

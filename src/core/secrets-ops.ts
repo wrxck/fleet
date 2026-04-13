@@ -4,7 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { validateAll } from './secrets-validate.js';
 import { execSafe } from './exec.js';
-import { assertAppName, assertFilePath } from './validate.js';
+import { assertAppName, assertFilePath, assertSecretKey } from './validate.js';
 import { SecretsError } from './errors.js';
 import {
   KEY_PATH, VAULT_DIR, RUNTIME_DIR,
@@ -111,6 +111,7 @@ export function safeSealDbSecrets(app: string, secretsMap: Record<string, string
 
 export function setSecret(app: string, key: string, value: string): void {
   assertAppName(app);
+  assertSecretKey(key);
   const plaintext = decryptApp(app);
   const manifest = loadManifest();
   const entry = manifest.apps[app];
@@ -313,7 +314,7 @@ export function unsealAll(): void {
       chmodSync(envPath, 0o600);
     } else if (entry.type === 'secrets-dir') {
       const secretsDir = join(RUNTIME_DIR, app, 'secrets');
-      if (!existsSync(secretsDir)) mkdirSync(secretsDir, { recursive: true, mode: 0o755 });
+      if (!existsSync(secretsDir)) mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
       const parsed = parseSecretsBundle(plaintext);
       for (const [filename, content] of Object.entries(parsed)) {
         const safe = basename(filename);

@@ -14,7 +14,12 @@ import (
 	"fleet-bot/claude"
 )
 
-const claudeProjectsDir = "/home/matt/.claude/projects"
+func claudeProjectsDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h + "/.claude/projects"
+	}
+	return "/root/.claude/projects"
+}
 
 type sessionInfo struct {
 	ID        string
@@ -55,7 +60,8 @@ func handleCCSessions(ctx context.Context, b *bot.Bot, s *claude.Session, chatID
 func findRecentSessions(limit int) []sessionInfo {
 	var sessions []sessionInfo
 
-	projectDirs, err := os.ReadDir(claudeProjectsDir)
+	projectsDir := claudeProjectsDir()
+	projectDirs, err := os.ReadDir(projectsDir)
 	if err != nil {
 		return nil
 	}
@@ -66,7 +72,7 @@ func findRecentSessions(limit int) []sessionInfo {
 		}
 
 		dir := projectDirToPath(pd.Name())
-		sessDir := filepath.Join(claudeProjectsDir, pd.Name())
+		sessDir := filepath.Join(projectsDir, pd.Name())
 
 		entries, err := os.ReadDir(sessDir)
 		if err != nil {
@@ -218,7 +224,7 @@ func readSessionSummary(sessID string) string {
 	for _, s := range sessions {
 		if s.ID == sessID {
 			// Try to read the first user message from the JSONL
-			path := filepath.Join(claudeProjectsDir,
+			path := filepath.Join(claudeProjectsDir(),
 				strings.ReplaceAll(strings.TrimPrefix(s.Dir, "/"), "/", "-"),
 				sessID+".jsonl")
 			data, err := os.ReadFile(path)
