@@ -1,3 +1,4 @@
+name: fleet-docs
 services:
   docs:
     build:
