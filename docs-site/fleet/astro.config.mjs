@@ -25,8 +25,13 @@ export default defineConfig({
             });
             document.querySelectorAll('pre[data-language="mermaid"]').forEach((pre) => {
               const figure = pre.closest('figure.frame');
-              const btn = figure?.querySelector('button[data-code]');
-              const code = btn?.getAttribute('data-code') || pre.textContent;
+              const lines = [...pre.querySelectorAll('.ec-line')];
+              let code;
+              if (lines.length > 0) {
+                code = lines.map(l => l.textContent).join('\\n');
+              } else {
+                code = pre.textContent || '';
+              }
               const container = document.createElement('div');
               container.classList.add('mermaid');
               container.textContent = code;
