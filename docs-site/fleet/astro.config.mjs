@@ -2,6 +2,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  site: 'https://fleet.hesketh.pro',
   integrations: [
     starlight({
       title: 'Fleet',
@@ -10,7 +11,7 @@ export default defineConfig({
         github: 'https://github.com/wrxck/fleet',
       },
       editLink: {
-        baseUrl: 'https://github.com/wrxck/fleet/edit/main/docs-site/fleet/',
+        baseUrl: 'https://github.com/wrxck/fleet/edit/develop/docs-site/fleet/',
       },
       sidebar: [
         {
