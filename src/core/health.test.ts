@@ -35,7 +35,7 @@ function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
     name: 'test-app',
     displayName: 'Test App',
-    composePath: '/home/matt/test-app',
+    composePath: '/opt/apps/test-app',
     composeFile: null,
     serviceName: 'test-app',
     domains: [],

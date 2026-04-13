@@ -12,7 +12,12 @@ import (
 	"fleet-bot/exec"
 )
 
-const claudeProjectsDir = "/home/matt/.claude/projects"
+func claudeProjectsDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h + "/.claude/projects"
+	}
+	return "/root/.claude/projects"
+}
 
 // claudeSession holds minimal session info for listing.
 type claudeSession struct {
@@ -93,7 +98,11 @@ func claudeStatus() (adapter.OutboundMessage, error) {
 
 func claudeRun(prompt, workDir string) (adapter.OutboundMessage, error) {
 	if workDir == "" {
-		workDir = "/home/matt/fleet"
+		if h := os.Getenv("HOME"); h != "" {
+			workDir = h
+		} else {
+			workDir = "/root"
+		}
 	}
 
 	cmdArgs := []string{"--print", "--output-format", "text", prompt}
@@ -162,7 +171,8 @@ func claudeSessions() (adapter.OutboundMessage, error) {
 func findClaudeSessions(limit int) []claudeSession {
 	var sessions []claudeSession
 
-	projectDirs, err := os.ReadDir(claudeProjectsDir)
+	projectsDir := claudeProjectsDir()
+	projectDirs, err := os.ReadDir(projectsDir)
 	if err != nil {
 		return nil
 	}
@@ -173,7 +183,7 @@ func findClaudeSessions(limit int) []claudeSession {
 		}
 
 		dir := "/" + strings.ReplaceAll(pd.Name(), "-", "/")
-		sessDir := filepath.Join(claudeProjectsDir, pd.Name())
+		sessDir := filepath.Join(projectsDir, pd.Name())
 
 		entries, err := os.ReadDir(sessDir)
 		if err != nil {

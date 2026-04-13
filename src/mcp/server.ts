@@ -15,6 +15,7 @@ import { listSites, installConfig, testConfig, reload, removeConfig } from '../c
 import { generateNginxConfig } from '../templates/nginx.js';
 import { composeBuild } from '../core/docker.js';
 import { AppNotFoundError } from '../core/errors.js';
+import { assertAppName, assertServiceName, assertFilePath, assertDomain } from '../core/validate.js';
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets.js';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops.js';
 import { validateApp, validateAll } from '../core/secrets-validate.js';
@@ -219,6 +220,16 @@ export async function startMcpServer(): Promise<void> {
       dependsOnDatabases: z.boolean().optional().default(false).describe('Depends on docker-databases'),
     },
     async (params) => {
+      try {
+        assertAppName(params.name);
+        assertFilePath(params.composePath);
+        if (params.serviceName) assertServiceName(params.serviceName);
+        if (params.composeFile) assertFilePath(params.composeFile);
+        for (const d of (params.domains ?? [])) assertDomain(d);
+      } catch (err) {
+        return text(`Validation error: ${(err as Error).message}`);
+      }
+
       if (!existsSync(params.composePath)) {
         return text(`Error: composePath does not exist: ${params.composePath}`);
       }

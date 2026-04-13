@@ -13,13 +13,29 @@ import (
 )
 
 const (
-	ClaudeBin       = "/home/matt/.local/bin/claude"
-	DefaultWorkDir  = "/home/matt"
 	DefaultModel    = "sonnet"
 	DefaultMaxTurns = 50
 	SessionTimeout  = 10 * time.Minute
 	UpdateInterval  = 3 * time.Second
 )
+
+// claudeBin returns the path to the claude CLI binary.
+// Uses CLAUDE_BIN env var if set, otherwise falls back to locating it via PATH.
+func claudeBin() string {
+	if s := os.Getenv("CLAUDE_BIN"); s != "" {
+		return s
+	}
+	return "claude"
+}
+
+// defaultWorkDir returns the default working directory for Claude sessions.
+// Uses HOME env var if set, otherwise "/root".
+func defaultWorkDir() string {
+	if h := os.Getenv("HOME"); h != "" {
+		return h
+	}
+	return "/root"
+}
 
 // StreamMsg represents a line from Claude Code --output-format stream-json.
 type StreamMsg struct {
@@ -68,7 +84,7 @@ type Session struct {
 
 func NewSession() *Session {
 	return &Session{
-		workDir: DefaultWorkDir,
+		workDir: defaultWorkDir(),
 		model:   DefaultModel,
 	}
 }
@@ -205,12 +221,9 @@ func (s *Session) Run(prompt string, onUpdate func(StatusUpdate)) (*RunResult, e
 	s.mu.Unlock()
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, ClaudeBin, args...)
+	cmd := exec.CommandContext(ctx, claudeBin(), args...)
 	cmd.Dir = workDir
-	cmd.Env = append(os.Environ(),
-		"HOME=/home/matt",
-		"USER=root",
-	)
+	cmd.Env = os.Environ()
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

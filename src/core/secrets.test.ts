@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
 
-const VAULT_DIR = '/home/matt/fleet/vault';
 const KEY_PATH = '/etc/fleet/age.key';
-const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
 
 // Mock fs and child_process before importing
 vi.mock('node:fs', async () => {
@@ -27,7 +25,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { existsSync, copyFileSync, rmSync, readFileSync } from 'node:fs';
-import { backupVaultFile, restoreVaultFile, removeBackup } from './secrets.js';
+import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR } from './secrets.js';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockCopyFileSync = vi.mocked(copyFileSync);
@@ -40,7 +38,7 @@ function setupManifest(apps: Record<string, any>) {
     const path = String(p);
     if (path === KEY_PATH) return true;
     if (path === VAULT_DIR) return true;
-    if (path === MANIFEST_PATH) return true;
+    if (path === join(VAULT_DIR, 'manifest.json')) return true;
     return false;
   });
   mockReadFileSync.mockReturnValue(manifest);
