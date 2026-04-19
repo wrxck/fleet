@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@matthesketh/ink-breadcrumb": "^0.1.0",
+    "@matthesketh/ink-form": "0.1.0",
     "@matthesketh/ink-fuzzy-select": "0.1.0",
     "@matthesketh/ink-gauge": "^0.1.0",
     "@matthesketh/ink-input-dispatcher": "^0.1.0",
