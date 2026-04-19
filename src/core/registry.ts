@@ -1,9 +1,13 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const REGISTRY_PATH = join(__dirname, '..', '..', 'data', 'registry.json');
+
+function resolveRegistryPath(): string {
+  return process.env.FLEET_REGISTRY_PATH
+    ?? join(__dirname, '..', '..', 'data', 'registry.json');
+}
 
 export interface AppEntry {
   name: string;
@@ -49,20 +53,39 @@ function defaultRegistry(): Registry {
 }
 
 export function load(): Registry {
-  if (!existsSync(REGISTRY_PATH)) return defaultRegistry();
-  const raw = readFileSync(REGISTRY_PATH, 'utf-8');
-  try {
-    return JSON.parse(raw) as Registry;
-  } catch {
-    process.stderr.write(`[registry] Warning: failed to parse registry, using default\n`);
-    return defaultRegistry();
+  const path = resolveRegistryPath();
+  const bakPath = path + '.bak';
+  if (existsSync(path)) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf-8')) as Registry;
+    } catch {
+      process.stderr.write(`[registry] Warning: failed to parse ${path}, trying ${bakPath}\n`);
+    }
   }
+  if (existsSync(bakPath)) {
+    try {
+      return JSON.parse(readFileSync(bakPath, 'utf-8')) as Registry;
+    } catch {
+      process.stderr.write(`[registry] Warning: failed to parse ${bakPath}, using default\n`);
+    }
+  }
+  return defaultRegistry();
 }
 
 export function save(reg: Registry): void {
-  const dir = dirname(REGISTRY_PATH);
+  const path = resolveRegistryPath();
+  const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2) + '\n');
+  if (existsSync(path)) {
+    try {
+      copyFileSync(path, path + '.bak');
+    } catch (err) {
+      process.stderr.write(`[registry] Warning: failed to write .bak: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+  const tmp = path + '.tmp';
+  writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
+  renameSync(tmp, path);
 }
 
 export function findApp(reg: Registry, name: string): AppEntry | undefined {
@@ -87,5 +110,5 @@ export function removeApp(reg: Registry, name: string): Registry {
 }
 
 export function registryPath(): string {
-  return REGISTRY_PATH;
+  return resolveRegistryPath();
 }
