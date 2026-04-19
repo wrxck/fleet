@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, renameSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,14 +77,30 @@ export function save(reg: Registry): void {
   const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   if (existsSync(path)) {
+    let mainIsValid = false;
     try {
-      copyFileSync(path, path + '.bak');
-    } catch (err) {
-      process.stderr.write(`[registry] Warning: failed to write .bak: ${err instanceof Error ? err.message : String(err)}\n`);
+      JSON.parse(readFileSync(path, 'utf-8'));
+      mainIsValid = true;
+    } catch {
+      process.stderr.write(`[registry] Warning: main registry unparsable, preserving existing .bak\n`);
+    }
+    if (mainIsValid) {
+      try {
+        copyFileSync(path, path + '.bak');
+      } catch (err) {
+        process.stderr.write(`[registry] Warning: failed to write .bak: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
     }
   }
   const tmp = path + '.tmp';
-  writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
+  const data = JSON.stringify(reg, null, 2) + '\n';
+  const fd = openSync(tmp, 'w');
+  try {
+    writeSync(fd, data);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
   renameSync(tmp, path);
 }
 

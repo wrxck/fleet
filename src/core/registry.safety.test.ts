@@ -89,4 +89,34 @@ describe('registry safety', () => {
     const loaded = load();
     expect(loaded.apps[0].name).toBe('backup-me');
   });
+
+  it('loads from .bak when main file is missing entirely', async () => {
+    const good = makeEmptyRegistry();
+    good.apps.push(makeTestApp({ name: 'from-bak-only', displayName: 'from-bak-only', composePath: '/tmp/x', serviceName: 'from-bak-only' }));
+    await fs.writeFile(tmpRegistryBak, JSON.stringify(good, null, 2));
+    const loaded = load();
+    expect(loaded.apps[0].name).toBe('from-bak-only');
+  });
+
+  it('returns defaultRegistry when both main and .bak are unparsable', async () => {
+    await fs.writeFile(tmpRegistry, '{corrupt');
+    await fs.writeFile(tmpRegistryBak, '{also corrupt');
+    const loaded = load();
+    expect(loaded.apps).toHaveLength(0);
+    expect(loaded.infrastructure.databases.serviceName).toBe('docker-databases');
+  });
+
+  it('preserves existing .bak when main file is corrupt during save', async () => {
+    const good = makeEmptyRegistry();
+    good.apps.push(makeTestApp({ name: 'original-bak', displayName: 'original-bak', composePath: '/tmp/y', serviceName: 'original-bak' }));
+    await fs.writeFile(tmpRegistryBak, JSON.stringify(good, null, 2));
+    // Corrupt the main file
+    await fs.writeFile(tmpRegistry, '{corrupt');
+    // Save a new registry — must NOT overwrite the good .bak with the corrupt main
+    const next = makeEmptyRegistry();
+    next.apps.push(makeTestApp({ name: 'new-current', displayName: 'new-current', composePath: '/tmp/z', serviceName: 'new-current' }));
+    save(next);
+    const bakContent = await fs.readFile(tmpRegistryBak, 'utf-8');
+    expect(JSON.parse(bakContent).apps[0].name).toBe('original-bak');
+  });
 });
