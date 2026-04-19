@@ -60,11 +60,33 @@ export function getContainerLogs(container: string, lines = 100): string {
   return result.ok ? (result.stdout || result.stderr) : result.stderr || 'No logs available';
 }
 
+function resolveImageName(composePath: string, composeFile: string | null): string | null {
+  const args = ['compose', ...(composeFile ? ['-f', composeFile] : []), 'config', '--images'];
+  const r = execSafe('docker', args, { cwd: composePath, timeout: 15_000 });
+  if (!r.ok) return null;
+  const first = r.stdout.split('\n').filter(Boolean)[0];
+  return first ?? null;
+}
+
+function imageExists(image: string): boolean {
+  return execSafe('docker', ['image', 'inspect', image], { timeout: 10_000 }).ok;
+}
+
 export function composeBuild(composePath: string, composeFile: string | null, appName?: string): boolean {
+  const image = resolveImageName(composePath, composeFile);
+  if (image && imageExists(image)) {
+    const lastColon = image.lastIndexOf(':');
+    const base = lastColon > 0 ? image.slice(0, lastColon) : image;
+    const previous = `${base}:fleet-previous`;
+    execSafe('docker', ['tag', image, previous], { timeout: 10_000 });
+    // intentional: retag failure does not block build
+  }
   const args = ['compose', ...(composeFile ? ['-f', composeFile] : []), 'build'];
   const env = appName ? loadEnvFile(`${SECRETS_BASE}/${appName}/.env`) : {};
   const result = execSafe('docker', args, {
-    cwd: composePath, timeout: 300_000, env: Object.keys(env).length > 0 ? env : undefined,
+    cwd: composePath,
+    timeout: 300_000,
+    env: Object.keys(env).length > 0 ? env : undefined,
   });
   return result.ok;
 }
