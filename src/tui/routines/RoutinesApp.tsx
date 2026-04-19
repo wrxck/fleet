@@ -10,14 +10,17 @@ import type { Routine } from '../../core/routines/schema.js';
 import type { RoutinesRuntime } from './runtime.js';
 import { DashboardTab } from './tabs/DashboardTab.js';
 import { GitTab } from './tabs/GitTab.js';
+import { LogsTab } from './tabs/LogsTab.js';
+import { OpsTab } from './tabs/OpsTab.js';
 import { RepoDetailView } from './tabs/RepoDetailView.js';
 import { RoutinesTab } from './tabs/RoutinesTab.js';
+import { SecurityTab } from './tabs/SecurityTab.js';
 import { RoutineForm } from './components/RoutineForm.js';
 import { CommandPalette, type PaletteAction } from './components/CommandPalette.js';
 import { LiveRunPanel } from './components/LiveRunPanel.js';
 import { useSignals } from './hooks/use-signals.js';
 
-type ActiveTab = 'dashboard' | 'routines' | 'git' | 'repo-detail';
+type ActiveTab = 'dashboard' | 'routines' | 'git' | 'ops' | 'security' | 'logs' | 'repo-detail';
 type Modal =
   | null
   | { kind: 'form'; initial?: Routine }
@@ -140,6 +143,9 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
     if (input === '1') { setActiveTab('dashboard'); return true; }
     if (input === '2') { setActiveTab('routines'); setRoutinesDetail(false); return true; }
     if (input === '3') { setActiveTab('git'); return true; }
+    if (input === '4') { setActiveTab('ops'); return true; }
+    if (input === '5') { setActiveTab('security'); return true; }
+    if (input === '6') { setActiveTab('logs'); return true; }
 
     if (activeTab === 'repo-detail') {
       if (key.escape) { setActiveTab('dashboard'); setFocusedRepo(null); return true; }
@@ -201,6 +207,9 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
           { id: 'dashboard', label: '1  Dashboard', badge: dashboardRows.length },
           { id: 'routines', label: '2  Routines', badge: routines.length },
           { id: 'git', label: '3  Git' },
+          { id: 'ops', label: '4  Ops' },
+          { id: 'security', label: '5  Security' },
+          { id: 'logs', label: '6  Logs' },
           ...(activeTab === 'repo-detail' ? [{ id: 'repo-detail', label: `◆  ${focusedRepo ?? ''}` }] : []),
         ]}
         activeId={activeTab}
@@ -229,6 +238,12 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
 
       {activeTab === 'git' && <GitTab apps={registry.apps} />}
 
+      {activeTab === 'ops' && <OpsTab apps={registry.apps} />}
+
+      {activeTab === 'security' && <SecurityTab apps={registry.apps} />}
+
+      {activeTab === 'logs' && <LogsTab apps={registry.apps} />}
+
       {activeTab === 'repo-detail' && focusedRepo && (() => {
         const app = registry.apps.find(a => a.name === focusedRepo);
         return app
@@ -238,7 +253,7 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
 
       <Box marginTop={1}>
         <Text color="gray">
-          1 dash · 2 routines · 3 git · p palette · j/k move · enter drill · n new · e edit · d del · t toggle · r run · Esc back · q quit
+          1 dash · 2 routines · 3 git · 4 ops · 5 sec · 6 logs · p palette · j/k move · enter drill · n new · e edit · d del · t toggle · r run · Esc back · q quit
         </Text>
       </Box>
 
