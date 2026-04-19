@@ -86,3 +86,53 @@ describe('fetchOrigin', () => {
     expect(fetchOrigin('/tmp/app', 'main')).toEqual({ ok: false, reason: 'fetch-failed', detail: 'exit 124' });
   });
 });
+
+import { fastForward } from './boot-refresh.js';
+
+describe('fastForward', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  function revParse(stdout: string) {
+    return { ok: true, stdout, stderr: '', exitCode: 0 };
+  }
+
+  it('no-change when local HEAD == origin/branch', () => {
+    vi.mocked(exec.execSafe)
+      .mockReturnValueOnce(revParse('abc123'))   // rev-parse HEAD
+      .mockReturnValueOnce(revParse('abc123'));  // rev-parse origin/main
+    expect(fastForward('/tmp/app', 'main')).toEqual({ ok: true, changed: false, newHead: 'abc123' });
+  });
+
+  it('ok and changed when fast-forwards cleanly', () => {
+    vi.mocked(exec.execSafe)
+      .mockReturnValueOnce(revParse('aaa'))      // HEAD before
+      .mockReturnValueOnce(revParse('bbb'))      // origin/main
+      .mockReturnValueOnce(revParse(''))         // merge --ff-only succeeds
+      .mockReturnValueOnce(revParse('bbb'));     // HEAD after
+    expect(fastForward('/tmp/app', 'main')).toEqual({ ok: true, changed: true, newHead: 'bbb' });
+  });
+
+  it('aborts when merge is not fast-forward', () => {
+    vi.mocked(exec.execSafe)
+      .mockReturnValueOnce(revParse('aaa'))
+      .mockReturnValueOnce(revParse('bbb'))
+      .mockReturnValueOnce({ ok: false, stdout: '', stderr: 'Not possible to fast-forward, aborting.', exitCode: 128 })
+      .mockReturnValueOnce(revParse(''));        // merge --abort
+    const r = fastForward('/tmp/app', 'main');
+    expect(r).toEqual({ ok: false, reason: 'non-ff', detail: 'Not possible to fast-forward, aborting.' });
+    // confirm merge --abort was called
+    expect(exec.execSafe).toHaveBeenCalledWith('git', ['merge', '--abort'], expect.objectContaining({ cwd: '/tmp/app' }));
+  });
+
+  it('returns rev-parse-failed when rev-parse HEAD fails', () => {
+    vi.mocked(exec.execSafe).mockReturnValueOnce({ ok: false, stdout: '', stderr: 'fatal: bad HEAD', exitCode: 128 });
+    expect(fastForward('/tmp/app', 'main')).toEqual({ ok: false, reason: 'rev-parse-failed', detail: 'rev-parse HEAD or origin/branch failed' });
+  });
+
+  it('returns rev-parse-failed when rev-parse origin/branch fails', () => {
+    vi.mocked(exec.execSafe)
+      .mockReturnValueOnce(revParse('aaa'))
+      .mockReturnValueOnce({ ok: false, stdout: '', stderr: 'fatal: bad revision', exitCode: 128 });
+    expect(fastForward('/tmp/app', 'main')).toEqual({ ok: false, reason: 'rev-parse-failed', detail: 'rev-parse HEAD or origin/branch failed' });
+  });
+});

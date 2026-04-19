@@ -23,3 +23,31 @@ export function fetchOrigin(projectRoot: string, branch: string): FetchResult {
   if (!r.ok) return { ok: false, reason: 'fetch-failed', detail: r.stderr || `exit ${r.exitCode}` };
   return { ok: true };
 }
+
+export type FastForwardResult =
+  | { ok: true; changed: boolean; newHead: string }
+  | { ok: false; reason: 'non-ff' | 'rev-parse-failed'; detail: string };
+
+function revParse(projectRoot: string, ref: string): string | null {
+  const r = execSafe('git', ['rev-parse', ref], { cwd: projectRoot, timeout: 10_000 });
+  return r.ok ? r.stdout.trim() : null;
+}
+
+export function fastForward(projectRoot: string, branch: string): FastForwardResult {
+  const local = revParse(projectRoot, 'HEAD');
+  if (!local) {
+    return { ok: false, reason: 'rev-parse-failed', detail: 'rev-parse HEAD or origin/branch failed' };
+  }
+  const remote = revParse(projectRoot, `origin/${branch}`);
+  if (!remote) {
+    return { ok: false, reason: 'rev-parse-failed', detail: 'rev-parse HEAD or origin/branch failed' };
+  }
+  if (local === remote) return { ok: true, changed: false, newHead: local };
+  const merge = execSafe('git', ['merge', '--ff-only', `origin/${branch}`], { cwd: projectRoot, timeout: 30_000 });
+  if (!merge.ok) {
+    execSafe('git', ['merge', '--abort'], { cwd: projectRoot, timeout: 10_000 });
+    return { ok: false, reason: 'non-ff', detail: merge.stderr || `exit ${merge.exitCode}` };
+  }
+  const newHead = revParse(projectRoot, 'HEAD');
+  return { ok: true, changed: true, newHead: newHead ?? remote };
+}
