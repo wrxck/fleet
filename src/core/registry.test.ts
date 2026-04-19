@@ -227,6 +227,39 @@ describe('removeApp', () => {
   });
 });
 
+describe('AppEntry.lastBuiltCommit', () => {
+  it('round-trips lastBuiltCommit through save and load', () => {
+    const reg: Registry = {
+      version: 1,
+      apps: [{
+        name: 'test-app',
+        displayName: 'test-app',
+        composePath: '/tmp/test-app',
+        composeFile: null,
+        serviceName: 'test-app',
+        domains: [],
+        port: null,
+        usesSharedDb: false,
+        type: 'service',
+        containers: [],
+        dependsOnDatabases: false,
+        registeredAt: '2026-04-19T00:00:00.000Z',
+        lastBuiltCommit: 'abc123def456',
+      }],
+      infrastructure: {
+        databases: { serviceName: 'docker-databases', composePath: '' },
+        nginx: { configPath: '/etc/nginx' },
+      },
+    };
+    mockExistsSync.mockReturnValue(true);
+    save(reg);
+    const written = mockWriteFileSync.mock.calls[0][1] as string;
+    mockReadFileSync.mockReturnValue(written);
+    const loaded = load();
+    expect(loaded.apps[0].lastBuiltCommit).toBe('abc123def456');
+  });
+});
+
 describe('security: prototype pollution', () => {
   it('cannot inject __proto__ as an app name via addApp', () => {
     const reg = makeRegistry([]);
