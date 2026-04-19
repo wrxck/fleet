@@ -3,12 +3,14 @@ import { fileURLToPath } from 'node:url';
 
 import type Database from 'better-sqlite3';
 
+import { createStdoutNotifier } from '../../adapters/notifier/index.js';
 import { builtInSignalProviders } from '../../adapters/signals/index.js';
 import type { RoutineEngine } from '../../core/routines/engine.js';
 import { closeDb, openDb } from '../../core/routines/db.js';
 import { builtInDefaultRoutines } from '../../core/routines/defaults.js';
 import { RoutineEngine as Engine } from '../../core/routines/engine.js';
 import { createClaudeCliRunner } from '../../adapters/runner/claude-cli.js';
+import { createMcpCallRunner } from '../../adapters/runner/mcp-call.js';
 import { createShellRunner } from '../../adapters/runner/shell.js';
 import { createSystemdTimerAdapter } from '../../adapters/scheduler/systemd-timer.js';
 import { RoutineStore } from '../../core/routines/store.js';
@@ -43,8 +45,9 @@ export function createRuntime(opts: RuntimeOptions = {}): RoutinesRuntime {
   const engine = new Engine({
     store,
     db,
-    runners: [createShellRunner(), createClaudeCliRunner()],
+    runners: [createShellRunner(), createClaudeCliRunner(), createMcpCallRunner()],
     scheduler: scheduler.available() ? scheduler : null,
+    notifiers: [createStdoutNotifier()],
   });
   const collector = new SignalCollector({ providers: builtInSignalProviders(), db, concurrency: 4 });
 
