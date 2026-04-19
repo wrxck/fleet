@@ -9,13 +9,15 @@ import type { AppEntry, Registry } from '../../core/registry.js';
 import type { Routine } from '../../core/routines/schema.js';
 import type { RoutinesRuntime } from './runtime.js';
 import { DashboardTab } from './tabs/DashboardTab.js';
+import { GitTab } from './tabs/GitTab.js';
+import { RepoDetailView } from './tabs/RepoDetailView.js';
 import { RoutinesTab } from './tabs/RoutinesTab.js';
 import { RoutineForm } from './components/RoutineForm.js';
 import { CommandPalette, type PaletteAction } from './components/CommandPalette.js';
 import { LiveRunPanel } from './components/LiveRunPanel.js';
 import { useSignals } from './hooks/use-signals.js';
 
-type ActiveTab = 'dashboard' | 'routines';
+type ActiveTab = 'dashboard' | 'routines' | 'git' | 'repo-detail';
 type Modal =
   | null
   | { kind: 'form'; initial?: Routine }
@@ -40,6 +42,7 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
   const [dashboardIndex, setDashboardIndex] = useState(0);
   const [routinesIndex, setRoutinesIndex] = useState(0);
   const [routinesDetail, setRoutinesDetail] = useState(false);
+  const [focusedRepo, setFocusedRepo] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [routinesVersion, setRoutinesVersion] = useState(0);
 
@@ -120,10 +123,9 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
       return;
     }
     if (action.id.startsWith('repo:')) {
-      setActiveTab('dashboard');
       const repo = action.id.slice('repo:'.length);
-      const idx = dashboardRows.findIndex(r => r.repo === repo);
-      if (idx >= 0) setDashboardIndex(idx);
+      setFocusedRepo(repo);
+      setActiveTab('repo-detail');
     }
   };
 
@@ -137,6 +139,17 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
     }
     if (input === '1') { setActiveTab('dashboard'); return true; }
     if (input === '2') { setActiveTab('routines'); setRoutinesDetail(false); return true; }
+    if (input === '3') { setActiveTab('git'); return true; }
+
+    if (activeTab === 'repo-detail') {
+      if (key.escape) { setActiveTab('dashboard'); setFocusedRepo(null); return true; }
+      if (input === 'a') {
+        const nightly = runtime.store.get('nightly-audit');
+        if (nightly) setModal({ kind: 'live-run', routineId: nightly.id });
+        return true;
+      }
+      return false;
+    }
 
     if (activeTab === 'dashboard') {
       if (input === 'j' || key.downArrow) {
@@ -148,6 +161,11 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
         return true;
       }
       if (input === 'r') { void refresh(true); return true; }
+      if (key.return && dashboardRows[dashboardIndex]) {
+        setFocusedRepo(dashboardRows[dashboardIndex].repo);
+        setActiveTab('repo-detail');
+        return true;
+      }
     }
 
     if (activeTab === 'routines') {
@@ -182,6 +200,8 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
         tabs={[
           { id: 'dashboard', label: '1  Dashboard', badge: dashboardRows.length },
           { id: 'routines', label: '2  Routines', badge: routines.length },
+          { id: 'git', label: '3  Git' },
+          ...(activeTab === 'repo-detail' ? [{ id: 'repo-detail', label: `◆  ${focusedRepo ?? ''}` }] : []),
         ]}
         activeId={activeTab}
         accentColor="cyan"
@@ -207,9 +227,18 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
         />
       )}
 
+      {activeTab === 'git' && <GitTab apps={registry.apps} />}
+
+      {activeTab === 'repo-detail' && focusedRepo && (() => {
+        const app = registry.apps.find(a => a.name === focusedRepo);
+        return app
+          ? <RepoDetailView app={app} />
+          : <Text color="red">repo not found: {focusedRepo}</Text>;
+      })()}
+
       <Box marginTop={1}>
         <Text color="gray">
-          1 dashboard · 2 routines · p palette · j/k move · enter detail · n new · e edit · d delete · t toggle · r run · q quit
+          1 dash · 2 routines · 3 git · p palette · j/k move · enter drill · n new · e edit · d del · t toggle · r run · Esc back · q quit
         </Text>
       </Box>
 
