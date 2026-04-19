@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@matthesketh/ink-breadcrumb": "^0.1.0",
+    "@matthesketh/ink-fuzzy-select": "0.1.0",
     "@matthesketh/ink-gauge": "^0.1.0",
     "@matthesketh/ink-input-dispatcher": "^0.1.0",
     "@matthesketh/ink-keybinding-help": "^0.1.0",
@@ -60,6 +61,8 @@
     "@matthesketh/ink-status-bar": "^0.1.0",
     "@matthesketh/ink-table": "^0.1.0",
     "@matthesketh/ink-tabs": "^0.1.0",
+    "@matthesketh/ink-task-list": "0.1.0",
+    "@matthesketh/ink-timeline": "0.1.0",
     "@matthesketh/ink-toast": "^0.1.0",
     "@matthesketh/ink-viewport": "^0.1.0",
     "@modelcontextprotocol/sdk": "1.29.0",
