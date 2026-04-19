@@ -22,6 +22,7 @@ export interface AppEntry {
   gitRepo?: string;
   gitRemoteUrl?: string;
   gitOnboardedAt?: string;
+  lastBuiltCommit?: string;
   registeredAt: string;
   frozenAt?: string;
   frozenReason?: string;
