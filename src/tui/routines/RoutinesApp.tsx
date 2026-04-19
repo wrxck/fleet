@@ -12,6 +12,7 @@ import { DashboardTab } from './tabs/DashboardTab.js';
 import { RoutinesTab } from './tabs/RoutinesTab.js';
 import { RoutineForm } from './components/RoutineForm.js';
 import { CommandPalette, type PaletteAction } from './components/CommandPalette.js';
+import { LiveRunPanel } from './components/LiveRunPanel.js';
 import { useSignals } from './hooks/use-signals.js';
 
 type ActiveTab = 'dashboard' | 'routines';
@@ -19,7 +20,8 @@ type Modal =
   | null
   | { kind: 'form'; initial?: Routine }
   | { kind: 'delete'; id: string }
-  | { kind: 'palette' };
+  | { kind: 'palette' }
+  | { kind: 'live-run'; routineId: string };
 
 export interface RoutinesAppProps {
   runtime: RoutinesRuntime;
@@ -100,10 +102,8 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
     if (action.id === 'action:new') { setModal({ kind: 'form' }); return; }
     if (action.id.startsWith('routine:run:')) {
       const id = action.id.slice('routine:run:'.length);
-      void (async (): Promise<void> => {
-        for await (const _ of runtime.engine.runOnce(id)) { /* drain; live panel lands in next slice */ }
-        bump();
-      })();
+      setActiveTab('routines');
+      setModal({ kind: 'live-run', routineId: id });
       return;
     }
     if (action.id.startsWith('routine:edit:')) {
@@ -170,6 +170,7 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
         void runtime.engine.register({ ...selected, enabled: !selected.enabled }).then(bump);
         return true;
       }
+      if (input === 'r' && selected) { setModal({ kind: 'live-run', routineId: selected.id }); return true; }
     }
 
     return false;
@@ -208,7 +209,7 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
 
       <Box marginTop={1}>
         <Text color="gray">
-          1 dashboard · 2 routines · p palette · j/k move · enter detail · n new · e edit · d delete · t toggle · r refresh · q quit
+          1 dashboard · 2 routines · p palette · j/k move · enter detail · n new · e edit · d delete · t toggle · r run · q quit
         </Text>
       </Box>
 
@@ -233,6 +234,14 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
           actions={paletteActions}
           onSelect={(action) => { void handlePalette(action); }}
           onCancel={() => setModal(null)}
+        />
+      )}
+
+      {modal?.kind === 'live-run' && (
+        <LiveRunPanel
+          engine={runtime.engine}
+          routineId={modal.routineId}
+          onClose={() => { setModal(null); bump(); }}
         />
       )}
     </Box>
