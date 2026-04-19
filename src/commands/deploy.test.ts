@@ -35,12 +35,27 @@ vi.mock('./add.js', () => ({
   addCommand: vi.fn(),
 }));
 
+vi.mock('../core/exec.js', () => ({
+  execSafe: vi.fn(),
+}));
+
+vi.mock('../core/git.js', () => ({
+  getProjectRoot: vi.fn(),
+}));
+
+vi.mock('../core/boot-refresh.js', () => ({
+  recordBuiltCommit: vi.fn(),
+}));
+
 import { existsSync } from 'node:fs';
 import { deployCommand } from './deploy.js';
 import { load, save } from '../core/registry.js';
 import { composeBuild } from '../core/docker.js';
 import { startService, restartService, getServiceStatus } from '../core/systemd.js';
 import { addCommand } from './add.js';
+import { execSafe } from '../core/exec.js';
+import { getProjectRoot } from '../core/git.js';
+import { recordBuiltCommit } from '../core/boot-refresh.js';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockLoad = vi.mocked(load);
@@ -49,6 +64,9 @@ const mockStartService = vi.mocked(startService);
 const mockRestartService = vi.mocked(restartService);
 const mockGetServiceStatus = vi.mocked(getServiceStatus);
 const mockAddCommand = vi.mocked(addCommand);
+const mockExecSafe = vi.mocked(execSafe);
+const mockGetProjectRoot = vi.mocked(getProjectRoot);
+const mockRecordBuiltCommit = vi.mocked(recordBuiltCommit);
 
 function makeApp(overrides = {}) {
   return {
@@ -88,6 +106,9 @@ beforeEach(() => {
   mockRestartService.mockReturnValue(true);
   mockGetServiceStatus.mockReturnValue({ state: 'inactive', active: false });
   mockAddCommand.mockResolvedValue(undefined);
+  mockGetProjectRoot.mockReturnValue('/apps/myapp');
+  mockExecSafe.mockReturnValue({ ok: true, stdout: 'abc1234', stderr: '', exitCode: 0 });
+  mockRecordBuiltCommit.mockReturnValue(undefined);
 });
 
 describe('deployCommand — argument validation', () => {
@@ -160,5 +181,38 @@ describe('deployCommand — security', () => {
   it('throws for path traversal in app-dir', async () => {
     mockExistsSync.mockReturnValue(false);
     await expect(deployCommand(['../../etc/cron.d/evil'])).rejects.toThrow('Directory not found');
+  });
+});
+
+describe('deploy records lastBuiltCommit', () => {
+  it('updates registry.lastBuiltCommit after successful build', async () => {
+    mockGetProjectRoot.mockReturnValue('/apps/myapp');
+    mockExecSafe.mockReturnValue({ ok: true, stdout: 'new-sha\n', stderr: '', exitCode: 0 });
+
+    await deployCommand(['/apps/myapp', '-y']);
+
+    expect(mockGetProjectRoot).toHaveBeenCalledWith('/apps/myapp');
+    expect(mockExecSafe).toHaveBeenCalledWith('git', ['rev-parse', 'HEAD'], {
+      cwd: '/apps/myapp',
+      timeout: 10_000,
+    });
+    expect(mockRecordBuiltCommit).toHaveBeenCalledWith('myapp', 'new-sha');
+  });
+
+  it('does not record when build fails', async () => {
+    mockComposeBuild.mockReturnValue(false);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(deployCommand(['/apps/myapp', '-y'])).rejects.toThrow('exit');
+    expect(mockRecordBuiltCommit).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
+  });
+
+  it('continues deploy even if rev-parse fails', async () => {
+    mockExecSafe.mockReturnValue({ ok: false, stdout: '', stderr: 'not a git repo', exitCode: 128 });
+
+    await deployCommand(['/apps/myapp', '-y']);
+
+    expect(mockRecordBuiltCommit).not.toHaveBeenCalled();
+    expect(mockStartService).toHaveBeenCalledWith('myapp');
   });
 });
