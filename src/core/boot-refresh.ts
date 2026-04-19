@@ -1,5 +1,8 @@
 import { isGitRepo, getGitStatus } from './git.js';
 import { execSafe } from './exec.js';
+import type { AppEntry } from './registry.js';
+import { load, save } from './registry.js';
+import { composeBuild } from './docker.js';
 
 export type PreflightResult =
   | { ok: true; branch: string }
@@ -50,4 +53,25 @@ export function fastForward(projectRoot: string, branch: string): FastForwardRes
   }
   const newHead = revParse(projectRoot, 'HEAD');
   return { ok: true, changed: true, newHead: newHead ?? remote };
+}
+
+export type BuildResult =
+  | { ok: true; built: boolean }
+  | { ok: false; reason: 'build-failed' };
+
+export function buildIfStale(app: AppEntry, currentHead: string): BuildResult {
+  if (app.lastBuiltCommit && app.lastBuiltCommit === currentHead) {
+    return { ok: true, built: false };
+  }
+  const ok = composeBuild(app.composePath, app.composeFile, app.name);
+  if (!ok) return { ok: false, reason: 'build-failed' };
+  return { ok: true, built: true };
+}
+
+export function recordBuiltCommit(appName: string, commit: string): void {
+  const reg = load();
+  const i = reg.apps.findIndex(a => a.name === appName);
+  if (i < 0) return;
+  reg.apps[i] = { ...reg.apps[i], lastBuiltCommit: commit };
+  save(reg);
 }

@@ -87,7 +87,95 @@ describe('fetchOrigin', () => {
   });
 });
 
-import { fastForward } from './boot-refresh.js';
+import { fastForward, buildIfStale, recordBuiltCommit } from './boot-refresh.js';
+import * as docker from './docker.js';
+import * as registry from './registry.js';
+import type { AppEntry } from './registry.js';
+
+vi.mock('./docker.js');
+vi.mock('./registry.js');
+
+function app(overrides: Partial<AppEntry> = {}): AppEntry {
+  return {
+    name: 'x',
+    displayName: 'x',
+    composePath: '/tmp/x',
+    composeFile: null,
+    serviceName: 'x',
+    domains: [],
+    port: null,
+    usesSharedDb: false,
+    type: 'service',
+    containers: [],
+    dependsOnDatabases: false,
+    registeredAt: '',
+    ...overrides,
+  };
+}
+
+describe('buildIfStale', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('no-op when HEAD matches lastBuiltCommit', () => {
+    const r = buildIfStale(app({ lastBuiltCommit: 'abc' }), 'abc');
+    expect(r).toEqual({ ok: true, built: false });
+    expect(docker.composeBuild).not.toHaveBeenCalled();
+  });
+
+  it('builds when HEAD differs from lastBuiltCommit', () => {
+    vi.mocked(docker.composeBuild).mockReturnValue(true);
+    const r = buildIfStale(app({ lastBuiltCommit: 'old' }), 'new');
+    expect(r).toEqual({ ok: true, built: true });
+    expect(docker.composeBuild).toHaveBeenCalledWith('/tmp/x', null, 'x');
+  });
+
+  it('builds when lastBuiltCommit is undefined', () => {
+    vi.mocked(docker.composeBuild).mockReturnValue(true);
+    const r = buildIfStale(app({ lastBuiltCommit: undefined }), 'head');
+    expect(r).toEqual({ ok: true, built: true });
+  });
+
+  it('returns build-failed when composeBuild returns false', () => {
+    vi.mocked(docker.composeBuild).mockReturnValue(false);
+    const r = buildIfStale(app({ lastBuiltCommit: 'old' }), 'new');
+    expect(r).toEqual({ ok: false, reason: 'build-failed' });
+  });
+});
+
+describe('recordBuiltCommit', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('updates app.lastBuiltCommit and saves registry', () => {
+    const entry = app({ name: 'target', lastBuiltCommit: 'old' });
+    const reg = {
+      version: 1,
+      apps: [entry],
+      infrastructure: {
+        databases: { serviceName: 'docker-databases', composePath: '' },
+        nginx: { configPath: '/etc/nginx' },
+      },
+    };
+    vi.mocked(registry.load).mockReturnValue(reg);
+    recordBuiltCommit('target', 'new-sha');
+    expect(registry.save).toHaveBeenCalledWith(expect.objectContaining({
+      apps: expect.arrayContaining([expect.objectContaining({ name: 'target', lastBuiltCommit: 'new-sha' })]),
+    }));
+  });
+
+  it('is a silent no-op when app not found', () => {
+    const reg = {
+      version: 1,
+      apps: [],
+      infrastructure: {
+        databases: { serviceName: 'docker-databases', composePath: '' },
+        nginx: { configPath: '/etc/nginx' },
+      },
+    };
+    vi.mocked(registry.load).mockReturnValue(reg);
+    recordBuiltCommit('ghost', 'new-sha');
+    expect(registry.save).not.toHaveBeenCalled();
+  });
+});
 
 describe('fastForward', () => {
   beforeEach(() => vi.resetAllMocks());
