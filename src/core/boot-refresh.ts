@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { isGitRepo, getGitStatus } from './git.js';
 import { execSafe } from './exec.js';
 import type { AppEntry } from './registry.js';
@@ -74,4 +75,52 @@ export function recordBuiltCommit(appName: string, commit: string): void {
   if (i < 0) return;
   reg.apps[i] = { ...reg.apps[i], lastBuiltCommit: commit };
   save(reg);
+}
+
+export const KILL_SWITCH = '/etc/fleet/no-auto-refresh';
+export const DEFAULT_WALL_CLOCK_MS = 900_000;
+
+export type RefreshResult =
+  | { kind: 'refreshed'; head: string; built: boolean }
+  | { kind: 'no-change'; head: string }
+  | { kind: 'skipped'; reason: string }
+  | { kind: 'failed-safe'; step: string; detail: string };
+
+export interface RefreshOptions {
+  wallClockMs?: number;
+}
+
+async function doRefresh(app: AppEntry): Promise<RefreshResult> {
+  const pre = preflight(app.composePath);
+  if (!pre.ok) return { kind: 'skipped', reason: pre.reason };
+  const fetched = fetchOrigin(app.composePath, pre.branch);
+  if (!fetched.ok) return { kind: 'failed-safe', step: 'fetch', detail: fetched.detail };
+  const ff = fastForward(app.composePath, pre.branch);
+  if (!ff.ok) return { kind: 'failed-safe', step: 'merge', detail: ff.detail };
+  const build = buildIfStale(app, ff.newHead);
+  if (!build.ok) return { kind: 'failed-safe', step: 'build', detail: build.reason };
+  if (build.built) recordBuiltCommit(app.name, ff.newHead);
+  if (!ff.changed && !build.built) return { kind: 'no-change', head: ff.newHead };
+  return { kind: 'refreshed', head: ff.newHead, built: build.built };
+}
+
+export async function refresh(app: AppEntry, opts: RefreshOptions = {}): Promise<RefreshResult> {
+  if (existsSync(KILL_SWITCH)) return { kind: 'skipped', reason: 'kill-switch' };
+  const cap = opts.wallClockMs ?? DEFAULT_WALL_CLOCK_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race<RefreshResult>([
+      doRefresh(app),
+      new Promise<RefreshResult>((resolve) => {
+        timer = setTimeout(
+          () => resolve({ kind: 'failed-safe', step: 'wall-clock', detail: `exceeded ${cap}ms` }),
+          cap,
+        );
+      }),
+    ]);
+  } catch (err) {
+    return { kind: 'failed-safe', step: 'exception', detail: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
