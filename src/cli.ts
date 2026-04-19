@@ -23,6 +23,7 @@ import { patchSystemdCommand } from './commands/patch-systemd.js';
 import { freezeCommand, unfreezeCommand } from './commands/freeze.js';
 import { bootStartCommand } from './commands/boot-start.js';
 import { rollbackCommand } from './commands/rollback.js';
+import { routinesCommand } from './commands/routines.js';
 import { startMcpServer } from './mcp/server.js';
 import { error } from './ui/output.js';
 
@@ -77,6 +78,7 @@ Commands:
   git pr list <app>   List open PRs
   git release <app>   Create develop->main PR
   tui, dashboard      Interactive terminal dashboard
+  routines            Fleet-wide routines TUI (signals grid + routine history)
   init                Auto-discover all existing apps
   watchdog            Health check all services, alert on failure
   install-mcp         Install fleet as Claude Code MCP server
@@ -155,6 +157,7 @@ export async function run(argv: string[]): Promise<void> {
       const { launchTui } = await import('./tui/app.js');
       return launchTui();
     }
+    case 'routines': return routinesCommand(rest);
     default:
       error(`Unknown command: ${command}`);
       process.stdout.write(HELP);
