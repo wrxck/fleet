@@ -104,8 +104,16 @@ async function doRefresh(app: AppEntry): Promise<RefreshResult> {
   return { kind: 'refreshed', head: ff.newHead, built: build.built };
 }
 
+function isKillSwitchActive(): boolean {
+  try {
+    return existsSync(KILL_SWITCH);
+  } catch {
+    return false;  // permission error or similar — assume no kill switch, let refresh proceed
+  }
+}
+
 export async function refresh(app: AppEntry, opts: RefreshOptions = {}): Promise<RefreshResult> {
-  if (existsSync(KILL_SWITCH)) return { kind: 'skipped', reason: 'kill-switch' };
+  if (isKillSwitchActive()) return { kind: 'skipped', reason: 'kill-switch' };
   const cap = opts.wallClockMs ?? DEFAULT_WALL_CLOCK_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

@@ -349,4 +349,12 @@ describe('refresh', () => {
       expect(r.detail).toContain('boom');
     }
   });
+
+  it('proceeds with refresh when kill-switch existsSync throws (permission error)', async () => {
+    vi.spyOn(fs, 'existsSync').mockImplementation(() => { throw new Error('EACCES'); });
+    vi.mocked(git.isGitRepo).mockReturnValue(false);
+    const r = await refresh(app());
+    // We proceed past the kill-switch check, hit preflight, which returns not-a-git-repo.
+    expect(r).toEqual({ kind: 'skipped', reason: 'not-a-git-repo' });
+  });
 });
