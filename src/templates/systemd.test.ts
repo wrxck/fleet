@@ -57,9 +57,9 @@ describe('generateServiceFile', () => {
     expect(result).toContain('After=docker.service docker-databases.service');
   });
 
-  it('includes ExecStart with docker compose up', () => {
+  it('includes ExecStart with fleet boot-start', () => {
     const result = generateServiceFile(makeOpts());
-    expect(result).toContain('ExecStart=/usr/bin/docker compose up -d --force-recreate');
+    expect(result).toContain('ExecStart=/usr/bin/env fleet boot-start myapp');
   });
 
   it('includes ExecStop with docker compose down and timeout', () => {
@@ -115,12 +115,52 @@ describe('generateServiceFile', () => {
     expect(result).toContain('Description=App\nExecStart=/bin/evil');
   });
 
-  it('all ExecStart lines reference the same quoted composeFile', () => {
+  it('all Exec lines except ExecStart reference the same quoted composeFile', () => {
     const result = generateServiceFile(makeOpts({ composeFile: 'prod.yml' }));
-    const execLines = result.split('\n').filter(l => l.startsWith('Exec'));
+    const execLines = result.split('\n').filter(l => l.startsWith('Exec') && !l.startsWith('ExecStart='));
     expect(execLines.length).toBeGreaterThan(0);
     for (const line of execLines) {
       expect(line).toContain('-f "prod.yml"');
     }
+  });
+});
+
+describe('boot-start integration in template', () => {
+  it('uses fleet boot-start as ExecStart with the service name', () => {
+    const content = generateServiceFile({
+      serviceName: 'sample',
+      description: 'sample',
+      workingDirectory: '/home/matt/sample',
+      composeFile: null,
+      dependsOnDatabases: false,
+    });
+    expect(content).toContain('ExecStart=/usr/bin/env fleet boot-start sample');
+    expect(content).not.toContain('ExecStart=/usr/bin/docker compose');
+  });
+
+  it('bumps TimeoutStartSec to 900 to accommodate refresh cap', () => {
+    const content = generateServiceFile({
+      serviceName: 'sample',
+      description: 'sample',
+      workingDirectory: '/home/matt/sample',
+      composeFile: null,
+      dependsOnDatabases: false,
+    });
+    expect(content).toContain('TimeoutStartSec=900');
+    expect(content).not.toContain('TimeoutStartSec=300');
+  });
+
+  it('keeps ExecStartPre and ExecStop as docker compose (only ExecStart changes)', () => {
+    const content = generateServiceFile({
+      serviceName: 'sample',
+      description: 'sample',
+      workingDirectory: '/home/matt/sample',
+      composeFile: null,
+      dependsOnDatabases: false,
+    });
+    // ExecStartPre still does compose down (defensive cleanup before refresh)
+    expect(content).toContain('ExecStartPre=-/usr/bin/docker compose down');
+    // ExecStop still does compose down --timeout 30
+    expect(content).toContain('ExecStop=/usr/bin/docker compose down --timeout 30');
   });
 });
