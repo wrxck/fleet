@@ -15,7 +15,9 @@ import { LogsTab } from './tabs/LogsTab.js';
 import { OpsTab } from './tabs/OpsTab.js';
 import { RepoDetailView } from './tabs/RepoDetailView.js';
 import { RoutinesTab } from './tabs/RoutinesTab.js';
+import { ScaffoldTab } from './tabs/ScaffoldTab.js';
 import { SecurityTab } from './tabs/SecurityTab.js';
+import { SettingsTab } from './tabs/SettingsTab.js';
 import { TimelineTab } from './tabs/TimelineTab.js';
 import { RoutineForm } from './components/RoutineForm.js';
 import { CommandPalette, type PaletteAction } from './components/CommandPalette.js';
@@ -24,7 +26,7 @@ import { useSignals } from './hooks/use-signals.js';
 
 type ActiveTab =
   | 'dashboard' | 'routines' | 'git' | 'ops' | 'security' | 'logs'
-  | 'cost' | 'timeline' | 'repo-detail';
+  | 'cost' | 'timeline' | 'scaffold' | 'settings' | 'repo-detail';
 type Modal =
   | null
   | { kind: 'form'; initial?: Routine }
@@ -152,6 +154,8 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
     if (input === '6') { setActiveTab('logs'); return true; }
     if (input === '7') { setActiveTab('cost'); return true; }
     if (input === '8') { setActiveTab('timeline'); return true; }
+    if (input === '9') { setActiveTab('scaffold'); return true; }
+    if (input === '0') { setActiveTab('settings'); return true; }
 
     if (activeTab === 'repo-detail') {
       if (key.escape) { setActiveTab('dashboard'); setFocusedRepo(null); return true; }
@@ -218,6 +222,8 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
           { id: 'logs', label: '6  Logs' },
           { id: 'cost', label: '7  Cost' },
           { id: 'timeline', label: '8  Timeline' },
+          { id: 'scaffold', label: '9  Scaffold' },
+          { id: 'settings', label: '0  Settings' },
           ...(activeTab === 'repo-detail' ? [{ id: 'repo-detail', label: `◆  ${focusedRepo ?? ''}` }] : []),
         ]}
         activeId={activeTab}
@@ -256,6 +262,10 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
 
       {activeTab === 'timeline' && <TimelineTab engine={runtime.engine} />}
 
+      {activeTab === 'scaffold' && <ScaffoldTab />}
+
+      {activeTab === 'settings' && <SettingsTab runtime={runtime} />}
+
       {activeTab === 'repo-detail' && focusedRepo && (() => {
         const app = registry.apps.find(a => a.name === focusedRepo);
         return app
@@ -265,7 +275,7 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
 
       <Box marginTop={1}>
         <Text color="gray">
-          1 dash · 2 routines · 3 git · 4 ops · 5 sec · 6 logs · 7 cost · 8 timeline · p palette · j/k · enter drill · n new · e edit · d del · t toggle · r run · q quit
+          1-8 tabs · 9 scaffold · 0 settings · p palette · j/k · enter drill · n/e/d/t routines · r run · Esc back · q quit
         </Text>
       </Box>
 
