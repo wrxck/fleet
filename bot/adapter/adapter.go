@@ -48,3 +48,13 @@ type Adapter interface {
 	// Stop gracefully shuts down the adapter.
 	Stop() error
 }
+
+// SenderAuthorizer is an optional interface adapters may implement to let the
+// router enforce per-sender authorization before dispatching a command.
+// Adapters that do not implement this interface are assumed to have already
+// authenticated the sender at the transport layer.
+type SenderAuthorizer interface {
+	// IsAuthorizedSender reports whether the given senderID (as populated in
+	// InboundMessage.SenderID) is permitted to invoke bot commands.
+	IsAuthorizedSender(senderID string) bool
+}
