@@ -2,15 +2,24 @@ import React, { useMemo, useState } from 'react';
 
 import { Box, Text } from 'ink';
 import { Tabs } from '@matthesketh/ink-tabs';
+import { Modal } from '@matthesketh/ink-modal';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 
 import type { AppEntry, Registry } from '../../core/registry.js';
+import type { Routine } from '../../core/routines/schema.js';
 import type { RoutinesRuntime } from './runtime.js';
 import { DashboardTab } from './tabs/DashboardTab.js';
 import { RoutinesTab } from './tabs/RoutinesTab.js';
+import { RoutineForm } from './components/RoutineForm.js';
+import { CommandPalette, type PaletteAction } from './components/CommandPalette.js';
 import { useSignals } from './hooks/use-signals.js';
 
 type ActiveTab = 'dashboard' | 'routines';
+type Modal =
+  | null
+  | { kind: 'form'; initial?: Routine }
+  | { kind: 'delete'; id: string }
+  | { kind: 'palette' };
 
 export interface RoutinesAppProps {
   runtime: RoutinesRuntime;
@@ -29,18 +38,103 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
   const [dashboardIndex, setDashboardIndex] = useState(0);
   const [routinesIndex, setRoutinesIndex] = useState(0);
   const [routinesDetail, setRoutinesDetail] = useState(false);
+  const [modal, setModal] = useState<Modal>(null);
+  const [routinesVersion, setRoutinesVersion] = useState(0);
 
   const targets = useMemo(() => targetsForRegistry(registry.apps), [registry]);
   const { snapshot, loading, lastRefreshed, refresh } = useSignals(runtime.collector, targets, 30_000);
 
-  const routines = runtime.store.list();
+  const routines = useMemo(() => {
+    void routinesVersion;
+    runtime.store.reload();
+    return runtime.store.list();
+  }, [runtime.store, routinesVersion]);
 
   const dashboardRows = useMemo(
     () => targets.map(t => ({ repo: t.repoName, signals: snapshot.get(t.repoName) ?? [] })),
     [targets, snapshot],
   );
 
+  const bump = (): void => setRoutinesVersion(v => v + 1);
+
+  const handleFormSubmit = async (routine: Routine): Promise<void> => {
+    await runtime.engine.register(routine);
+    setModal(null);
+    bump();
+  };
+
+  const handleDelete = async (id: string): Promise<void> => {
+    await runtime.engine.unregister(id);
+    setModal(null);
+    setRoutinesIndex(i => Math.max(0, Math.min(i, routines.length - 2)));
+    bump();
+  };
+
+  const paletteActions: PaletteAction[] = useMemo(() => {
+    const items: PaletteAction[] = [
+      { id: 'nav:dashboard', group: 'nav', label: 'go to Dashboard' },
+      { id: 'nav:routines', group: 'nav', label: 'go to Routines' },
+      { id: 'action:refresh', group: 'action', label: 'refresh signals now' },
+      { id: 'action:new', group: 'action', label: 'new routine…' },
+    ];
+    for (const r of routines) {
+      items.push({ id: `routine:run:${r.id}`, group: 'routine', label: `run "${r.id}" now` });
+      items.push({ id: `routine:edit:${r.id}`, group: 'routine', label: `edit "${r.id}"` });
+      items.push({
+        id: `routine:toggle:${r.id}`,
+        group: 'routine',
+        label: r.enabled ? `disable "${r.id}"` : `enable "${r.id}"`,
+      });
+    }
+    for (const app of registry.apps) {
+      items.push({ id: `repo:${app.name}`, group: 'repo', label: `focus repo "${app.name}"` });
+    }
+    return items;
+  }, [routines, registry]);
+
+  const handlePalette = async (action: PaletteAction): Promise<void> => {
+    setModal(null);
+    if (action.id === 'nav:dashboard') { setActiveTab('dashboard'); return; }
+    if (action.id === 'nav:routines') { setActiveTab('routines'); return; }
+    if (action.id === 'action:refresh') { await refresh(true); return; }
+    if (action.id === 'action:new') { setModal({ kind: 'form' }); return; }
+    if (action.id.startsWith('routine:run:')) {
+      const id = action.id.slice('routine:run:'.length);
+      void (async (): Promise<void> => {
+        for await (const _ of runtime.engine.runOnce(id)) { /* drain; live panel lands in next slice */ }
+        bump();
+      })();
+      return;
+    }
+    if (action.id.startsWith('routine:edit:')) {
+      const id = action.id.slice('routine:edit:'.length);
+      const r = runtime.store.get(id);
+      if (r) setModal({ kind: 'form', initial: r });
+      return;
+    }
+    if (action.id.startsWith('routine:toggle:')) {
+      const id = action.id.slice('routine:toggle:'.length);
+      const r = runtime.store.get(id);
+      if (r) await runtime.engine.register({ ...r, enabled: !r.enabled });
+      bump();
+      return;
+    }
+    if (action.id.startsWith('repo:')) {
+      setActiveTab('dashboard');
+      const repo = action.id.slice('repo:'.length);
+      const idx = dashboardRows.findIndex(r => r.repo === repo);
+      if (idx >= 0) setDashboardIndex(idx);
+    }
+  };
+
   useRegisterHandler((input, key) => {
+    if (modal?.kind === 'palette') return false;
+    if (modal) return false;
+
+    if (input === 'p' || (key.ctrl && input === 'k')) {
+      setModal({ kind: 'palette' });
+      return true;
+    }
     if (input === '1') { setActiveTab('dashboard'); return true; }
     if (input === '2') { setActiveTab('routines'); setRoutinesDetail(false); return true; }
 
@@ -67,6 +161,15 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
       }
       if (key.return) { setRoutinesDetail(o => !o); return true; }
       if (key.escape) { setRoutinesDetail(false); return true; }
+
+      const selected = routines[routinesIndex];
+      if (input === 'n') { setModal({ kind: 'form' }); return true; }
+      if (input === 'e' && selected) { setModal({ kind: 'form', initial: selected }); return true; }
+      if (input === 'd' && selected) { setModal({ kind: 'delete', id: selected.id }); return true; }
+      if (input === 't' && selected) {
+        void runtime.engine.register({ ...selected, enabled: !selected.enabled }).then(bump);
+        return true;
+      }
     }
 
     return false;
@@ -104,8 +207,49 @@ export function RoutinesApp({ runtime, registry }: RoutinesAppProps): React.JSX.
       )}
 
       <Box marginTop={1}>
-        <Text color="gray">1 dashboard · 2 routines · j/k move · enter detail · r refresh · q quit</Text>
+        <Text color="gray">
+          1 dashboard · 2 routines · p palette · j/k move · enter detail · n new · e edit · d delete · t toggle · r refresh · q quit
+        </Text>
       </Box>
+
+      {modal?.kind === 'form' && (
+        <RoutineForm
+          initial={modal.initial}
+          onSubmit={(r) => { void handleFormSubmit(r); }}
+          onCancel={() => setModal(null)}
+        />
+      )}
+
+      {modal?.kind === 'delete' && (
+        <ConfirmDelete
+          id={modal.id}
+          onConfirm={() => { void handleDelete(modal.id); }}
+          onCancel={() => setModal(null)}
+        />
+      )}
+
+      {modal?.kind === 'palette' && (
+        <CommandPalette
+          actions={paletteActions}
+          onSelect={(action) => { void handlePalette(action); }}
+          onCancel={() => setModal(null)}
+        />
+      )}
+    </Box>
+  );
+}
+
+interface ConfirmDeleteProps { id: string; onConfirm(): void; onCancel(): void }
+
+function ConfirmDelete({ id, onConfirm, onCancel }: ConfirmDeleteProps): React.JSX.Element {
+  useRegisterHandler((input, key) => {
+    if (input === 'y' || input === 'Y') { onConfirm(); return true; }
+    if (input === 'n' || input === 'N' || key.escape) { onCancel(); return true; }
+    return false;
+  });
+  return (
+    <Box borderStyle="round" borderColor="red" paddingX={1} marginTop={1}>
+      <Text>Delete routine <Text bold color="cyan">{id}</Text>? <Text color="green">y</Text> confirm   <Text color="red">n</Text> cancel</Text>
     </Box>
   );
 }
