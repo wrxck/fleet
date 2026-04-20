@@ -36,6 +36,15 @@ export function execSafe(
   };
 }
 
+export function execGit(
+  args: string[],
+  opts: { cwd: string; timeout?: number; env?: Record<string, string> },
+): ExecResult {
+  // Prepend -c safe.directory=<cwd> so git under root can operate on repos owned by other users.
+  // This is scoped to the one command — does not mutate global git config.
+  return execSafe('git', ['-c', `safe.directory=${opts.cwd}`, ...args], opts);
+}
+
 export function execLive(cmd: string, args: string[], opts: { cwd?: string } = {}): number {
   const result = spawnSync(cmd, args, {
     cwd: opts.cwd,
