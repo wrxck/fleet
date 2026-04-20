@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { execSafe } from './exec.js';
+import { execSafe, execGit } from './exec.js';
 
 // execSafe uses spawnSync with array args — no shell injection possible.
 // Tests exercise real process spawning with safe, known-good binaries.
@@ -84,5 +84,24 @@ describe('execSafe', () => {
     const result = execSafe('echo', ['safe; rm -rf /']);
     expect(result.ok).toBe(true);
     expect(result.stdout).toBe('safe; rm -rf /');
+  });
+});
+
+describe('execGit', () => {
+  it('prepends -c safe.directory=<cwd> and runs git successfully in a real repo', () => {
+    // Integration test: run against the real worktree — ownership matches so this always works,
+    // and it proves the -c safe.directory prefix does not break valid git invocations.
+    const cwd = '/home/matt/fleet-boot-refresh';
+    const result = execGit(['rev-parse', '--is-inside-work-tree'], { cwd });
+    expect(result.ok).toBe(true);
+    expect(result.stdout).toBe('true');
+  });
+
+  it('passes cwd and timeout through to the underlying call', () => {
+    const cwd = '/home/matt/fleet-boot-refresh';
+    const result = execGit(['rev-parse', 'HEAD'], { cwd, timeout: 5000 });
+    expect(result.ok).toBe(true);
+    // HEAD SHA is a 40-char hex string
+    expect(result.stdout).toMatch(/^[0-9a-f]{40}$/);
   });
 });

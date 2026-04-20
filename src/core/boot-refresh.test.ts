@@ -6,7 +6,14 @@ import { preflight, fetchOrigin, refresh } from './boot-refresh.js';
 import * as fs from 'node:fs';
 
 vi.mock('./git.js');
-vi.mock('./exec.js');
+vi.mock('./exec.js', () => {
+  const execSafe = vi.fn();
+  // execGit is used by boot-refresh; forward to execSafe so existing mock sequences work.
+  const execGit = vi.fn((args: string[], opts: { cwd: string; timeout?: number }) =>
+    execSafe('git', args, opts),
+  );
+  return { execSafe, execGit };
+});
 vi.mock('node:fs');
 
 function status(overrides: Partial<GitStatus> = {}): GitStatus {

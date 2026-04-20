@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { isGitRepo, getGitStatus } from './git.js';
-import { execSafe } from './exec.js';
+import { execGit } from './exec.js';
 import type { AppEntry } from './registry.js';
 import { load, save } from './registry.js';
 import { composeBuild } from './docker.js';
@@ -23,7 +23,7 @@ export type FetchResult =
   | { ok: false; reason: 'fetch-failed'; detail: string };
 
 export function fetchOrigin(projectRoot: string, branch: string): FetchResult {
-  const r = execSafe('git', ['fetch', 'origin', branch], { cwd: projectRoot, timeout: 60_000 });
+  const r = execGit(['fetch', 'origin', branch], { cwd: projectRoot, timeout: 60_000 });
   if (!r.ok) return { ok: false, reason: 'fetch-failed', detail: r.stderr || `exit ${r.exitCode}` };
   return { ok: true };
 }
@@ -33,7 +33,7 @@ export type FastForwardResult =
   | { ok: false; reason: 'non-ff' | 'rev-parse-failed'; detail: string };
 
 function revParse(projectRoot: string, ref: string): string | null {
-  const r = execSafe('git', ['rev-parse', ref], { cwd: projectRoot, timeout: 10_000 });
+  const r = execGit(['rev-parse', ref], { cwd: projectRoot, timeout: 10_000 });
   return r.ok ? r.stdout.trim() : null;
 }
 
@@ -47,9 +47,9 @@ export function fastForward(projectRoot: string, branch: string): FastForwardRes
     return { ok: false, reason: 'rev-parse-failed', detail: 'rev-parse HEAD or origin/branch failed' };
   }
   if (local === remote) return { ok: true, changed: false, newHead: local };
-  const merge = execSafe('git', ['merge', '--ff-only', `origin/${branch}`], { cwd: projectRoot, timeout: 30_000 });
+  const merge = execGit(['merge', '--ff-only', `origin/${branch}`], { cwd: projectRoot, timeout: 30_000 });
   if (!merge.ok) {
-    execSafe('git', ['merge', '--abort'], { cwd: projectRoot, timeout: 10_000 });
+    execGit(['merge', '--abort'], { cwd: projectRoot, timeout: 10_000 });
     return { ok: false, reason: 'non-ff', detail: merge.stderr || `exit ${merge.exitCode}` };
   }
   const newHead = revParse(projectRoot, 'HEAD');
