@@ -91,4 +91,50 @@ d('boot-refresh integration — happy path', () => {
       expect(r.step).toBe('build');
     }
   }, 180_000);
+
+  it('skips cleanly when working tree dirty', async () => {
+    await fs.writeFile(join(workingTree, 'dirty.txt'), 'uncommitted');
+    try {
+      const r = await refresh(testApp(workingTree));
+      expect(r).toEqual({ kind: 'skipped', reason: 'dirty-tree' });
+    } finally {
+      await fs.rm(join(workingTree, 'dirty.txt'), { force: true });
+    }
+  });
+
+  it('skips cleanly when no remote configured', async () => {
+    const noRemote = join(workDir, 'no-remote');
+    execSync(`git init -b main "${noRemote}"`);
+    execSync(`git -C "${noRemote}" config user.email it@test`);
+    execSync(`git -C "${noRemote}" config user.name it`);
+    await fs.writeFile(join(noRemote, 'file'), 'x');
+    execSync(`git -C "${noRemote}" add .`);
+    execSync(`git -C "${noRemote}" commit -m init`);
+    const r = await refresh(testApp(noRemote));
+    expect(r).toEqual({ kind: 'skipped', reason: 'no-remote' });
+  });
+
+  it('skips cleanly when detached HEAD', async () => {
+    const originalBranch = execSync(`git -C "${workingTree}" rev-parse --abbrev-ref HEAD`).toString().trim();
+    const sha = execSync(`git -C "${workingTree}" rev-parse HEAD`).toString().trim();
+    execSync(`git -C "${workingTree}" checkout --quiet ${sha}`);
+    try {
+      const r = await refresh(testApp(workingTree));
+      expect(r).toEqual({ kind: 'skipped', reason: 'detached-head' });
+    } finally {
+      execSync(`git -C "${workingTree}" checkout --quiet ${originalBranch}`);
+    }
+  });
+
+  it('fails safe when fetch cannot reach origin', async () => {
+    const originalRemote = execSync(`git -C "${workingTree}" remote get-url origin`).toString().trim();
+    execSync(`git -C "${workingTree}" remote set-url origin "${join(workDir, 'does-not-exist.git')}"`);
+    try {
+      const r = await refresh(testApp(workingTree));
+      expect(r.kind).toBe('failed-safe');
+      if (r.kind === 'failed-safe') expect(r.step).toBe('fetch');
+    } finally {
+      execSync(`git -C "${workingTree}" remote set-url origin "${originalRemote}"`);
+    }
+  });
 });
