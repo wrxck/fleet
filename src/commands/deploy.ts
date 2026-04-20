@@ -7,7 +7,7 @@ import { startService, restartService, getServiceStatus } from '../core/systemd.
 import { FleetError } from '../core/errors.js';
 import { success, error, info, warn, heading } from '../ui/output.js';
 import { addCommand } from './add.js';
-import { execSafe } from '../core/exec.js';
+import { execGit } from '../core/exec.js';
 import { getProjectRoot } from '../core/git.js';
 import { recordBuiltCommit } from '../core/boot-refresh.js';
 
@@ -54,7 +54,7 @@ export async function deployCommand(args: string[]): Promise<void> {
 
   try {
     const root = getProjectRoot(app.composePath);
-    const head = execSafe('git', ['rev-parse', 'HEAD'], { cwd: root, timeout: 10_000 });
+    const head = execGit(['rev-parse', 'HEAD'], { cwd: root, timeout: 10_000 });
     if (head.ok && head.stdout.trim()) {
       recordBuiltCommit(app.name, head.stdout.trim());
     }

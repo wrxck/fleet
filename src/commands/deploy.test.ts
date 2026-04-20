@@ -35,9 +35,14 @@ vi.mock('./add.js', () => ({
   addCommand: vi.fn(),
 }));
 
-vi.mock('../core/exec.js', () => ({
-  execSafe: vi.fn(),
-}));
+vi.mock('../core/exec.js', () => {
+  const execSafe = vi.fn();
+  // execGit is used by deploy; forward to execSafe so existing mock sequences work.
+  const execGit = vi.fn((args: string[], opts: { cwd: string; timeout?: number }) =>
+    execSafe('git', args, opts),
+  );
+  return { execSafe, execGit };
+});
 
 vi.mock('../core/git.js', () => ({
   getProjectRoot: vi.fn(),
@@ -53,7 +58,7 @@ import { load, save } from '../core/registry.js';
 import { composeBuild } from '../core/docker.js';
 import { startService, restartService, getServiceStatus } from '../core/systemd.js';
 import { addCommand } from './add.js';
-import { execSafe } from '../core/exec.js';
+import { execSafe, execGit } from '../core/exec.js';
 import { getProjectRoot } from '../core/git.js';
 import { recordBuiltCommit } from '../core/boot-refresh.js';
 
@@ -65,6 +70,7 @@ const mockRestartService = vi.mocked(restartService);
 const mockGetServiceStatus = vi.mocked(getServiceStatus);
 const mockAddCommand = vi.mocked(addCommand);
 const mockExecSafe = vi.mocked(execSafe);
+const mockExecGit = vi.mocked(execGit);
 const mockGetProjectRoot = vi.mocked(getProjectRoot);
 const mockRecordBuiltCommit = vi.mocked(recordBuiltCommit);
 
@@ -192,7 +198,7 @@ describe('deploy records lastBuiltCommit', () => {
     await deployCommand(['/apps/myapp', '-y']);
 
     expect(mockGetProjectRoot).toHaveBeenCalledWith('/apps/myapp');
-    expect(mockExecSafe).toHaveBeenCalledWith('git', ['rev-parse', 'HEAD'], {
+    expect(mockExecGit).toHaveBeenCalledWith(['rev-parse', 'HEAD'], {
       cwd: '/apps/myapp',
       timeout: 10_000,
     });
