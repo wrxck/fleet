@@ -36,6 +36,7 @@ export default defineConfig({
             { label: 'Git', slug: 'cli/git' },
             { label: 'Deps', slug: 'cli/deps' },
             { label: 'Watchdog', slug: 'cli/watchdog' },
+            { label: 'Boot Refresh', slug: 'cli/boot-refresh' },
           ],
         },
         {
