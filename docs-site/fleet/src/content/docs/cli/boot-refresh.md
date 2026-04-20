@@ -33,7 +33,7 @@ systemd ExecStart: fleet boot-start <app>
 │
 ├── Refresh pipeline (wall-clock cap: 900 s)
 │   ├── Preflight  — verify git repo exists at compose dir
-│   ├── Fetch      — git fetch origin (best-effort, skipped on error)
+│   ├── Fetch      — git fetch origin (best-effort, returns failed-safe on error)
 │   ├── FF-merge   — git merge --ff-only origin/<branch>
 │   ├── Build-if-stale — docker compose build only if HEAD ≠ lastBuiltCommit
 │   └── Record     — update lastBuiltCommit in registry on success
@@ -85,10 +85,12 @@ Rolling back myapp to fleet-previous...
 Migrate already-installed systemd units from the old `ExecStart` (`docker compose up`) to the new `fleet boot-start <app>` form. Backs up each original unit file as `<path>.service.bak` before writing.
 
 ```bash
-sudo fleet patch-systemd [<app>] [--rollback]
+sudo fleet patch-systemd [--rollback]
 ```
 
-Run without arguments to patch all registered apps at once. Pass an app name to patch a single service.
+Run without arguments to patch all registered app services at once. The command always patches every app — per-app filtering is not supported.
+
+The `docker-databases` service is **not** boot-start-ified. Its `ExecStart` (plain `docker compose up`) is left untouched; only `StartLimitBurst=5` / `StartLimitIntervalSec=300` are added if missing. This is intentional: the databases service has no git repository to pull from and does not participate in the boot-refresh pipeline.
 
 | Flag | Description |
 |------|-------------|

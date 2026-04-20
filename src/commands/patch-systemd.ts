@@ -11,16 +11,19 @@ export function patchSystemdCommand(args: string[]): void {
   if (args.includes('--rollback')) return rollback();
 
   const reg = load();
-  const serviceNames = [
-    ...reg.apps.map(a => a.serviceName),
-    reg.infrastructure.databases.serviceName,
+  const dbServiceName = reg.infrastructure.databases.serviceName;
+  const appServiceNames = reg.apps.map(a => a.serviceName);
+
+  const targets: Array<{ name: string; rewriteExecStart: boolean }> = [
+    ...appServiceNames.map(name => ({ name, rewriteExecStart: true })),
+    { name: dbServiceName, rewriteExecStart: false },
   ];
 
-  info(`Patching ${serviceNames.length} service(s)...`);
+  info(`Patching ${targets.length} service(s)...`);
   let patched = 0;
   let skipped = 0;
 
-  for (const name of serviceNames) {
+  for (const { name, rewriteExecStart } of targets) {
     const path = `${SERVICE_DIR}/${name}.service`;
     const content = readServiceFile(name);
 
@@ -33,7 +36,7 @@ export function patchSystemdCommand(args: string[]): void {
     let updated = content;
     let changed = false;
 
-    // Existing behavior: add StartLimitBurst if missing
+    // Existing behavior: add StartLimitBurst if missing (applies to ALL services including databases)
     if (!updated.includes('StartLimitBurst=')) {
       updated = updated.replace(
         /(\[Service\])/,
@@ -42,21 +45,23 @@ export function patchSystemdCommand(args: string[]): void {
       changed = true;
     }
 
-    // New behavior: rewrite ExecStart to fleet boot-start
-    const expectedExecStart = `ExecStart=/usr/bin/env fleet boot-start ${name}`;
-    if (!updated.includes(expectedExecStart)) {
-      updated = updated.replace(/^ExecStart=.*$/m, expectedExecStart);
-      changed = true;
-    }
-
-    // Ensure TimeoutStartSec=900
-    if (!updated.includes('TimeoutStartSec=900')) {
-      if (/^TimeoutStartSec=\d+/m.test(updated)) {
-        updated = updated.replace(/^TimeoutStartSec=\d+.*$/m, 'TimeoutStartSec=900');
-      } else {
-        updated = updated.replace(/(\[Service\])/, '$1\nTimeoutStartSec=900');
+    // ExecStart + TimeoutStartSec rewrite ONLY for app services — databases has no git repo
+    if (rewriteExecStart) {
+      const expectedExecStart = `ExecStart=/usr/bin/env fleet boot-start ${name}`;
+      if (!updated.includes(expectedExecStart)) {
+        updated = updated.replace(/^ExecStart=.*$/m, expectedExecStart);
+        changed = true;
       }
-      changed = true;
+
+      // Ensure TimeoutStartSec=900
+      if (!updated.includes('TimeoutStartSec=900')) {
+        if (/^TimeoutStartSec=\d+/m.test(updated)) {
+          updated = updated.replace(/^TimeoutStartSec=\d+.*$/m, 'TimeoutStartSec=900');
+        } else {
+          updated = updated.replace(/(\[Service\])/, '$1\nTimeoutStartSec=900');
+        }
+        changed = true;
+      }
     }
 
     if (!changed) {
