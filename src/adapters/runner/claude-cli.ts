@@ -155,8 +155,9 @@ export function createClaudeCliRunner(opts: ClaudeCliOptions = {}): RunnerAdapte
             for (const part of evt.message!.content!) {
               if (part.type === 'tool_use' && part.name) {
                 push({ kind: 'tool-call', name: part.name, argsPreview: summariseArgs(part.input) });
-              } else if (part.type === 'text' && typeof (part as { text?: unknown }).text === 'string') {
-                push({ kind: 'stdout', chunk: (part as { text: string }).text });
+              } else if (part.type === 'text') {
+                const text = (part as unknown as { text?: unknown }).text;
+                if (typeof text === 'string') push({ kind: 'stdout', chunk: text });
               }
             }
           }
