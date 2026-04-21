@@ -14,6 +14,7 @@ import { checkHealth, checkAllHealth } from '../core/health.js';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx.js';
 import { generateNginxConfig } from '../templates/nginx.js';
 import { composeBuild } from '../core/docker.js';
+import { execSafe } from '../core/exec.js';
 import { AppNotFoundError } from '../core/errors.js';
 import { assertAppName, assertServiceName, assertFilePath, assertDomain } from '../core/validate.js';
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets.js';
@@ -286,6 +287,42 @@ export async function startMcpServer(): Promise<void> {
       unfreezeApp(app);
       return text(`Unfrozen ${app} — service enabled and started`);
     }
+  );
+
+  server.tool(
+    'fleet_rollback',
+    'Roll back an app to its previous image (tagged <repo>:fleet-previous before the last build) and restart the service. Use this when a recent deploy or boot-refresh produced a broken image.',
+    { app: z.string().describe('App name') },
+    async ({ app }) => {
+      const entry = requireApp(app);
+
+      // Resolve current image name via compose config
+      const config = execSafe(
+        'docker',
+        ['compose', ...(entry.composeFile ? ['-f', entry.composeFile] : []), 'config', '--images'],
+        { cwd: entry.composePath, timeout: 15_000 },
+      );
+      if (!config.ok) return text(`Could not resolve image name for ${entry.name}: ${config.stderr}`);
+      const latest = config.stdout.split('\n').filter(Boolean)[0];
+      if (!latest) return text(`Could not resolve image name for ${entry.name}`);
+
+      // Compute previous tag via lastIndexOf (handles registry:port/repo:tag)
+      const lastColon = latest.lastIndexOf(':');
+      const base = lastColon > 0 ? latest.slice(0, lastColon) : latest;
+      const previous = `${base}:fleet-previous`;
+
+      if (!execSafe('docker', ['image', 'inspect', previous], { timeout: 10_000 }).ok) {
+        return text(`No previous image found (${previous}) — nothing to roll back to`);
+      }
+      const tag = execSafe('docker', ['tag', previous, latest], { timeout: 10_000 });
+      if (!tag.ok) return text(`docker tag failed: ${tag.stderr}`);
+
+      const ok = restartService(entry.serviceName);
+      return text(ok
+        ? `Rolled back ${entry.name} to ${previous}`
+        : `Tag flipped but service restart failed for ${entry.serviceName}`,
+      );
+    },
   );
 
   registerGitTools(server);

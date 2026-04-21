@@ -182,6 +182,7 @@ describe('MCP server tool registration', () => {
     'fleet_register',
     'fleet_freeze',
     'fleet_unfreeze',
+    'fleet_rollback',
   ];
 
   for (const toolName of EXPECTED_TOOLS) {

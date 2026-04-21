@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('./exec.js', () => ({
-  execSafe: vi.fn(),
-}));
+vi.mock('./exec.js', () => {
+  const execSafe = vi.fn();
+  // execGit is a thin wrapper — forward to execSafe so existing mock logic works.
+  const execGit = vi.fn((_args: string[], opts: { cwd: string; timeout?: number }) =>
+    execSafe('git', _args, opts),
+  );
+  return { execSafe, execGit };
+});
 
 vi.mock('./validate.js', () => ({
   assertBranch: vi.fn(),
