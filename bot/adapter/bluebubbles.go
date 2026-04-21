@@ -3,12 +3,22 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/google/uuid"
 )
+
+// webhookSignatureHeader is the HTTP header that must carry the hex-encoded
+// HMAC-SHA256 of the raw request body, computed with the adapter password as
+// the shared key. Requests without a valid signature are rejected.
+const webhookSignatureHeader = "X-BlueBubbles-Signature"
 
 // BlueBubblesAdapter implements Adapter for iMessage via BlueBubbles relay.
 type BlueBubblesAdapter struct {
@@ -78,11 +88,48 @@ func (b *BlueBubblesAdapter) Start(ctx context.Context, inbox chan<- InboundMess
 	return nil
 }
 
+// IsAuthorizedSender reports whether the given sender identity is in the
+// configured allowlist. The router consults this before dispatching any
+// command originating from the BlueBubbles adapter.
+func (b *BlueBubblesAdapter) IsAuthorizedSender(senderID string) bool {
+	return b.allowedNumbers[senderID]
+}
+
+// verifyWebhookSignature reports whether the hex-encoded signature in
+// headerSig matches the HMAC-SHA256 of body keyed by the adapter password.
+// Comparison is constant-time. An empty password disables verification (the
+// adapter refuses to accept any webhook) to avoid silently accepting an
+// unauthenticated deployment.
+func (b *BlueBubblesAdapter) verifyWebhookSignature(body []byte, headerSig string) bool {
+	if b.password == "" || headerSig == "" {
+		return false
+	}
+	provided, err := hex.DecodeString(headerSig)
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(b.password))
+	mac.Write(body)
+	expected := mac.Sum(nil)
+	return subtle.ConstantTimeCompare(provided, expected) == 1
+}
+
 // webhookHandler returns the HTTP handler for incoming BlueBubbles webhook events.
 func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		if !b.verifyWebhookSignature(body, r.Header.Get(webhookSignatureHeader)) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -96,7 +143,7 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 			} `json:"data"`
 		}
 
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.Unmarshal(body, &payload); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
@@ -107,7 +154,7 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 		}
 
 		sender := payload.Data.Handle.Address
-		if !b.allowedNumbers[sender] {
+		if !b.IsAuthorizedSender(sender) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}

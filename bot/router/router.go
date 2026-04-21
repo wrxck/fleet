@@ -83,6 +83,17 @@ func (r *Router) SendAlert(text string) {
 
 // dispatch handles a single inbound message.
 func (r *Router) dispatch(msg adapter.InboundMessage) {
+	// Enforce per-sender authorization if the originating adapter supports it.
+	// An adapter that does not implement SenderAuthorizer is assumed to have
+	// already authenticated the sender at the transport layer.
+	if a, ok := r.adapters[msg.Provider]; ok {
+		if auth, ok := a.(adapter.SenderAuthorizer); ok {
+			if !auth.IsAuthorizedSender(msg.SenderID) {
+				return
+			}
+		}
+	}
+
 	text := strings.TrimSpace(msg.Text)
 
 	// Check pending selection first.
