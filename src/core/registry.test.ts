@@ -1,13 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('node:fs', () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-}));
+vi.mock('node:fs', () => {
+  const writtenData: { value: string } = { value: '' };
+  const mockFd = 42;
+  return {
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+    copyFileSync: vi.fn(),
+    renameSync: vi.fn(),
+    openSync: vi.fn(() => mockFd),
+    writeSync: vi.fn((_fd: number, data: string) => { writtenData.value = data; }),
+    fsyncSync: vi.fn(),
+    closeSync: vi.fn(),
+    _writtenData: writtenData,
+  };
+});
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
 import { load, save, findApp, addApp, removeApp } from './registry.js';
 import type { AppEntry, Registry } from './registry.js';
 
@@ -15,6 +26,10 @@ const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);
 const mockWriteFileSync = vi.mocked(writeFileSync);
 const mockMkdirSync = vi.mocked(mkdirSync);
+const mockOpenSync = vi.mocked(openSync);
+const mockWriteSync = vi.mocked(writeSync);
+const mockFsyncSync = vi.mocked(fsyncSync);
+const mockCloseSync = vi.mocked(closeSync);
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
@@ -89,10 +104,11 @@ describe('load', () => {
 describe('save', () => {
   it('writes valid JSON to the registry file', () => {
     mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify(makeRegistry()));
     const reg = makeRegistry([makeApp()]);
     save(reg);
-    expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
-    const written = mockWriteFileSync.mock.calls[0][1] as string;
+    expect(mockWriteSync).toHaveBeenCalledTimes(1);
+    const written = mockWriteSync.mock.calls[0][1] as string;
     const parsed = JSON.parse(written);
     expect(parsed.apps).toHaveLength(1);
     expect(parsed.apps[0].name).toBe('myapp');
@@ -103,23 +119,35 @@ describe('save', () => {
     const reg = makeRegistry();
     save(reg);
     expect(mockMkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
-    expect(mockWriteFileSync).toHaveBeenCalled();
+    expect(mockWriteSync).toHaveBeenCalled();
   });
 
   it('writes JSON with trailing newline', () => {
     mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify(makeRegistry()));
     const reg = makeRegistry();
     save(reg);
-    const written = mockWriteFileSync.mock.calls[0][1] as string;
+    const written = mockWriteSync.mock.calls[0][1] as string;
     expect(written.endsWith('\n')).toBe(true);
   });
 
   it('writes pretty-printed JSON (2-space indent)', () => {
     mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify(makeRegistry()));
     const reg = makeRegistry([makeApp()]);
     save(reg);
-    const written = mockWriteFileSync.mock.calls[0][1] as string;
+    const written = mockWriteSync.mock.calls[0][1] as string;
     expect(written).toContain('  "version"');
+  });
+
+  it('fsyncs and closes the fd before rename', () => {
+    mockExistsSync.mockReturnValue(false);
+    const reg = makeRegistry();
+    save(reg);
+    expect(mockOpenSync).toHaveBeenCalled();
+    expect(mockWriteSync).toHaveBeenCalled();
+    expect(mockFsyncSync).toHaveBeenCalled();
+    expect(mockCloseSync).toHaveBeenCalled();
   });
 });
 
@@ -224,6 +252,40 @@ describe('removeApp', () => {
     const reg = makeRegistry([makeApp()]);
     const returned = removeApp(reg, 'myapp');
     expect(returned).toBe(reg);
+  });
+});
+
+describe('AppEntry.lastBuiltCommit', () => {
+  it('round-trips lastBuiltCommit through save and load', () => {
+    const reg: Registry = {
+      version: 1,
+      apps: [{
+        name: 'test-app',
+        displayName: 'test-app',
+        composePath: '/tmp/test-app',
+        composeFile: null,
+        serviceName: 'test-app',
+        domains: [],
+        port: null,
+        usesSharedDb: false,
+        type: 'service',
+        containers: [],
+        dependsOnDatabases: false,
+        registeredAt: '2026-04-19T00:00:00.000Z',
+        lastBuiltCommit: 'abc123def456',
+      }],
+      infrastructure: {
+        databases: { serviceName: 'docker-databases', composePath: '' },
+        nginx: { configPath: '/etc/nginx' },
+      },
+    };
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify(makeRegistry()));
+    save(reg);
+    const written = mockWriteSync.mock.calls[0][1] as string;
+    mockReadFileSync.mockReturnValue(written);
+    const loaded = load();
+    expect(loaded.apps[0].lastBuiltCommit).toBe('abc123def456');
   });
 });
 

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import type { AppEntry, Registry } from '../core/registry.js';
+
 vi.mock('../core/registry.js', () => ({
   load: vi.fn(),
   findApp: vi.fn(),
@@ -23,18 +25,47 @@ import { execLive } from '../core/exec.js';
 import { error } from '../ui/output.js';
 import { logsCommand } from './logs.js';
 
+function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
+  return {
+    name: 'myapp',
+    displayName: 'myapp',
+    composePath: '/srv/myapp',
+    composeFile: null,
+    serviceName: 'fleet-myapp',
+    domains: [],
+    port: null,
+    usesSharedDb: false,
+    type: 'service',
+    containers: ['myapp-web'],
+    dependsOnDatabases: false,
+    registeredAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeRegistry(apps: AppEntry[]): Registry {
+  return {
+    version: 1,
+    apps,
+    infrastructure: {
+      databases: { serviceName: 'docker-databases', composePath: '' },
+      nginx: { configPath: '/etc/nginx' },
+    },
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 });
 
 describe('logsCommand', () => {
-  const mockApp = { name: 'myapp', serviceName: 'fleet-myapp', containers: ['myapp-web'] };
-
   it('shows logs for a valid app', () => {
-    vi.mocked(load).mockReturnValue({ apps: [mockApp] } as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
+    const app = makeApp();
+    vi.mocked(load).mockReturnValue(makeRegistry([app]));
+    vi.mocked(findApp).mockReturnValue(app);
     vi.mocked(getContainerLogs).mockReturnValue('log line 1\nlog line 2');
 
     logsCommand(['myapp']);
@@ -43,8 +74,9 @@ describe('logsCommand', () => {
   });
 
   it('follows logs with -f flag', () => {
-    vi.mocked(load).mockReturnValue({ apps: [mockApp] } as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
+    const app = makeApp();
+    vi.mocked(load).mockReturnValue(makeRegistry([app]));
+    vi.mocked(findApp).mockReturnValue(app);
     vi.mocked(execLive).mockReturnValue(0);
 
     expect(() => logsCommand(['myapp', '-f'])).toThrow('exit');
@@ -52,8 +84,9 @@ describe('logsCommand', () => {
   });
 
   it('respects -n flag for line count', () => {
-    vi.mocked(load).mockReturnValue({ apps: [mockApp] } as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
+    const app = makeApp();
+    vi.mocked(load).mockReturnValue(makeRegistry([app]));
+    vi.mocked(findApp).mockReturnValue(app);
     vi.mocked(getContainerLogs).mockReturnValue('');
 
     logsCommand(['myapp', '-n', '50']);
@@ -63,15 +96,47 @@ describe('logsCommand', () => {
 
   it('exits with error when no app name provided', () => {
     expect(() => logsCommand([])).toThrow('exit');
-    expect(error).toHaveBeenCalledWith('Usage: fleet logs <app> [-f] [-n <lines>]');
+    expect(error).toHaveBeenCalledWith('Usage: fleet logs <app> [-f] [-n <lines>] [-c <container>]');
   });
 
   it('exits with error when app has no containers', () => {
-    const noCtApp = { ...mockApp, containers: [] };
-    vi.mocked(load).mockReturnValue({ apps: [noCtApp] } as any);
-    vi.mocked(findApp).mockReturnValue(noCtApp as any);
+    const noCtApp = makeApp({ containers: [] });
+    vi.mocked(load).mockReturnValue(makeRegistry([noCtApp]));
+    vi.mocked(findApp).mockReturnValue(noCtApp);
 
     expect(() => logsCommand(['myapp'])).toThrow('exit');
     expect(error).toHaveBeenCalledWith('No containers registered for myapp');
+  });
+
+  it('selects a specific container with -c flag', () => {
+    const multiApp = makeApp({ containers: ['myapp-web', 'myapp-worker'] });
+    vi.mocked(load).mockReturnValue(makeRegistry([multiApp]));
+    vi.mocked(findApp).mockReturnValue(multiApp);
+    vi.mocked(getContainerLogs).mockReturnValue('');
+
+    logsCommand(['myapp', '-c', 'myapp-worker']);
+
+    expect(getContainerLogs).toHaveBeenCalledWith('myapp-worker', 100);
+  });
+
+  it('does not treat -c value as the app name', () => {
+    const multiApp = makeApp({ containers: ['myapp-web', 'myapp-worker'] });
+    vi.mocked(load).mockReturnValue(makeRegistry([multiApp]));
+    vi.mocked(findApp).mockReturnValue(multiApp);
+    vi.mocked(getContainerLogs).mockReturnValue('');
+
+    logsCommand(['-c', 'myapp-worker', 'myapp']);
+
+    expect(findApp).toHaveBeenCalledWith(expect.anything(), 'myapp');
+    expect(getContainerLogs).toHaveBeenCalledWith('myapp-worker', 100);
+  });
+
+  it('exits when -c container is not in the app', () => {
+    const app = makeApp();
+    vi.mocked(load).mockReturnValue(makeRegistry([app]));
+    vi.mocked(findApp).mockReturnValue(app);
+
+    expect(() => logsCommand(['myapp', '-c', 'nope'])).toThrow('exit');
+    expect(error).toHaveBeenCalledWith('Container "nope" not found in myapp. Available:');
   });
 });
