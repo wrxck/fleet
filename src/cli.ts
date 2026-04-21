@@ -21,6 +21,8 @@ import { watchdogCommand } from './commands/watchdog.js';
 import { installMcpCommand } from './commands/install-mcp.js';
 import { patchSystemdCommand } from './commands/patch-systemd.js';
 import { freezeCommand, unfreezeCommand } from './commands/freeze.js';
+import { bootStartCommand } from './commands/boot-start.js';
+import { rollbackCommand } from './commands/rollback.js';
 import { startMcpServer } from './mcp/server.js';
 import { error } from './ui/output.js';
 
@@ -80,7 +82,9 @@ Commands:
   install-mcp         Install fleet as Claude Code MCP server
   mcp                 Start as MCP server
   patch-systemd       Add StartLimitBurst/StartLimitIntervalSec to all service files
+  boot-start <app>    Start app respecting boot-order dependencies
   freeze <app>        Freeze a crash-looping service (stop + disable)
+  rollback <app>      Roll back app to previous image
   unfreeze <app>      Unfreeze and restart a frozen service
 
 Global flags:
@@ -141,7 +145,9 @@ export async function run(argv: string[]): Promise<void> {
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
     case 'patch-systemd': return patchSystemdCommand(rest);
+    case 'boot-start': return bootStartCommand(rest);
     case 'freeze': return freezeCommand(rest);
+    case 'rollback': return rollbackCommand(rest);
     case 'unfreeze': return unfreezeCommand(rest);
     case 'mcp': return startMcpServer();
     case 'tui':

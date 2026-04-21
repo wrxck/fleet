@@ -5,7 +5,7 @@ vi.mock('./exec.js', () => ({
 }));
 
 import { execSafe } from './exec.js';
-import { listContainers, inspectContainer, getContainerLogs, getContainersByCompose } from './docker.js';
+import { listContainers, inspectContainer, getContainerLogs, getContainersByCompose, composeBuild } from './docker.js';
 
 const mockedExec = vi.mocked(execSafe);
 
@@ -182,5 +182,50 @@ describe('getContainersByCompose', () => {
     mockedExec.mockReturnValue(makeExecResult('container-a\n\ncontainer-b\n'));
     const result = getContainersByCompose('/opt/app', null);
     expect(result).toEqual(['container-a', 'container-b']);
+  });
+});
+
+describe('composeBuild previous-image tagging', () => {
+  it('retags existing image as fleet-previous before building', () => {
+    mockedExec
+      .mockReturnValueOnce(makeExecResult('sample-app:latest'))       // compose config --images
+      .mockReturnValueOnce(makeExecResult(''))                        // docker image inspect (ok)
+      .mockReturnValueOnce(makeExecResult(''))                        // docker tag
+      .mockReturnValueOnce(makeExecResult(''));                       // docker compose build
+
+    const result = composeBuild('/tmp/sample', null, 'sample-app');
+    expect(result).toBe(true);
+
+    const tagCall = mockedExec.mock.calls.find(
+      call => call[1][0] === 'tag',
+    );
+    expect(tagCall).toBeDefined();
+    expect(tagCall![1]).toEqual(['tag', 'sample-app:latest', 'sample-app:fleet-previous']);
+  });
+
+  it('skips retag when no existing image (first build)', () => {
+    mockedExec
+      .mockReturnValueOnce(makeExecResult('sample-app:latest'))       // compose config --images
+      .mockReturnValueOnce(makeExecResult('', false))                 // docker image inspect (fails)
+      .mockReturnValueOnce(makeExecResult(''));                       // docker compose build
+
+    const result = composeBuild('/tmp/sample', null, 'sample-app');
+    expect(result).toBe(true);
+
+    const tagCall = mockedExec.mock.calls.find(
+      call => call[1][0] === 'tag',
+    );
+    expect(tagCall).toBeUndefined();
+  });
+
+  it('build succeeds even when retag fails', () => {
+    mockedExec
+      .mockReturnValueOnce(makeExecResult('sample-app:latest'))       // compose config --images
+      .mockReturnValueOnce(makeExecResult(''))                        // docker image inspect (ok)
+      .mockReturnValueOnce(makeExecResult('', false))                 // docker tag (fails)
+      .mockReturnValueOnce(makeExecResult(''));                       // docker compose build
+
+    const result = composeBuild('/tmp/sample', null, 'sample-app');
+    expect(result).toBe(true);
   });
 });

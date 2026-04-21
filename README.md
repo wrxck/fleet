@@ -116,6 +116,46 @@ graph TD
     Restart --> Healthy
 ```
 
+## Boot Refresh
+
+On every systemd start — including reboots — Fleet pulls the latest code from GitHub and rebuilds the image if needed, before starting the container. The flow is entirely fail-safe: any failure at any step (dirty working tree, no remote, fetch error, non-fast-forward merge, build failure, or a 900-second wall-clock timeout) is logged and falls through to a plain `docker compose up` with the existing image. The container will always start.
+
+**New commands**
+
+| Command | Description |
+|---------|-------------|
+| `fleet boot-start <app>` | Entry point systemd now invokes (`ExecStart`). Runs refresh then `docker compose up`. Not typically run by hand. |
+| `fleet rollback <app>` | Re-tags `<image>:fleet-previous` → `<image>:latest` and restarts the service. Fleet tags the previous image automatically before every build. |
+| `fleet patch-systemd` | Rewrites `ExecStart` in all installed unit files to use `fleet boot-start`, sets `TimeoutStartSec=900`, and backs up originals to `<path>.service.bak`. |
+| `fleet patch-systemd --rollback` | Restores all `.bak` unit files and runs `daemon-reload`. |
+
+**Kill switch**
+
+To disable boot refresh entirely — next `systemctl start` goes straight to `docker compose up`:
+
+```bash
+sudo touch /etc/fleet/no-auto-refresh
+```
+
+Remove the file to re-enable.
+
+**Registry field: `lastBuiltCommit`**
+
+Each app in the registry stores the Git commit that was last built. Fleet sets this on `fleet deploy` and on every successful boot-refresh build. Boot refresh skips `docker compose build` when HEAD already matches this value, keeping boots fast when no code has changed.
+
+**First boot after upgrade**
+
+Any app with `lastBuiltCommit` unset will trigger a full rebuild the first time it boots after upgrading to this version. Expect a longer first boot for those apps.
+
+**Recovery escape hatches**
+
+| Situation | Action |
+|-----------|--------|
+| One app misbehaving after a build | `fleet rollback <app>` |
+| Registry corrupted | Auto-loads `.bak` on next read |
+| Broad issue with boot-start behaviour | `sudo touch /etc/fleet/no-auto-refresh` |
+| Worst case — revert all unit files | `fleet patch-systemd --rollback` |
+
 ## MCP Server
 
 Fleet exposes 36 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for AI-assisted server management. Run `fleet mcp` to start the stdio server, or install it into Claude Code:
