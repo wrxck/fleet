@@ -7,6 +7,9 @@ import { startService, restartService, getServiceStatus } from '../core/systemd.
 import { FleetError } from '../core/errors.js';
 import { success, error, info, warn, heading } from '../ui/output.js';
 import { addCommand } from './add.js';
+import { execGit } from '../core/exec.js';
+import { getProjectRoot } from '../core/git.js';
+import { recordBuiltCommit } from '../core/boot-refresh.js';
 
 export async function deployCommand(args: string[]): Promise<void> {
   const dryRun = args.includes('--dry-run');
@@ -48,6 +51,16 @@ export async function deployCommand(args: string[]): Promise<void> {
     process.exit(1);
   }
   success('Build complete');
+
+  try {
+    const root = getProjectRoot(app.composePath);
+    const head = execGit(['rev-parse', 'HEAD'], { cwd: root, timeout: 10_000 });
+    if (head.ok && head.stdout.trim()) {
+      recordBuiltCommit(app.name, head.stdout.trim());
+    }
+  } catch {
+    // Non-fatal: deploy already succeeded
+  }
 
   info(`Starting ${app.name}...`);
   const svc = getServiceStatus(app.serviceName);

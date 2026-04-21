@@ -7,10 +7,10 @@ import { load } from './registry.js';
 // these tests read actual systemd service files — skip in CI
 const isCI = !!process.env.CI;
 
-describe.skipIf(isCI)('boot order - systemd dependencies', () => {
-  const reg = load();
-  const dbApps = reg.apps.filter(a => a.dependsOnDatabases);
+const bootOrderReg = load();
+const dbApps = bootOrderReg.apps.filter(a => a.dependsOnDatabases);
 
+describe.skipIf(isCI || dbApps.length === 0)('boot order - systemd dependencies', () => {
   for (const app of dbApps) {
     describe(app.serviceName, () => {
       const servicePath = `/etc/systemd/system/${app.serviceName}.service`;
@@ -55,11 +55,16 @@ describe.skipIf(isCI)('fleet-watchdog.timer', () => {
   });
 });
 
-describe.skipIf(isCI)('wait-for-healthy.sh', () => {
+const healthScriptPath = (() => {
+  const reg = load();
+  const dbPath = reg.infrastructure.databases.composePath;
+  return dbPath ? `${dbPath}/wait-for-healthy.sh` : '';
+})();
+const skipHealthScript = isCI || !healthScriptPath || !existsSync(healthScriptPath);
+
+describe.skipIf(skipHealthScript)('wait-for-healthy.sh', () => {
   it('has timeout >= 180s', () => {
-    const reg = load();
-    const dbPath = reg.infrastructure.databases.composePath;
-    const content = readFileSync(`${dbPath}/wait-for-healthy.sh`, 'utf-8');
+    const content = readFileSync(healthScriptPath, 'utf-8');
     const match = content.match(/TIMEOUT=(\d+)/);
     expect(match).not.toBeNull();
     expect(parseInt(match![1], 10)).toBeGreaterThanOrEqual(180);
