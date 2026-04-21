@@ -21,6 +21,10 @@ import { watchdogCommand } from './commands/watchdog.js';
 import { installMcpCommand } from './commands/install-mcp.js';
 import { patchSystemdCommand } from './commands/patch-systemd.js';
 import { freezeCommand, unfreezeCommand } from './commands/freeze.js';
+import { bootStartCommand } from './commands/boot-start.js';
+import { rollbackCommand } from './commands/rollback.js';
+import { routineRunCommand } from './commands/routine-run.js';
+import { routinesCommand } from './commands/routines.js';
 import { startMcpServer } from './mcp/server.js';
 import { error } from './ui/output.js';
 
@@ -75,12 +79,17 @@ Commands:
   git pr list <app>   List open PRs
   git release <app>   Create develop->main PR
   tui, dashboard      Interactive terminal dashboard
+  routines            Fleet-wide routines TUI (signals grid + routine history)
+  routine-run --id <id> [--target <repo>] [--trigger scheduled]
+                      Headless entrypoint for systemd-timer units. JSON mode: --json.
   init                Auto-discover all existing apps
   watchdog            Health check all services, alert on failure
   install-mcp         Install fleet as Claude Code MCP server
   mcp                 Start as MCP server
   patch-systemd       Add StartLimitBurst/StartLimitIntervalSec to all service files
+  boot-start <app>    Start app respecting boot-order dependencies
   freeze <app>        Freeze a crash-looping service (stop + disable)
+  rollback <app>      Roll back app to previous image
   unfreeze <app>      Unfreeze and restart a frozen service
 
 Global flags:
@@ -141,7 +150,9 @@ export async function run(argv: string[]): Promise<void> {
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
     case 'patch-systemd': return patchSystemdCommand(rest);
+    case 'boot-start': return bootStartCommand(rest);
     case 'freeze': return freezeCommand(rest);
+    case 'rollback': return rollbackCommand(rest);
     case 'unfreeze': return unfreezeCommand(rest);
     case 'mcp': return startMcpServer();
     case 'tui':
@@ -149,6 +160,8 @@ export async function run(argv: string[]): Promise<void> {
       const { launchTui } = await import('./tui/app.js');
       return launchTui();
     }
+    case 'routines': return routinesCommand(rest);
+    case 'routine-run': return routineRunCommand(rest);
     default:
       error(`Unknown command: ${command}`);
       process.stdout.write(HELP);

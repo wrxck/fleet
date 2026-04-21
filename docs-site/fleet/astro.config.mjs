@@ -13,6 +13,34 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/wrxck/fleet/edit/feat/docs-site/docs-site/fleet/',
       },
+      head: [
+        {
+          tag: 'script',
+          attrs: { type: 'module' },
+          content: `
+            import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'default',
+            });
+            document.querySelectorAll('pre[data-language="mermaid"]').forEach((pre) => {
+              const figure = pre.closest('figure.frame');
+              const lines = [...pre.querySelectorAll('.ec-line')];
+              let code;
+              if (lines.length > 0) {
+                code = lines.map(l => l.textContent).join('\\n');
+              } else {
+                code = pre.textContent || '';
+              }
+              const container = document.createElement('div');
+              container.classList.add('mermaid');
+              container.textContent = code;
+              (figure || pre).replaceWith(container);
+            });
+            await mermaid.run({ querySelector: '.mermaid' });
+          `,
+        },
+      ],
       sidebar: [
         {
           label: 'Getting Started',
@@ -36,6 +64,7 @@ export default defineConfig({
             { label: 'Git', slug: 'cli/git' },
             { label: 'Deps', slug: 'cli/deps' },
             { label: 'Watchdog', slug: 'cli/watchdog' },
+            { label: 'Boot Refresh', slug: 'cli/boot-refresh' },
           ],
         },
         {

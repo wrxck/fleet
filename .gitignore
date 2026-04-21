@@ -19,7 +19,15 @@ vault/manifest.json
 
 # Instance-specific data
 data/registry.json
+data/deps-cache.json
+data/deps-config.json
+data/notified-findings.json
 
+# Private / instance-specific
+docs/superpowers/
+deploy-webhook.cjs
+packages/
+npm-downloads/
 
 # Claude Code local settings
 .claude/
