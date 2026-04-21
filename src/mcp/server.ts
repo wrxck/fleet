@@ -90,16 +90,33 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fleet_logs',
-    'Get recent container logs for an app',
+    'Get recent container logs for an app. For multi-service apps, specify container to pick which service.',
     {
       app: z.string().describe('App name'),
+      container: z.string().optional().describe('Container name (omit to list available containers, or get logs from first)'),
       lines: z.number().optional().default(100).describe('Number of log lines'),
     },
-    async ({ app, lines }) => {
+    async ({ app, container, lines }) => {
       const entry = requireApp(app);
-      const container = entry.containers[0];
-      if (!container) return text('No containers registered');
-      const logs = getContainerLogs(container, lines);
+      if (entry.containers.length === 0) return text('No containers registered');
+
+      if (!container && entry.containers.length > 1) {
+        return text(
+          `${entry.name} has ${entry.containers.length} containers. Specify one:\n` +
+          entry.containers.map(c => `  - ${c}`).join('\n') +
+          `\n\nOr omit container to get logs from: ${entry.containers[0]}`
+        );
+      }
+
+      const target = container ?? entry.containers[0];
+      if (!entry.containers.includes(target)) {
+        return text(
+          `Container "${target}" not found in ${entry.name}. Available:\n` +
+          entry.containers.map(c => `  - ${c}`).join('\n')
+        );
+      }
+
+      const logs = getContainerLogs(target, lines);
       return text(logs);
     }
   );
