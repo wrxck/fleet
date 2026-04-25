@@ -8,14 +8,24 @@ import { initVault, getPublicKey, loadManifest, listSecrets } from '../core/secr
 import { enumerateSecrets, enumerateAllSecrets, type EnrichedSecret } from '../core/secrets-metadata.js';
 import {
   setSecret, getSecret, importEnvFile, importDbSecrets,
-  exportApp, unsealAll, sealFromRuntime, rotateKey, getStatus,
+  exportApp, sealFromRuntime, rotateKey, getStatus,
   detectDrift,
 } from '../core/secrets-ops.js';
 import { restoreVaultFile } from '../core/secrets.js';
 import { generateUnsealService } from '../templates/unseal.js';
 import { validateApp, validateAll } from '../core/secrets-validate.js';
 import { confirm } from '../ui/confirm.js';
+import { prompt, promptHidden } from '../ui/prompt.js';
 import { c, heading, table, success, error, info, warn } from '../ui/output.js';
+import {
+  performRotation,
+  validateFormat,
+  checkEntropy,
+  maskNewValue,
+} from '../core/secrets-rotation.js';
+import { unsealAll } from '../core/secrets-ops.js';
+import { restartService } from '../core/systemd.js';
+import { checkHealth } from '../core/health.js';
 
 function getDbSecretsDir(): string {
   const reg = load();
@@ -36,6 +46,7 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'seal': return secretsSeal(rest);
     case 'unseal': return secretsUnseal();
     case 'rotate': return secretsRotate(rest);
+    case 'rotate-key': return secretsRotateKey(rest);
     case 'ages': return secretsAges(rest);
     case 'validate': return secretsValidate(rest);
     case 'status': return secretsStatus(rest);
@@ -43,7 +54,7 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'restore': return secretsRestore(rest);
     case 'seal-runtime': return secretsSeal(rest);
     default:
-      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|ages|validate|status|drift|restore>');
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|validate|status|drift|restore>');
       process.exit(1);
   }
 }
@@ -178,9 +189,9 @@ function secretsSeal(args: string[]): void {
   }
 }
 
-async function secretsRotate(args: string[]): Promise<void> {
+async function secretsRotateKey(args: string[]): Promise<void> {
   const yes = args.includes('-y') || args.includes('--yes');
-  if (!yes && !await confirm('Rotate age key? This will re-encrypt all secrets.')) {
+  if (!yes && !await confirm('Rotate AGE master key? This will re-encrypt all secrets.')) {
     info('Cancelled');
     return;
   }
@@ -191,6 +202,208 @@ async function secretsRotate(args: string[]): Promise<void> {
   info(`New: ${result.newPubkey}`);
   info(`Re-encrypted ${result.appsRotated.length} apps`);
   warn('Run "fleet secrets unseal" to update runtime secrets');
+}
+
+interface RotateOpts {
+  dryRun: boolean;
+  noRestart: boolean;
+  dataMigrated: boolean;
+}
+
+function parseRotateArgs(args: string[]): { app?: string; key?: string; opts: RotateOpts } {
+  const opts: RotateOpts = {
+    dryRun: args.includes('--dry-run'),
+    noRestart: args.includes('--no-restart'),
+    dataMigrated: args.includes('--data-migrated'),
+  };
+  const positional = args.filter(a => !a.startsWith('-'));
+  return { app: positional[0], key: positional[1], opts };
+}
+
+/**
+ * Walk one secret through the interactive rotation flow. Returns true if
+ * a rotation was performed (regardless of success/rollback), false on skip.
+ */
+async function rotateOneInteractive(
+  app: string,
+  secret: EnrichedSecret,
+  opts: RotateOpts,
+): Promise<{ acted: boolean; succeeded: boolean }> {
+  const provider = secret.provider;
+  const sensTag = provider
+    ? { critical: c.red, high: c.yellow, medium: c.blue, low: c.dim }[provider.sensitivity] + provider.sensitivity + c.reset
+    : `${c.dim}unclassified${c.reset}`;
+
+  process.stdout.write(`\n${c.bold}━━━ ${secret.name} ━━━${c.reset}\n`);
+  info(`Current: ${c.dim}${secret.maskedValue}${c.reset}  age: ${secret.ageDays ?? '?'}d  sens: ${sensTag}`);
+  if (provider) {
+    info(`Provider: ${provider.name}`);
+    info(`Strategy: ${provider.strategy}`);
+    if (provider.url) info(`Regen URL: ${c.cyan}${provider.url}${c.reset}`);
+  }
+
+  const action = await prompt('  [r]otate / [s]kip / [q]uit', 's');
+  const a = action.toLowerCase().slice(0, 1);
+  if (a === 'q') {
+    info('Quitting rotation walkthrough.');
+    process.exit(0);
+  }
+  if (a !== 'r') {
+    info(`Skipped ${secret.name}`);
+    return { acted: false, succeeded: false };
+  }
+
+  // Strategy gates BEFORE asking for a value — saves user effort.
+  if (provider?.strategy === 'user-issued') {
+    error(`${secret.name} is user-issued. Rotate per-user inside your app, not here.`);
+    return { acted: false, succeeded: false };
+  }
+  if (provider?.strategy === 'at-rest-key' && !opts.dataMigrated) {
+    warn(`${secret.name} encrypts data at rest.`);
+    warn('Re-encrypt your data first, then re-run with --data-migrated');
+    return { acted: false, succeeded: false };
+  }
+  if (provider?.strategy === 'dual-mode') {
+    warn(`Dual-mode rotation: old value will be kept as ${secret.name}_PREVIOUS for the grace period.`);
+    warn('Your app MUST read both values for verification, otherwise existing tokens become invalid.');
+    if (!await confirm('Has your app been updated to read the _PREVIOUS variant?', false)) {
+      info('Skipping — update your app first, then re-run.');
+      return { acted: false, succeeded: false };
+    }
+  }
+
+  if (provider?.instructions) {
+    process.stdout.write(`\n${c.bold}Steps:${c.reset}\n`);
+    for (const line of provider.instructions.split('\n')) process.stdout.write(`  ${line}\n`);
+  }
+
+  let newValue: string;
+  while (true) {
+    newValue = await promptHidden(`Paste new ${secret.name} (input hidden)`);
+    if (!newValue) {
+      info('Empty value — skipping');
+      return { acted: false, succeeded: false };
+    }
+    const formatErr = validateFormat(newValue, provider);
+    const entropyErr = checkEntropy(newValue);
+    if (formatErr) {
+      error(formatErr);
+      if (!await confirm('Try again?', true)) return { acted: false, succeeded: false };
+      continue;
+    }
+    if (entropyErr) {
+      error(entropyErr);
+      if (!await confirm('Try again?', true)) return { acted: false, succeeded: false };
+      continue;
+    }
+    break;
+  }
+
+  info(`New value: ${maskNewValue(newValue)}`);
+  if (!await confirm('Apply rotation?', false)) {
+    info('Cancelled');
+    return { acted: false, succeeded: false };
+  }
+
+  const result = performRotation(app, secret.name, newValue, {
+    dryRun: opts.dryRun,
+    notes: opts.dataMigrated ? '--data-migrated' : undefined,
+  });
+
+  if (result.rolledBack) {
+    error(`${secret.name}: rotation FAILED — auto-rolled back. Reason: ${result.reason}`);
+    return { acted: true, succeeded: false };
+  }
+  if (opts.dryRun) {
+    success(`${secret.name}: dry-run — vault NOT modified`);
+  } else {
+    success(`${secret.name}: rotated  (snapshot: ${result.snapshot.split('/').pop()})`);
+  }
+  return { acted: true, succeeded: true };
+}
+
+async function secretsRotate(args: string[]): Promise<void> {
+  const { app, key, opts } = parseRotateArgs(args);
+  if (!app) {
+    error('Usage: fleet secrets rotate <app> [<KEY>] [--dry-run] [--data-migrated] [--no-restart]');
+    error('       fleet secrets rotate-key   (legacy: rotate the AGE master key)');
+    process.exit(1);
+  }
+
+  const manifest = loadManifest();
+  if (!manifest.apps[app]) {
+    error(`No app in vault: ${app}`);
+    process.exit(1);
+  }
+
+  let secrets = enumerateSecrets(app);
+  if (key) {
+    secrets = secrets.filter(s => s.name === key);
+    if (secrets.length === 0) {
+      error(`No secret named ${key} in ${app}`);
+      process.exit(1);
+    }
+  }
+
+  heading(`Rotate ${key ? `${key} in ${app}` : `secrets in ${app}`}${opts.dryRun ? ' [DRY-RUN]' : ''}`);
+  info(`${secrets.length} secret(s) to walk through. Empty answer = skip; "q" = quit.`);
+
+  let acted = 0;
+  let succeeded = 0;
+  for (const s of secrets) {
+    const r = await rotateOneInteractive(app, s, opts);
+    if (r.acted) acted++;
+    if (r.succeeded) succeeded++;
+  }
+
+  process.stdout.write('\n');
+  if (acted === 0) {
+    info('No rotations performed.');
+    return;
+  }
+  if (opts.dryRun) {
+    success(`Dry-run complete: ${succeeded}/${acted} would-rotate (no changes made)`);
+    return;
+  }
+
+  // Apply runtime: re-unseal so /run/fleet-secrets has the new values.
+  info('Re-unsealing vault to /run/fleet-secrets...');
+  unsealAll();
+  success('Runtime updated');
+
+  // Restart + health gate (unless --no-restart).
+  if (opts.noRestart) {
+    warn('Skipping restart (--no-restart). Restart manually with `fleet restart ' + app + '`');
+    return;
+  }
+
+  const reg = load();
+  const appEntry = findApp(reg, app);
+  if (!appEntry) {
+    warn(`App ${app} not in registry — skipping restart + health gate.`);
+    return;
+  }
+
+  info(`Restarting ${app}...`);
+  if (!restartService(appEntry.serviceName)) {
+    error(`Restart failed for ${app}. Check logs.`);
+    return;
+  }
+  success(`${app} restarted`);
+
+  // Brief health gate.
+  info('Waiting 5s then checking health...');
+  await new Promise(r => setTimeout(r, 5000));
+  try {
+    const h = checkHealth(appEntry);
+    if (h.containers.every(ct => ct.running && (ct.health === 'healthy' || ct.health === 'none' || ct.health === ''))) {
+      success(`${app} healthy after rotation`);
+    } else {
+      warn(`${app} health: not all containers happy. Run: fleet health ${app}`);
+    }
+  } catch (e: unknown) {
+    warn(`Could not check health: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 interface AgesOpts { json: boolean; staleOnly: boolean; }
