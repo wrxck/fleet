@@ -19,9 +19,14 @@ vault/manifest.json
 
 # Instance-specific data
 data/registry.json
+data/registry.json.bak
+data/registry.json.tmp
+data/registry.json.pre-*
 data/deps-cache.json
 data/deps-config.json
 data/notified-findings.json
+# Audit log + rotation snapshots (instance-specific)
+vault/.snapshots/
 
 # Private / instance-specific
 docs/superpowers/
