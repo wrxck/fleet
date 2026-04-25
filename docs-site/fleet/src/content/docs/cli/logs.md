@@ -9,14 +9,26 @@ Fleet wraps `docker logs` with filters, configures docker's json-file driver for
 
 ## fleet logs
 
-Tail container logs, with optional filtering. Defaults to the last 100 lines of the first container.
+Tail container logs for one app, or aggregate across many. Single-app mode defaults to the last 100 lines of the first container; multi-source mode (`--all` / `--apps` / `--containers`) prefixes every line with `app/container` and colour-codes by source.
 
-### Usage
+### Single-app usage
 
 ```bash
 fleet logs <app> [-f] [-n <lines>] [-c <container>] \
                  [--since <Nm|Nh|Nd>] [--grep <text>] [--level info|warn|error]
 ```
+
+### Multi-source usage
+
+```bash
+fleet logs --all [-f]                              # every container, prefixed
+fleet logs --apps macpool,shiftfaced [-f]          # subset by app
+fleet logs --containers '*-postgres' [-f]          # glob match container names
+fleet logs --all -f --grep error --level warn      # live filtered tail
+fleet logs --all --tail 20                         # one-shot dump, 20 per source
+```
+
+Each source gets a stable colour assigned by name hash, so you can keep visual track of which is which without staring at the prefix. Ctrl-C tears down all child `docker logs -f` processes cleanly.
 
 ### Flags
 
@@ -98,6 +110,23 @@ fleet logs prune <app> [-y]
 ```
 
 ---
+
+## TUI: multi-source logs view
+
+Press `Tab` from the dashboard until you reach the **Logs** view (now part of the top-level cycle: dashboard → health → secrets → logs-multi → dashboard).
+
+| Key | Action |
+|---|---|
+| `Tab` | Switch focus between source picker and logs viewport |
+| `j` / `k` | Move selection cursor in the picker |
+| `Space` | Toggle the selected source on/off (re-tail starts immediately) |
+| `a` | Select all / deselect all sources |
+| `p` | Pause output (lines keep buffering up to 500) |
+| `c` | Clear the visible buffer |
+| `L` | Cycle level filter: `all` → `debug` → `info` → `warn` → `error` |
+| `q` | Quit |
+
+Output is batched on a 100ms tick to avoid flicker during bursts. Each line shows `HH:MM:SS  app/container  message`.
 
 ## MCP tools
 

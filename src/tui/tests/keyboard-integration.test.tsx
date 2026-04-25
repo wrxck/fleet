@@ -24,6 +24,10 @@ describe('keyboard integration', () => {
 
     stdin.write('\t');
     await delay(50);
+    expect(lastFrame()).toContain('view:logs-multi');
+
+    stdin.write('\t');
+    await delay(50);
     expect(lastFrame()).toContain('view:dashboard');
   });
 
