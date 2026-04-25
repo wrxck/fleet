@@ -63,17 +63,26 @@ function ensureLog(): void {
 }
 
 export function auditLog(entry: Omit<AuditEntry, 'ts' | 'actor'> & { actor?: string }): void {
-  ensureLog();
-  const line: AuditEntry = {
-    ts: new Date().toISOString(),
-    actor: entry.actor ?? getActor(),
-    op: entry.op,
-    app: entry.app,
-    secret: entry.secret,
-    ok: entry.ok,
-    details: entry.details,
-  };
-  appendFileSync(AUDIT_PATH, JSON.stringify(line) + '\n');
+  // Auditing must never block the actual operation. If the FS isn't writable
+  // (read-only mount, missing dir, mocked-out tests, etc.), surface a single
+  // stderr warning and continue. The op succeeds; we just lose this audit line.
+  try {
+    ensureLog();
+    const line: AuditEntry = {
+      ts: new Date().toISOString(),
+      actor: entry.actor ?? getActor(),
+      op: entry.op,
+      app: entry.app,
+      secret: entry.secret,
+      ok: entry.ok,
+      details: entry.details,
+    };
+    appendFileSync(AUDIT_PATH, JSON.stringify(line) + '\n');
+  } catch (err) {
+    process.stderr.write(
+      `[fleet audit] WARNING: failed to write audit entry (${err instanceof Error ? err.message : err})\n`,
+    );
+  }
 }
 
 export function getAuditPath(): string {
