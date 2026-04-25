@@ -5,6 +5,7 @@ import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 import { Viewport } from '@matthesketh/ink-viewport';
 import { ToastProvider } from '@matthesketh/ink-toast';
 import { ToastContainer } from '@matthesketh/ink-toast';
+import { checkForUpdate, applyUpdate, type UpdateInfo } from '../core/self-update.js';
 import { KeyBindingHelp } from '@matthesketh/ink-keybinding-help';
 
 import { reducer, initialState, AppStateContext, AppDispatchContext, nextTopView } from './state.js';
@@ -73,15 +74,58 @@ function ViewRouter(): React.JSX.Element {
 
 const CHROME_ROWS = 6;
 
+function UpdateBanner({ info, inProgress }: { info: UpdateInfo | null; inProgress: boolean }): React.JSX.Element | null {
+  if (!info?.available && !inProgress) return null;
+  if (inProgress) {
+    return (
+      <Box paddingX={1}>
+        <Box borderStyle="round" borderColor="yellow" paddingX={1}>
+          <Text color="yellow">Updating fleet… (git pull + npm run build)</Text>
+        </Box>
+      </Box>
+    );
+  }
+  const ahead = info!.behind;
+  const subject = info!.latestSubject ? ` — ${info!.latestSubject}` : '';
+  return (
+    <Box paddingX={1}>
+      <Box borderStyle="round" borderColor="cyan" paddingX={1}>
+        <Text color="cyan">↑ Update available: {ahead} commit{ahead === 1 ? '' : 's'} ahead{subject}. Press </Text>
+        <Text color="cyan" bold>U</Text>
+        <Text color="cyan"> to install.</Text>
+      </Box>
+    </Box>
+  );
+}
+
 export function App(): React.JSX.Element {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [vaultSealed, setVaultSealed] = useState(true);
   const [showHelp, setShowHelp] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateInProgress, setUpdateInProgress] = useState(false);
   const confirmRef = useRef(state.confirmAction);
+  const updateInfoRef = useRef<UpdateInfo | null>(null);
+  const updateInProgressRef = useRef(false);
 
   useEffect(() => {
     confirmRef.current = state.confirmAction;
   }, [state.confirmAction]);
+  useEffect(() => { updateInfoRef.current = updateInfo; }, [updateInfo]);
+  useEffect(() => { updateInProgressRef.current = updateInProgress; }, [updateInProgress]);
+
+  // One-shot update check on mount + a recheck every 30 minutes for long sessions.
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      checkForUpdate().then(info => {
+        if (!cancelled) setUpdateInfo(info);
+      }).catch(() => { /* network down etc., just skip */ });
+    };
+    run();
+    const interval = setInterval(run, 30 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     try {
@@ -137,8 +181,28 @@ export function App(): React.JSX.Element {
       return true;
     }
 
+    // U → apply pending update. Only fires when one is actually available.
+    if ((input === 'U' || input === 'u') && state.currentView !== 'secret-edit') {
+      const info = updateInfoRef.current;
+      if (info?.available && !updateInProgressRef.current) {
+        setUpdateInProgress(true);
+        applyUpdate().then(result => {
+          setUpdateInProgress(false);
+          if (result.ok) {
+            setUpdateInfo({ available: false, behind: 0, latestSubject: '', branch: info.branch });
+          }
+          // Result reported via UpdateBanner below.
+          (App as any).__lastUpdateOutput = result.output;
+        }).catch(err => {
+          setUpdateInProgress(false);
+          (App as any).__lastUpdateOutput = err instanceof Error ? err.message : String(err);
+        });
+        return true;
+      }
+    }
+
     if (key.tab) {
-      const topViews: View[] = ['dashboard', 'health', 'secrets'];
+      const topViews: View[] = ['dashboard', 'health', 'secrets', 'logs-multi'];
       const base = topViews.includes(state.currentView)
         ? state.currentView
         : state.previousView ?? 'dashboard';
@@ -161,6 +225,7 @@ export function App(): React.JSX.Element {
           <InputDispatcher globalHandler={globalHandler}>
             <Viewport chrome={CHROME_ROWS}>
               <Header vaultSealed={vaultSealed} />
+              <UpdateBanner info={updateInfo} inProgress={updateInProgress} />
               <Box flexGrow={1} flexDirection="column">
                 {showHelp ? (
                   <KeyBindingHelp
