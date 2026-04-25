@@ -6,6 +6,8 @@ import { validateAll } from './secrets-validate.js';
 import { execSafe } from './exec.js';
 import { assertAppName, assertFilePath, assertSecretKey } from './validate.js';
 import { SecretsError } from './errors.js';
+import { auditLog } from './secrets-audit.js';
+import { checkEntropy } from './secrets-rotation.js';
 import {
   KEY_PATH, VAULT_DIR, RUNTIME_DIR,
   loadManifest, saveManifest, decryptApp, parseSecretsBundle,
@@ -109,9 +111,26 @@ export function safeSealDbSecrets(app: string, secretsMap: Record<string, string
   return validation;
 }
 
-export function setSecret(app: string, key: string, value: string): void {
+export function setSecret(
+  app: string,
+  key: string,
+  value: string,
+  opts: { allowWeak?: boolean } = {},
+): void {
   assertAppName(app);
   assertSecretKey(key);
+
+  // Entropy / placeholder check unless explicitly bypassed.
+  if (!opts.allowWeak) {
+    const entropyErr = checkEntropy(value);
+    if (entropyErr) {
+      auditLog({ op: 'set', app, secret: key, ok: false, details: `weak value rejected: ${entropyErr}` });
+      throw new SecretsError(
+        `${entropyErr}. Pass --allow-weak to override (not recommended).`,
+      );
+    }
+  }
+
   const plaintext = decryptApp(app);
   const manifest = loadManifest();
   const entry = manifest.apps[app];
@@ -130,6 +149,7 @@ export function setSecret(app: string, key: string, value: string): void {
   if (!found) updated.push(`${key}=${value}`);
 
   safeSealApp(app, updated.join('\n'), entry.sourceFile);
+  auditLog({ op: 'set', app, secret: key, ok: true });
 }
 
 export function getSecret(app: string, key: string): string | null {
@@ -151,6 +171,11 @@ export function getSecret(app: string, key: string): string | null {
   return files[key] ?? null;
 }
 
+// Note: getSecret is read-only; we audit at the command layer to record
+// human-driven reads (set/get/import/export). Programmatic reads done by
+// other fleet operations (sealing, validation, drift) are not audited to
+// avoid log noise.
+
 export function importEnvFile(app: string, path: string): number {
   if (!existsSync(path)) throw new SecretsError(`File not found: ${path}`);
   const content = readFileSync(path, 'utf-8');
@@ -161,9 +186,11 @@ export function importEnvFile(app: string, path: string): number {
     removeBackup(app);
   } catch (err) {
     restoreVaultFile(app);
+    auditLog({ op: 'import', app, ok: false, details: `${path}: ${err}` });
     throw err;
   }
   const manifest = loadManifest();
+  auditLog({ op: 'import', app, ok: true, details: `${path}: ${manifest.apps[app].keyCount} keys` });
   return manifest.apps[app].keyCount;
 }
 
@@ -191,6 +218,7 @@ export function importDbSecrets(app: string, dir: string): number {
 }
 
 export function exportApp(app: string): string {
+  auditLog({ op: 'export', app, ok: true });
   return decryptApp(app);
 }
 
@@ -278,6 +306,7 @@ function parseEnvMap(content: string): Record<string, string> {
 
 export function unsealAll(): void {
   const manifest = loadManifest();
+  auditLog({ op: 'unseal', ok: true, details: `apps=${Object.keys(manifest.apps).length}` });
 
   // Phase 4: Decrypt all apps first and validate BEFORE writing to runtime
   const decrypted: Record<string, string> = {};

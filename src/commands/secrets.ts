@@ -26,6 +26,8 @@ import {
 import { unsealAll } from '../core/secrets-ops.js';
 import { restartService } from '../core/systemd.js';
 import { checkHealth } from '../core/health.js';
+import { listSnapshots, restoreSnapshot, snapshotApp } from '../core/secrets-snapshots.js';
+import { auditLog } from '../core/secrets-audit.js';
 
 function getDbSecretsDir(): string {
   const reg = load();
@@ -52,9 +54,11 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'status': return secretsStatus(rest);
     case 'drift': return secretsDrift(rest);
     case 'restore': return secretsRestore(rest);
+    case 'rollback': return secretsRollback(rest);
+    case 'snapshots': return secretsSnapshots(rest);
     case 'seal-runtime': return secretsSeal(rest);
     default:
-      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|validate|status|drift|restore>');
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|rollback|snapshots|validate|status|drift|restore>');
       process.exit(1);
   }
 }
@@ -623,6 +627,87 @@ function secretsDrift(args: string[]): void {
     warn('Run "fleet secrets unseal" to revert runtime to vault state');
   } else {
     success('No drift detected');
+  }
+}
+
+function secretsSnapshots(args: string[]): void {
+  const json = args.includes('--json');
+  const app = args.find(a => !a.startsWith('-'));
+  if (!app) {
+    error('Usage: fleet secrets snapshots <app>');
+    process.exit(1);
+  }
+  const snaps = listSnapshots(app);
+  if (json) {
+    process.stdout.write(JSON.stringify(snaps, null, 2) + '\n');
+    return;
+  }
+  if (snaps.length === 0) {
+    info(`No snapshots for ${app}`);
+    return;
+  }
+  heading(`Snapshots for ${app} (${snaps.length})`);
+  const rows = snaps.map(s => [
+    s.timestamp,
+    `${(s.sizeBytes / 1024).toFixed(1)}K`,
+    s.path.split('/').slice(-2).join('/'),
+  ]);
+  table(['TIMESTAMP', 'SIZE', 'PATH'], rows);
+  process.stdout.write('\n');
+  info(`Restore the newest with: fleet secrets rollback ${app}`);
+  info(`Restore a specific one:  fleet secrets rollback ${app} --to <TIMESTAMP>`);
+}
+
+async function secretsRollback(args: string[]): Promise<void> {
+  const yes = args.includes('-y') || args.includes('--yes');
+  const toIdx = args.indexOf('--to');
+  const to = toIdx >= 0 ? args[toIdx + 1] : undefined;
+  const app = args.find((a, i) => !a.startsWith('-') && i !== toIdx + 1);
+
+  if (!app) {
+    error('Usage: fleet secrets rollback <app> [--to <TIMESTAMP>]');
+    error('       (use `fleet secrets snapshots <app>` to list available)');
+    process.exit(1);
+  }
+
+  const snaps = listSnapshots(app);
+  if (snaps.length === 0) {
+    error(`No snapshots for ${app}`);
+    process.exit(1);
+  }
+  const target = to ? snaps.find(s => s.timestamp === to) : snaps[0];
+  if (!target) {
+    error(`Snapshot not found for ${app}: ${to}`);
+    process.exit(1);
+  }
+
+  warn(`About to restore ${app} from snapshot ${target.timestamp}`);
+  warn('This will OVERWRITE the current vault file.');
+  if (!yes && !await confirm('Proceed?', false)) {
+    info('Cancelled');
+    return;
+  }
+
+  // Snapshot the CURRENT state before overwriting (so we can roll the rollback back too).
+  const safety = snapshotApp(app);
+  info(`Pre-rollback safety snapshot: ${safety.split('/').pop()}`);
+
+  restoreSnapshot(app, target.timestamp);
+  auditLog({ op: 'rollback', app, ok: true, details: `to ${target.timestamp}` });
+  success(`Restored ${app} from ${target.timestamp}`);
+
+  info('Re-unsealing vault...');
+  unsealAll();
+
+  const reg = load();
+  const appEntry = findApp(reg, app);
+  if (appEntry) {
+    info(`Restarting ${app}...`);
+    if (restartService(appEntry.serviceName)) {
+      success(`${app} restarted`);
+    } else {
+      warn(`Restart failed — restart manually with: fleet restart ${app}`);
+    }
   }
 }
 
