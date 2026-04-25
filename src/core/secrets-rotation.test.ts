@@ -171,12 +171,19 @@ describe('performRotation', () => {
     ).toThrow(/Re-encrypt your data first/);
   });
 
-  it('accepts at-rest rotation with --data-migrated note', () => {
+  it('accepts at-rest rotation with explicit dataMigrated:true', () => {
     vi.mocked(decryptApp).mockReturnValue('ENCRYPTION_KEY=oldvalue\n');
-    performRotation('macpool', 'ENCRYPTION_KEY', 'newvalue1234567', {
-      notes: 'rotated after re-encryption: --data-migrated',
-    });
+    performRotation('macpool', 'ENCRYPTION_KEY', 'newvalue1234567', { dataMigrated: true });
     expect(sealApp).toHaveBeenCalled();
+  });
+
+  it('does NOT accept --data-migrated as substring in free-text notes (post-review fix)', () => {
+    vi.mocked(decryptApp).mockReturnValue('ENCRYPTION_KEY=oldvalue\n');
+    expect(() =>
+      performRotation('macpool', 'ENCRYPTION_KEY', 'newvalue1234567', {
+        notes: 'see ticket #42: --data-migrated documentation update',
+      }),
+    ).toThrow(/Re-encrypt your data first/);
   });
 
   it('refuses user-issued rotations', () => {

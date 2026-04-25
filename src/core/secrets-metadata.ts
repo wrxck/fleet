@@ -104,9 +104,11 @@ export function enumerateAllSecrets(): Array<EnrichedSecret & { app: string }> {
   for (const app of Object.keys(manifest.apps)) {
     try {
       for (const s of enumerateSecrets(app)) out.push({ app, ...s });
-    } catch {
-      // App may be sealed-but-unreadable (e.g. key missing). Skip silently —
-      // the caller's job to report on overall vault health, not ours.
+    } catch (err) {
+      // App may be sealed-but-unreadable (e.g. key missing). Continue but
+      // log so a corrupt manifest entry doesn't masquerade as "no secrets".
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`[fleet secrets] skipped ${app}: ${msg}\n`);
     }
   }
   return out;

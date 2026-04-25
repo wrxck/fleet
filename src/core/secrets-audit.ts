@@ -6,7 +6,7 @@
  * so a crash mid-rotation still leaves a trail.
  */
 
-import { existsSync, mkdirSync, appendFileSync, chmodSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, appendFileSync, chmodSync, statSync, openSync, closeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -47,11 +47,13 @@ function ensureLog(): void {
     mkdirSync(AUDIT_DIR, { recursive: true, mode: 0o700 });
   }
   if (!existsSync(AUDIT_PATH)) {
-    appendFileSync(AUDIT_PATH, '');
-    chmodSync(AUDIT_PATH, 0o600);
+    // Atomic create with the desired mode in a single syscall — closes the
+    // TOCTOU window where the file briefly existed at the umask default
+    // (typically 0o644) before the chmod.
+    const fd = openSync(AUDIT_PATH, 'a', 0o600);
+    closeSync(fd);
     return;
   }
-  // If perms drifted (e.g. someone touched the file), restore them.
   try {
     const mode = statSync(AUDIT_PATH).mode & 0o777;
     if (mode !== 0o600) chmodSync(AUDIT_PATH, 0o600);

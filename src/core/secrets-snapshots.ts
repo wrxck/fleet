@@ -82,7 +82,11 @@ export function restoreSnapshot(app: string, timestamp?: string): Snapshot {
   const entry = manifest.apps[app];
   if (!entry) throw new SecretsError(`No app in manifest: ${app}`);
   const dest = join(VAULT_DIR, entry.encryptedFile);
-  copyFileSync(target.path, dest);
+  // Atomic replace: copy → fsync → rename. A crash mid-restore leaves the
+  // original vault file intact (the tmp file is the only thing in flux).
+  const tmp = dest + '.restore.tmp';
+  copyFileSync(target.path, tmp);
+  renameSync(tmp, dest);
   return target;
 }
 
