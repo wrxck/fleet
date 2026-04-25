@@ -145,9 +145,17 @@ describe('secretsCommand — subcommand routing', () => {
 });
 
 describe('secretsCommand — secrets set', () => {
-  it('calls setSecret with app, key, value', async () => {
-    await secretsCommand(['set', 'myapp', 'DATABASE_URL', 'postgres://localhost/db']);
-    expect(mockSetSecret).toHaveBeenCalledWith('myapp', 'DATABASE_URL', 'postgres://localhost/db');
+  // Post-incident hardening: argv-as-value is REJECTED at the CLI layer
+  // (process arguments are world-readable via /proc/<pid>/cmdline + land
+  // in shell history). The new contract: interactive prompt by default,
+  // explicit `--from-stdin` for piped values.
+  it('refuses argv-as-value before reaching setSecret', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(
+      secretsCommand(['set', 'myapp', 'DATABASE_URL', 'postgres://localhost/db']),
+    ).rejects.toThrow('exit');
+    expect(mockSetSecret).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
   });
 
   it('exits when app is missing', async () => {
@@ -160,17 +168,6 @@ describe('secretsCommand — secrets set', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
     await expect(secretsCommand(['set', 'myapp'])).rejects.toThrow('exit');
     exitSpy.mockRestore();
-  });
-
-  it('exits when value is missing', async () => {
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
-    await expect(secretsCommand(['set', 'myapp', 'KEY'])).rejects.toThrow('exit');
-    exitSpy.mockRestore();
-  });
-
-  it('handles value with spaces by joining parts', async () => {
-    await secretsCommand(['set', 'myapp', 'KEY', 'value', 'with', 'spaces']);
-    expect(mockSetSecret).toHaveBeenCalledWith('myapp', 'KEY', 'value with spaces');
   });
 });
 
@@ -303,17 +300,22 @@ describe('secretsCommand — drift output', () => {
 });
 
 describe('security — path traversal and injection', () => {
-  it('app name with path traversal does not reach setSecret', async () => {
-    // The validate layer in secrets-ops would reject it,
-    // but the command itself passes through - test that setSecret receives the raw value
-    // so we can verify validation happens downstream
-    await secretsCommand(['set', '../etc/passwd', 'KEY', 'val']);
-    expect(mockSetSecret).toHaveBeenCalledWith('../etc/passwd', 'KEY', 'val');
+  // The previous two tests verified that the CLI passed traversal/injection
+  // inputs through to setSecret (relying on downstream validate to reject).
+  // The new contract is stronger: any argv-as-value form is rejected at the
+  // CLI layer, so the inputs never reach setSecret in the first place.
+  it('rejects path-traversal app name + value-as-argv before setSecret', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(secretsCommand(['set', '../etc/passwd', 'KEY', 'val'])).rejects.toThrow('exit');
+    expect(mockSetSecret).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
   });
 
-  it('passes arguments with shell metacharacters verbatim to setSecret', async () => {
-    await secretsCommand(['set', 'myapp', 'KEY', 'val; rm -rf /']);
-    expect(mockSetSecret).toHaveBeenCalledWith('myapp', 'KEY', 'val; rm -rf /');
+  it('rejects shell-metachar value-as-argv before setSecret', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(secretsCommand(['set', 'myapp', 'KEY', 'val; rm -rf /'])).rejects.toThrow('exit');
+    expect(mockSetSecret).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
   });
 
   it('seal-runtime routes to sealFromRuntime', async () => {

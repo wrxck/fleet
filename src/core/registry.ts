@@ -30,6 +30,28 @@ export interface AppEntry {
   registeredAt: string;
   frozenAt?: string;
   frozenReason?: string;
+  /** Numeric UID/GID to chown /run/fleet-secrets/<app>/.env to after unseal.
+   * If unset, file remains root:root 0600 (the safe default). Used only for
+   * apps that read the env file directly from the host (rare); Docker apps
+   * using env_file in compose don't need this. */
+  runtimeUid?: number;
+  runtimeGid?: number;
+  /** Per-app age recipient public key (for fleet secrets harden --per-app).
+   * When set, the vault is encrypted to (admin + this) recipients. */
+  ageRecipient?: string;
+  /** Per-app log policy. If unset, defaults are applied (7 days, 100MB, info). */
+  logging?: {
+    retentionDays?: number;
+    maxSizeMB?: number;
+    level?: 'debug' | 'info' | 'warn' | 'error';
+  };
+  /** Per-app outbound egress allowlist. v1 supports `observe` and `shadow` modes
+   * only — `enforce` mode (actual drop via nftables) is deferred to Phase E. */
+  egress?: {
+    mode?: 'observe' | 'shadow';
+    /** Allowlist entries: 'host', 'host:port', or 'cidr/N'. Hosts resolved at check time. */
+    allow?: string[];
+  };
 }
 
 export interface Registry {

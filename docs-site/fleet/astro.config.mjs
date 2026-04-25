@@ -60,6 +60,8 @@ export default defineConfig({
             { label: 'Freeze', slug: 'cli/freeze' },
             { label: 'Health', slug: 'cli/health' },
             { label: 'Secrets', slug: 'cli/secrets' },
+            { label: 'Logs', slug: 'cli/logs' },
+            { label: 'Egress', slug: 'cli/egress' },
             { label: 'Nginx', slug: 'cli/nginx' },
             { label: 'Git', slug: 'cli/git' },
             { label: 'Deps', slug: 'cli/deps' },

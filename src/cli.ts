@@ -8,6 +8,7 @@ import { startCommand } from './commands/start.js';
 import { stopCommand } from './commands/stop.js';
 import { restartCommand } from './commands/restart.js';
 import { logsCommand } from './commands/logs.js';
+import { egressCommand } from './commands/egress.js';
 import { healthCommand } from './commands/health.js';
 import { addCommand } from './commands/add.js';
 import { removeCommand } from './commands/remove.js';
@@ -138,6 +139,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'stop': return stopCommand(rest);
     case 'restart': return restartCommand(rest);
     case 'logs': return logsCommand(rest);
+    case 'egress': return egressCommand(rest);
     case 'health': return healthCommand(rest);
     case 'deps': return depsCommand(rest);
     case 'add': return addCommand(rest);

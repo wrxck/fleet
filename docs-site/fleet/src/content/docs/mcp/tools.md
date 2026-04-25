@@ -55,14 +55,79 @@ Restart an app via systemctl.
 
 ---
 
-### `fleet_logs`
+### `fleet_logs` *(deprecated)*
 
-Get recent container logs for an app.
+Get recent container logs. Marked deprecated in favour of the four token-conservative tools below — kept for backwards compatibility.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `app` | string | Yes | App name |
 | `lines` | number | No | Number of log lines (default: 100) |
+
+---
+
+### `fleet_logs_summary`
+
+Aggregate counts by level + top 10 distinct error/warn messages over a window. **Cheapest log tool** — your first pass before fetching raw text.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app` | string | Yes | App name |
+| `container` | string | No | Container name (defaults to first) |
+| `sinceMinutes` | number | No | Window in minutes (default: 60) |
+
+---
+
+### `fleet_logs_recent`
+
+Bounded tail with level / since / grep filters. Defaults are deliberately small.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app` | string | Yes | App name |
+| `container` | string | No | Container (defaults to first) |
+| `lines` | number | No | Tail N lines (default: 50) |
+| `level` | enum | No | `debug` / `info` / `warn` / `error` (default: `warn`) |
+| `sinceMinutes` | number | No | Look back this many minutes (default: 15) |
+| `grep` | string | No | Substring filter applied after level |
+
+Output capped at 200 KB; appends a hint when truncated.
+
+---
+
+### `fleet_logs_search`
+
+Bounded grep across recent logs. Returns matching lines, capped at `maxResults`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app` | string | Yes | App name |
+| `container` | string | No | Container (defaults to first) |
+| `query` | string | Yes | Substring or regex |
+| `sinceMinutes` | number | No | Window in minutes (default: 60) |
+| `maxResults` | number | No | Cap results (default: 20) |
+
+---
+
+### `fleet_logs_status`
+
+Per-container driver, current size, and policy applied. Use to find apps still on docker defaults (unbounded).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app` | string | No | App name (omit for all) |
+
+---
+
+### `fleet_egress_snapshot`
+
+Snapshot the current outbound TCP flows for an app and report which destinations aren't on the configured allowlist. Observe-only — never blocks traffic.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `app` | string | Yes | App name |
+
+Returns `{ takenAt, uniqueRemotes, violations, flowCount }`.
 
 ---
 
