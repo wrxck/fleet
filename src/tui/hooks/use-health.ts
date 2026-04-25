@@ -15,13 +15,21 @@ export function useHealth(autoRefreshMs: number = 15_000): HealthData {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initialised = useRef(false);
+  // Cache last serialised payload so we can short-circuit setResults when
+  // nothing changed. This kills the flicker that was happening on every
+  // poll because React was re-rendering the whole list with identical data.
+  const lastSerialised = useRef<string>('');
 
   const refresh = useCallback(() => {
     if (!initialised.current) setLoading(true);
     runFleetJson<HealthResult[]>(['health']).then(data => {
       initialised.current = true;
       if (data) {
-        setResults(data);
+        const serialised = JSON.stringify(data);
+        if (serialised !== lastSerialised.current) {
+          lastSerialised.current = serialised;
+          setResults(data);
+        }
         setError(null);
       } else {
         setError('Failed to fetch health data');
