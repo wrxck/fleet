@@ -89,19 +89,27 @@ describe('checkHttp', () => {
 
   it('returns ok for HTTP 200', () => {
     const result = checkHttp(3000);
-    expect(result).toEqual({ ok: true, status: 200, error: null });
+    expect(result).toEqual({ ok: true, status: 200, error: null, endpointMissing: false });
   });
 
-  it('returns ok for HTTP 404 (< 500)', () => {
+  it('returns ok for HTTP 301 (redirect, e.g. /health → /health/)', () => {
+    mockedExec.mockReturnValue({ stdout: '301', stderr: '', exitCode: 0, ok: true });
+    const result = checkHttp(3000);
+    expect(result).toEqual({ ok: true, status: 301, error: null, endpointMissing: false });
+  });
+
+  it('returns NOT ok for HTTP 404 and flags endpointMissing', () => {
+    // Tightened post-review: 4xx is not healthy. 404 specifically means
+    // the app never implemented a /health route — distinct from a real failure.
     mockedExec.mockReturnValue({ stdout: '404', stderr: '', exitCode: 0, ok: true });
     const result = checkHttp(3000);
-    expect(result).toEqual({ ok: true, status: 404, error: null });
+    expect(result).toEqual({ ok: false, status: 404, error: null, endpointMissing: true });
   });
 
-  it('returns not ok for HTTP 500', () => {
+  it('returns not ok for HTTP 500 (without endpointMissing)', () => {
     mockedExec.mockReturnValue({ stdout: '500', stderr: '', exitCode: 0, ok: true });
     const result = checkHttp(3000);
-    expect(result).toEqual({ ok: false, status: 500, error: null });
+    expect(result).toEqual({ ok: false, status: 500, error: null, endpointMissing: false });
   });
 
   it('returns not ok for connection refused', () => {
