@@ -125,20 +125,49 @@ export function snapshotEgress(app: AppEntry): EgressSnapshot {
   };
 }
 
+/**
+ * Match a destination against the allowlist. Supported entry forms:
+ *   exact-host:port          api.stripe.com:443
+ *   bare-host (any port)     api.stripe.com
+ *   bare-ip / ip:port        1.2.3.4 / 1.2.3.4:443
+ *   wildcard host            *.stripe.com           (also matches the bare apex)
+ *   wildcard host + port     *.stripe.com:443
+ *   bare host + glob port    api.stripe.com:*
+ *
+ * SECURITY NOTE: `host` is the result of a reverse-DNS lookup. An attacker
+ * who controls the reverse DNS for an IP they own can return whatever
+ * hostname they like. The IP-based allow forms (`ip`, `ip:port`) are the
+ * only trustworthy way to allow a destination by name; use them when the
+ * remote endpoint isn't under cloudflare/etc. Hostname-based entries are
+ * provided for ergonomics only — verify forward+reverse if you need to be
+ * adversarial about it.
+ */
 function allowMatches(allow: Set<string>, remote: string, host: string, ip: string, port: number): boolean {
   if (allow.size === 0) return false;
-  // Exact host:port
-  if (allow.has(remote)) return true;
-  // Bare host (any port)
-  if (allow.has(host)) return true;
-  // Bare ip
+  // IP-based (always trustworthy):
   if (allow.has(ip)) return true;
-  // host:port without numeric port lookup: check 'host:*'
-  if (allow.has(`${host}:*`)) return true;
-  // Domain-suffix matching (`*.stripe.com` allows `api.stripe.com`)
+  if (allow.has(`${ip}:${port}`)) return true;
+  // Hostname-based (trust depends on PTR record — see note above):
+  if (allow.has(remote)) return true;            // exact host:port
+  if (allow.has(host)) return true;              // bare host, any port
+  if (allow.has(`${host}:*`)) return true;       // host with glob port
   for (const a of allow) {
-    if (a.startsWith('*.') && (host.endsWith(a.slice(1)) || host === a.slice(2))) return true;
-    if (a.endsWith(`:${port}`) && (host === a.slice(0, -port.toString().length - 1) || ip === a.slice(0, -port.toString().length - 1))) return true;
+    // Wildcard host without port: '*.stripe.com'
+    if (a.startsWith('*.') && !a.includes(':')) {
+      const suffix = a.slice(1);                 // '.stripe.com'
+      const apex = a.slice(2);                   // 'stripe.com'
+      if (host === apex || host.endsWith(suffix)) return true;
+    }
+    // Wildcard host WITH port: '*.stripe.com:443'
+    if (a.startsWith('*.') && a.includes(':')) {
+      const colon = a.lastIndexOf(':');
+      const wildHost = a.slice(0, colon);        // '*.stripe.com'
+      const wildPort = a.slice(colon + 1);
+      if (parseInt(wildPort, 10) !== port) continue;
+      const suffix = wildHost.slice(1);
+      const apex = wildHost.slice(2);
+      if (host === apex || host.endsWith(suffix)) return true;
+    }
   }
   return false;
 }

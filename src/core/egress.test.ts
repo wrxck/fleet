@@ -94,6 +94,37 @@ describe('snapshotEgress', () => {
     ]);
     expect(snapshotEgress(app({ egress: { allow: ['*.stripe.com'] } })).violations).toEqual([]);
   });
+
+  // Regression: reviewer flagged that *.host:port combinations were silently
+  // unsupported (string-suffix-comparison broke the path).
+  it('supports wildcard host + port: *.stripe.com:443', () => {
+    mockSequence([
+      { ok: true, stdout: '1234' },
+      { ok: true, stdout: 'ESTAB 0 0 172.20.0.5:34000 1.2.3.4:443' },
+      { ok: true, stdout: '1.2.3.4     api.stripe.com' },
+    ]);
+    expect(snapshotEgress(app({ egress: { allow: ['*.stripe.com:443'] } })).violations).toEqual([]);
+  });
+
+  it('rejects wildcard host + port when port differs', () => {
+    mockSequence([
+      { ok: true, stdout: '1234' },
+      { ok: true, stdout: 'ESTAB 0 0 172.20.0.5:34000 1.2.3.4:8080' },
+      { ok: true, stdout: '1.2.3.4     api.stripe.com' },
+    ]);
+    expect(snapshotEgress(app({ egress: { allow: ['*.stripe.com:443'] } })).violations).toEqual(['api.stripe.com:8080']);
+  });
+
+  // Regression: IP-based allow forms must work without trusting PTR records.
+  it('IP allow form ignores hostname spoofed by PTR', () => {
+    mockSequence([
+      { ok: true, stdout: '1234' },
+      { ok: true, stdout: 'ESTAB 0 0 172.20.0.5:34000 8.8.8.8:443' },
+      { ok: true, stdout: '8.8.8.8     attacker-set-fake.example.com' },
+    ]);
+    // Allowlist names the IP — works regardless of the (potentially lying) PTR.
+    expect(snapshotEgress(app({ egress: { allow: ['8.8.8.8:443'] } })).violations).toEqual([]);
+  });
 });
 
 describe('addEgressAllow', () => {

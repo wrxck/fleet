@@ -160,7 +160,11 @@ export const PROVIDERS: ProviderDef[] = [
       '1. Sign in and create a new App Password (e.g. "macpool-2026")\n' +
       '2. Copy the 16-character value and paste below WITHOUT spaces\n' +
       '3. Revoke the old App Password from the same page',
-    format: /^[a-z0-9 ]{16,20}$/,
+    // Gmail app passwords are 16 lowercase alphanumeric chars. Google
+    // displays them with spaces every 4 chars for readability but expects
+    // them WITHOUT spaces in the SMTP password field — we accept only the
+    // de-spaced form so a paste-as-displayed gets rejected with a clear error.
+    format: /^[a-z0-9]{16}$/,
     sensitivity: 'critical',
     rotationFrequencyDays: 90,
     strategy: 'immediate',
@@ -289,9 +293,12 @@ export const PROVIDERS: ProviderDef[] = [
 
   // ── Generic fallback ─────────────────────────────────────────────────────
   // Anything looking like a secret name but not specifically known.
+  // Require an explicit `_` boundary before the suffix (so `MONKEY` and
+  // `BROKEN_KEY` no longer match) and exclude `PUBLIC_KEY` / `PUB_KEY`
+  // which are not secrets despite ending in KEY.
   {
     id: 'generic-secret',
-    matches: /(SECRET|TOKEN|KEY|PASSWORD|PRIVATE)$/i,
+    matches: /^(?!.*(?:PUBLIC_KEY|PUB_KEY)$).*_(SECRET|TOKEN|KEY|PASSWORD|PRIVATE)$/i,
     name: 'Generic Secret',
     instructions: 'Generate a fresh high-entropy value, e.g. `openssl rand -base64 32`.',
     sensitivity: 'medium',

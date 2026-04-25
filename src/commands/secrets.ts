@@ -114,14 +114,44 @@ function secretsList(args: string[]): void {
   process.stdout.write('\n');
 }
 
-function secretsSet(args: string[]): void {
-  const [app, key, ...valueParts] = args;
-  const value = valueParts.join(' ');
-  if (!app || !key || !value) {
-    error('Usage: fleet secrets set <app> <KEY> <VALUE>');
+async function secretsSet(args: string[]): Promise<void> {
+  // Strip flags. Positional layout: <app> <KEY>. Value comes from interactive
+  // prompt (default) or stdin (--from-stdin). The legacy 'value as argv' form
+  // is REJECTED — argv is world-readable via /proc/<pid>/cmdline + lands in
+  // shell history, the exact leak class this branch was built to prevent.
+  const fromStdin = args.includes('--from-stdin');
+  const allowWeak = args.includes('--allow-weak');
+  const positional = args.filter(a => !a.startsWith('-'));
+  const [app, key, ...rest] = positional;
+
+  if (!app || !key) {
+    error('Usage: fleet secrets set <app> <KEY> [--from-stdin] [--allow-weak]');
+    error('       (interactive paste is the default — value is NEVER passed in argv)');
     process.exit(1);
   }
-  setSecret(app, key, value);
+  if (rest.length > 0) {
+    error('Refusing to take a secret value from argv (visible in /proc/<pid>/cmdline + shell history).');
+    error('Use the interactive prompt or pipe via --from-stdin:');
+    error(`  fleet secrets set ${app} ${key}                          # interactive`);
+    error(`  printf '%s' "$NEW_VALUE" | fleet secrets set ${app} ${key} --from-stdin`);
+    process.exit(1);
+  }
+
+  let value: string;
+  if (fromStdin) {
+    const chunks: string[] = [];
+    process.stdin.setEncoding('utf8');
+    for await (const chunk of process.stdin) chunks.push(chunk as string);
+    value = chunks.join('').replace(/\r?\n$/, '');  // strip trailing newline
+  } else {
+    value = await promptHidden(`Paste new value for ${key} (input hidden)`);
+  }
+
+  if (!value) {
+    error('Empty value — aborting');
+    process.exit(1);
+  }
+  setSecret(app, key, value, { allowWeak });
   success(`Set ${key} for ${app}`);
 }
 
@@ -313,7 +343,7 @@ async function rotateOneInteractive(
 
   const result = performRotation(app, secret.name, newValue, {
     dryRun: opts.dryRun,
-    notes: opts.dataMigrated ? '--data-migrated' : undefined,
+    dataMigrated: opts.dataMigrated,
   });
 
   if (result.rolledBack) {
@@ -686,7 +716,12 @@ async function secretsRollback(args: string[]): Promise<void> {
   const yes = args.includes('-y') || args.includes('--yes');
   const toIdx = args.indexOf('--to');
   const to = toIdx >= 0 ? args[toIdx + 1] : undefined;
-  const app = args.find((a, i) => !a.startsWith('-') && i !== toIdx + 1);
+  // Bug fix: previous logic excluded args[toIdx + 1] always (even when toIdx
+  // was -1, i.e. no --to flag), which silently skipped args[0] and grabbed
+  // the wrong positional. Only exclude the timestamp slot if --to was given.
+  const app = args.find((a, i) =>
+    !a.startsWith('-') && (toIdx < 0 || i !== toIdx + 1),
+  );
 
   if (!app) {
     error('Usage: fleet secrets rollback <app> [--to <TIMESTAMP>]');

@@ -36,7 +36,10 @@ export function checkEntropy(value: string): string | null {
     'replace_me', 'replace-me', 'fixme',
   ];
   if (placeholders.includes(lower)) {
-    return `Value "${value}" looks like a placeholder, not a real secret`;
+    // Don't echo the rejected value — even an obvious placeholder might be
+    // an unintended paste of a real secret that just happened to start with
+    // a placeholder substring.
+    return `Value looks like a placeholder, not a real secret`;
   }
   if (value.length < 8) {
     return `Value too short (${value.length} chars) — secrets should be ≥ 8 chars`;
@@ -133,7 +136,7 @@ export function performRotation(
   app: string,
   key: string,
   newValue: string,
-  opts: { dryRun?: boolean; notes?: string } = {},
+  opts: { dryRun?: boolean; notes?: string; dataMigrated?: boolean } = {},
 ): RotationResult {
   const manifest: Manifest = loadManifest();
   const entry = manifest.apps[app];
@@ -150,7 +153,9 @@ export function performRotation(
       `${key} is a user-issued token. Rotating yours doesn't help — invalidate per-user instead.`,
     );
   }
-  if (strategy === 'at-rest-key' && !opts.notes?.includes('--data-migrated')) {
+  // Strict typed opt — was previously a substring match on opts.notes which
+  // could be bypassed by any caller embedding the flag in free-text notes.
+  if (strategy === 'at-rest-key' && !opts.dataMigrated) {
     throw new SecretsError(
       `${key} encrypts data at rest. Re-encrypt your data first, then pass --data-migrated.`,
     );
