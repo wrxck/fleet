@@ -47,12 +47,13 @@ vi.mock('./secrets.js', async () => {
   };
 });
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, chmodSync, writeFileSync } from 'node:fs';
+
 import {
   loadManifest, decryptApp, sealApp, parseSecretsBundle,
   backupVaultFile, restoreVaultFile, removeBackup,
 } from './secrets.js';
-import { validateBeforeSeal, detectDrift, safeSealApp } from './secrets-ops.js';
+import { validateBeforeSeal, detectDrift, safeSealApp, unsealAll } from './secrets-ops.js';
 
 const mockLoadManifest = vi.mocked(loadManifest);
 const mockDecryptApp = vi.mocked(decryptApp);
@@ -266,5 +267,69 @@ describe('safeSealApp', () => {
     expect(() => safeSealApp('myapp', 'A=1\nB=2\nC=3', '.env')).toThrow('encryption failed');
     expect(mockRestoreVaultFile).toHaveBeenCalledWith('myapp');
     expect(mockRemoveBackup).not.toHaveBeenCalled();
+  });
+});
+
+describe('unsealAll runtime perms', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('writes secrets-dir files with mode 0o644 so non-root containers can read them', async () => {
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        'docker-databases': {
+          type: 'secrets-dir',
+          encryptedFile: 'docker-databases.secrets.age',
+          sourceFile: '/srv/docker-databases/secrets',
+          files: ['mongo_root_password.txt'],
+          lastSealedAt: '',
+          keyCount: 1,
+        },
+      },
+    });
+    const { ageDecryptFile } = await import('./secrets.js');
+    vi.mocked(ageDecryptFile).mockReturnValue('---SECRET:mongo_root_password.txt---\nhunter2');
+    mockParseSecretsBundle.mockReturnValue({ 'mongo_root_password.txt': 'hunter2' });
+    mockExistsSync.mockReturnValue(true);
+
+    unsealAll();
+
+    const chmodCalls = vi.mocked(chmodSync).mock.calls;
+    const secretFileCall = chmodCalls.find(
+      ([p]) => typeof p === 'string' && p.endsWith('mongo_root_password.txt'),
+    );
+    expect(secretFileCall).toBeDefined();
+    // 0o644 — group-only (0o640) breaks mongo's entrypoint, which reads the
+    // password file as uid 999 without first becoming root the way postgres does
+    expect(secretFileCall![1]).toBe(0o644);
+  });
+
+  it('still writes env files with 0o600 (only the runtime process needs them)', async () => {
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        myapp: {
+          type: 'env',
+          encryptedFile: 'myapp.env.age',
+          sourceFile: '.env',
+          lastSealedAt: '',
+          keyCount: 1,
+        },
+      },
+    });
+    const { ageDecryptFile } = await import('./secrets.js');
+    vi.mocked(ageDecryptFile).mockReturnValue('FOO=bar');
+    mockExistsSync.mockReturnValue(true);
+
+    unsealAll();
+
+    const chmodCalls = vi.mocked(chmodSync).mock.calls;
+    const envCall = chmodCalls.find(
+      ([p]) => typeof p === 'string' && p.endsWith('/myapp/.env'),
+    );
+    expect(envCall).toBeDefined();
+    expect(envCall![1]).toBe(0o600);
   });
 });
