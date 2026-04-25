@@ -85,15 +85,22 @@ describe('secrets-providers', () => {
   });
 
   describe('format validation', () => {
-    it('accepts a valid stripe live key', () => {
+    it('accepts a valid stripe standard live key', () => {
       const p = classifySecret('STRIPE_SECRET_KEY')!;
       expect(p.format!.test('sk_live_' + 'a'.repeat(50))).toBe(true);
+    });
+
+    it('accepts a valid stripe RESTRICTED live key (rk_live_...) — Stripe-recommended pattern', () => {
+      const p = classifySecret('STRIPE_SECRET_KEY')!;
+      expect(p.format!.test('rk_live_' + 'a'.repeat(50))).toBe(true);
+      expect(p.format!.test('rk_test_' + 'a'.repeat(50))).toBe(true);
     });
 
     it('rejects malformed stripe keys', () => {
       const p = classifySecret('STRIPE_SECRET_KEY')!;
       expect(p.format!.test('not_a_real_key')).toBe(false);
       expect(p.format!.test('sk_live_short')).toBe(false);
+      expect(p.format!.test('rk_live_short')).toBe(false);
     });
 
     it('accepts whsec_ webhook secrets', () => {
