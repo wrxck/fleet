@@ -8,6 +8,26 @@ import { assertAppName, assertFilePath, assertSecretKey } from './validate.js';
 import { SecretsError } from './errors.js';
 import { auditLog } from './secrets-audit.js';
 import { checkEntropy } from './secrets-rotation.js';
+import { chownSync } from 'node:fs';
+import { load as loadRegistry } from './registry.js';
+
+/**
+ * Best-effort UID/GID tightening of a runtime secrets file. If the registry
+ * defines runtimeUid/runtimeGid for the app, chown to those values; otherwise
+ * leave as-is (root:root). Never throws — secret availability beats stricter
+ * perms (we already chmod'd 0600 so root-only is the floor).
+ */
+function tryTightenPerms(envPath: string, app: string): void {
+  try {
+    const reg = loadRegistry();
+    const entry = reg.apps.find(a => a.name === app);
+    if (!entry?.runtimeUid && !entry?.runtimeGid) return;
+    chownSync(envPath, entry.runtimeUid ?? 0, entry.runtimeGid ?? 0);
+  } catch (err) {
+    // log + continue; never block unseal
+    process.stderr.write(`[fleet-unseal] perm tightening skipped for ${app}: ${err}\n`);
+  }
+}
 import {
   KEY_PATH, VAULT_DIR, RUNTIME_DIR,
   loadManifest, saveManifest, decryptApp, parseSecretsBundle,
@@ -341,6 +361,10 @@ export function unsealAll(): void {
       const envPath = join(appDir, '.env');
       writeFileSync(envPath, plaintext);
       chmodSync(envPath, 0o600);
+      // Optional UID/GID tightening (registry.runtimeUid/runtimeGid). Default
+      // root:root if unset. Failures are non-fatal — if the UID doesn't exist
+      // we'd rather have the secret available than fail boot.
+      tryTightenPerms(envPath, app);
     } else if (entry.type === 'secrets-dir') {
       const secretsDir = join(RUNTIME_DIR, app, 'secrets');
       if (!existsSync(secretsDir)) mkdirSync(secretsDir, { recursive: true, mode: 0o700 });
