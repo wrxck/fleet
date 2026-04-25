@@ -14,10 +14,16 @@ export function patchSystemdCommand(args: string[]): void {
   const dbServiceName = reg.infrastructure.databases.serviceName;
   const appServiceNames = reg.apps.map(a => a.serviceName);
 
-  const targets: Array<{ name: string; rewriteExecStart: boolean }> = [
-    ...appServiceNames.map(name => ({ name, rewriteExecStart: true })),
-    { name: dbServiceName, rewriteExecStart: false },
-  ];
+  // dedupe by service name with infra (rewriteExecStart=false) winning. a stale
+  // registry can list docker-databases under both reg.apps and infrastructure;
+  // without this guard the apps entry would rewrite ExecStart on the shared
+  // databases service, defeating the safety carve-out.
+  const targetMap = new Map<string, { name: string; rewriteExecStart: boolean }>();
+  for (const name of appServiceNames) {
+    targetMap.set(name, { name, rewriteExecStart: true });
+  }
+  targetMap.set(dbServiceName, { name: dbServiceName, rewriteExecStart: false });
+  const targets = Array.from(targetMap.values());
 
   info(`Patching ${targets.length} service(s)...`);
   let patched = 0;
