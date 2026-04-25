@@ -48,6 +48,16 @@ const viewHints: Record<View, KeyHintItem[]> = {
     { key: 'Esc', label: 'back' },
     { key: 'q', label: 'quit' },
   ],
+  'logs-multi': [
+    { key: 'Tab', label: 'switch focus' },
+    { key: 'j/k', label: 'pick' },
+    { key: 'Space', label: 'toggle' },
+    { key: 'a', label: 'all/none' },
+    { key: 'p', label: 'pause' },
+    { key: 'c', label: 'clear' },
+    { key: 'L', label: 'level' },
+    { key: 'q', label: 'quit' },
+  ],
 };
 
 export function KeyHint(): React.JSX.Element {

@@ -238,6 +238,16 @@ A Go companion bot (`bot/`) that provides remote server management through Teleg
 
 See the [bot documentation](https://fleet.hesketh.pro/bot/setup/) for setup instructions.
 
+## Self-update
+
+When `fleet`'s TUI launches it does a non-blocking `git fetch` against `origin/develop`. If the local repo is behind, a banner appears under the header:
+
+```
+↑ Update available: 3 commits ahead — feat: ... Press U to install.
+```
+
+Pressing `U` runs `git pull --ff-only` then `npm run build` (refused if the working tree is dirty). The new binary is live for the next `fleet …` invocation. Recheck happens every 30 minutes for long-running TUI sessions.
+
 ## Testing
 
 ```bash
