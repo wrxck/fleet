@@ -323,9 +323,13 @@ export function unsealAll(): void {
         }
         const fpath = join(secretsDir, safe);
         writeFileSync(fpath, content);
-        // 0640: docker compose secrets bind-mounts files into containers where
-        // non-root processes (e.g. mongodb uid 999) need read access via group
-        chmodSync(fpath, 0o640);
+        // 0644: docker bind-mounts these files into containers where non-root
+        // processes need read access. group-only (0640) breaks mongo's
+        // entrypoint, which reads the password file as uid 999 (mongodb)
+        // without first reading as root the way postgres does. host security
+        // still relies on the parent dir being 0700 root:root, so 0644 here
+        // does not widen host exposure.
+        chmodSync(fpath, 0o644);
       }
     }
   }
