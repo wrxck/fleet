@@ -412,3 +412,127 @@ Secrets Status
 ### Related
 
 - **MCP tool:** `fleet_secrets_status`
+
+---
+
+## fleet secrets set
+
+Set a single secret value for an app. **Interactive paste is the default** — the secret value is never accepted as a positional argv argument because process arguments are world-readable via `/proc/<pid>/cmdline` and land in shell history.
+
+### Usage
+
+```bash
+fleet secrets set <app> <KEY>                            # interactive (recommended)
+printf '%s' "$NEW_VALUE" | fleet secrets set <app> <KEY> --from-stdin
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--from-stdin` | Read the value from stdin (terminating newline stripped). |
+| `--allow-weak` | Skip the entropy / placeholder check (rejects of `changeme`, `password`, etc.). |
+
+### Why no `<VALUE>` positional?
+
+The legacy `fleet secrets set <app> <KEY> <VALUE>` form is **rejected** since fleet v1.6: argv leaks the value via `/proc/<pid>/cmdline`, ps, shell history, atop accounting, and similar. Use the interactive prompt or `--from-stdin`.
+
+---
+
+## fleet secrets ages
+
+Show every managed secret with its age, provider classification, rotation frequency, sensitivity, and freshness status. Read-only.
+
+### Usage
+
+```bash
+fleet secrets ages [<app>] [--json] [--stale-only] [--motd]
+```
+
+### Status legend
+
+- `fresh` — under 80% of the provider's `rotationFrequencyDays`
+- `aging` — between 80% and 100% of the frequency
+- `STALE` — at or past the frequency, time to rotate
+- `unknown` — secret name didn't match any known provider
+
+### Examples
+
+```bash
+$ fleet secrets ages --stale-only
+Secret ages (4 secrets)
+  APP      SECRET                AGE       ROTATE EVERY  PROVIDER             SENS      STATUS
+  macpool  STRIPE_SECRET_KEY     200 days  90d           Stripe Secret Key    critical  STALE
+  ...
+
+$ fleet secrets ages --motd
+-- Fleet Secrets ----------------------------------------
+  4 secrets need rotation (1 critical, 3 high) across 2 apps
+  !! macpool: STRIPE_SECRET_KEY (200d old)
+  ...
+```
+
+---
+
+## fleet secrets motd-init
+
+Install `/etc/update-motd.d/99-fleet-secrets` so the next shell login summarises stale-secret status alongside fleet deps.
+
+### Usage
+
+```bash
+sudo fleet secrets motd-init
+```
+
+---
+
+## fleet secrets rotate
+
+Interactive walkthrough that rotates one or every secret in an app. **Safety rails are mandatory** — pre-rotation snapshot, hidden input, format validation, entropy check, masked confirmation, atomic restore on failure, post-rotation health gate.
+
+### Usage
+
+```bash
+fleet secrets rotate <app>                                # walk every secret
+fleet secrets rotate <app> <KEY>                          # one specific secret
+fleet secrets rotate <app> <KEY> --dry-run                # show what would happen
+fleet secrets rotate <app> <KEY> --no-restart             # skip auto-restart
+fleet secrets rotate <app> ENCRYPTION_KEY --data-migrated # at-rest-key strategy
+```
+
+### Rotation strategies
+
+The provider registry classifies each secret name and picks one of:
+
+| Strategy | Examples | Behaviour |
+|----------|----------|-----------|
+| `immediate` | `STRIPE_SECRET_KEY`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, `BOOKWHEN_API_TOKEN` | Drop-in replace. Old dies. Safe for upstream API keys. |
+| `dual-mode` | `JWT_SECRET`, `NEXTAUTH_SECRET`, `AUTH_SECRET`, `SESSION_SECRET`, `CSRF_SECRET` | New value becomes primary; **old saved as `<NAME>_PREVIOUS`**. App must read both for verification so existing user sessions stay valid through the grace period. |
+| `at-rest-key` | `ENCRYPTION_KEY`, `FIELD_ENCRYPTION_KEY` | **Refused** unless `--data-migrated` is passed. Rotating without re-encrypting stored data first will brick reads. |
+| `user-issued` | `USER_API_TOKEN`, `CUSTOMER_API_KEYS` | **Refused entirely**. Rotate per-user inside your app. |
+
+### Audit + rollback
+
+Every rotation creates a snapshot at `vault/.snapshots/<app>-<ts>.env.age` before any change. If reseal fails, the snapshot is automatically restored. Audit log entry is appended to `~/.local/share/fleet/audit.jsonl` (mode `0600`, **never logs the value**).
+
+To restore manually:
+
+```bash
+fleet secrets snapshots <app>          # list snapshots, newest first
+fleet secrets rollback <app>           # restore the newest
+fleet secrets rollback <app> --to <TIMESTAMP>
+```
+
+The rollback itself takes a pre-rollback safety snapshot — the rollback is reversible.
+
+---
+
+## fleet secrets rotate-key
+
+Legacy command that rotates the AGE master key (re-encrypts every vault file with a fresh key). **Different concept from `fleet secrets rotate`** — that one rotates application secret values; this one rotates the encryption key the vault uses.
+
+### Usage
+
+```bash
+fleet secrets rotate-key [-y]
+```
