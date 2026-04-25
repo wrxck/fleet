@@ -12,6 +12,13 @@ export const RUNTIME_DIR = '/run/fleet-secrets';
 const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
 const SECRET_DELIMITER = '---SECRET:';
 
+export interface SecretMetadata {
+  lastRotated: string;
+  provider?: string;
+  strategy?: 'immediate' | 'dual-mode' | 'at-rest-key' | 'user-issued';
+  notes?: string;
+}
+
 export interface ManifestEntry {
   type: 'env' | 'secrets-dir';
   encryptedFile: string;
@@ -19,6 +26,11 @@ export interface ManifestEntry {
   files?: string[];
   lastSealedAt: string;
   keyCount: number;
+  /** Per-secret metadata, keyed by secret name. Backwards-compatible: missing means
+   * lastRotated falls back to lastSealedAt and provider is auto-classified at read time. */
+  secrets?: Record<string, SecretMetadata>;
+  /** Per-app age recipient public key, used by harden --per-app to limit blast radius. */
+  recipient?: string;
 }
 
 export interface Manifest {
