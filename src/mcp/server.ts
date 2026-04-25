@@ -24,6 +24,7 @@ import { freezeApp, unfreezeApp } from '../commands/freeze.js';
 import { registerGitTools } from './git-tools.js';
 import { registerSecretsTools } from './secrets-tools.js';
 import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy.js';
+import { snapshotEgress } from '../core/egress.js';
 import { registerDepsTools } from './deps-tools.js';
 
 function requireApp(name: string) {
@@ -217,6 +218,29 @@ export async function startMcpServer(): Promise<void> {
         ? `\n\n[${matches.length - maxResults} more matches — narrow query or shorten window]`
         : '';
       return text(slice.join('\n') + note);
+    }
+  );
+
+  server.tool(
+    'fleet_egress_snapshot',
+    'Snapshot the current outbound TCP flows for an app and report which destinations are NOT in the configured allowlist. Use to seed allowlists or audit unexpected egress. v1 is observe-only — it never blocks traffic.',
+    { app: z.string().describe('App name') },
+    async ({ app }) => {
+      const entry = requireApp(app);
+      const snap = snapshotEgress(entry);
+      return text(
+        JSON.stringify(
+          {
+            takenAt: snap.takenAt,
+            app: snap.app,
+            uniqueRemotes: snap.uniqueRemotes,
+            violations: snap.violations,
+            flowCount: snap.flows.length,
+          },
+          null,
+          2,
+        ),
+      );
     }
   );
 
