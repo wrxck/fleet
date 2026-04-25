@@ -1,4 +1,4 @@
-import { writeFileSync, existsSync } from 'node:fs';
+import { writeFileSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSafe } from '../core/exec.js';
 
@@ -28,6 +28,7 @@ import { restartService } from '../core/systemd.js';
 import { checkHealth } from '../core/health.js';
 import { listSnapshots, restoreSnapshot, snapshotApp } from '../core/secrets-snapshots.js';
 import { auditLog } from '../core/secrets-audit.js';
+import { summariseSecrets, formatSecretsMotd, generateSecretsMotdScript } from '../core/secrets-motd.js';
 
 function getDbSecretsDir(): string {
   const reg = load();
@@ -56,6 +57,7 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'restore': return secretsRestore(rest);
     case 'rollback': return secretsRollback(rest);
     case 'snapshots': return secretsSnapshots(rest);
+    case 'motd-init': return secretsMotdInit();
     case 'seal-runtime': return secretsSeal(rest);
     default:
       error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|rollback|snapshots|validate|status|drift|restore>');
@@ -439,6 +441,13 @@ function ageString(days: number | null): string {
 }
 
 function secretsAges(args: string[]): void {
+  // --motd → short summary suitable for /etc/update-motd.d/
+  if (args.includes('--motd')) {
+    const summary = summariseSecrets();
+    process.stdout.write(formatSecretsMotd(summary) + '\n');
+    return;
+  }
+
   const { app, opts } = parseAgesOpts(args);
 
   let secrets: Array<EnrichedSecret & { app: string }>;
@@ -627,6 +636,21 @@ function secretsDrift(args: string[]): void {
     warn('Run "fleet secrets unseal" to revert runtime to vault state');
   } else {
     success('No drift detected');
+  }
+}
+
+function secretsMotdInit(): void {
+  const motdPath = '/etc/update-motd.d/99-fleet-secrets';
+  const script = generateSecretsMotdScript();
+  try {
+    writeFileSync(motdPath, script);
+    chmodSync(motdPath, 0o755);
+    success(`Installed MOTD script: ${motdPath}`);
+    info('Will print on next shell login.');
+  } catch (err: unknown) {
+    error(`Failed to install MOTD: ${err instanceof Error ? err.message : String(err)}`);
+    error('Re-run with sudo if permission denied.');
+    process.exit(1);
   }
 }
 

@@ -1,0 +1,571 @@
+{
+  "version": 1,
+  "apps": [
+    {
+      "name": "bahar-afg-women",
+      "displayName": "Bahar Afghan Women's Association",
+      "composePath": "/home/matt/bahar-afg-women/server",
+      "composeFile": null,
+      "serviceName": "bahar-afg-women",
+      "domains": [],
+      "port": 5025,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "bahar-afg-women"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:24.534Z"
+    },
+    {
+      "name": "blog-matthesketh-pro",
+      "displayName": "blog-matthesketh-pro",
+      "composePath": "/home/matt/blog-matthesketh-pro",
+      "composeFile": null,
+      "serviceName": "blog-matthesketh-pro",
+      "domains": [
+        "blog.matthesketh.pro"
+      ],
+      "port": 60612,
+      "usesSharedDb": false,
+      "type": "proxy",
+      "containers": [
+        "blog-matthesketh-pro"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:24.612Z"
+    },
+    {
+      "name": "docker-databases",
+      "displayName": "Shared Docker Databases",
+      "composePath": "/home/matt/docker-databases",
+      "composeFile": null,
+      "serviceName": "docker-databases",
+      "domains": [],
+      "port": null,
+      "type": "service",
+      "containers": [
+        "shared-mongodb",
+        "shared-postgres",
+        "shared-mysql",
+        "shared-redis",
+        "shared-minio"
+      ],
+      "usesSharedDb": false,
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T12:28:33.165Z"
+    },
+    {
+      "name": "abmanandvan",
+      "displayName": "AB Man and Van",
+      "composePath": "/home/matt/abmanandvan/server",
+      "composeFile": null,
+      "serviceName": "abmanandvan",
+      "domains": [
+        "www.abmanandvan.co.uk",
+        "abmanandvan.co.uk"
+      ],
+      "port": 5046,
+      "usesSharedDb": true,
+      "type": "spa",
+      "containers": [
+        "abmanandvan"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:24.453Z"
+    },
+    {
+      "name": "brandify",
+      "displayName": "Brandify",
+      "composePath": "/home/matt/brandify",
+      "composeFile": null,
+      "serviceName": "brandify",
+      "domains": [],
+      "port": 6553,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "brandify"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:24.692Z"
+    },
+    {
+      "name": "clawwatch",
+      "displayName": "clawwatch",
+      "composePath": "/home/matt/moltbook-stats",
+      "composeFile": null,
+      "serviceName": "clawwatch",
+      "domains": [],
+      "port": 9847,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "moltbook-stats-backend-1",
+        "moltbook-stats-db-1",
+        "moltbook-stats-frontend-1"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:24.776Z"
+    },
+    {
+      "name": "courier",
+      "displayName": "Courier",
+      "composePath": "/home/matt/courier",
+      "composeFile": null,
+      "serviceName": "courier",
+      "domains": [],
+      "port": 8055,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "courier"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:24.849Z"
+    },
+    {
+      "name": "cv-matthesketh-pro",
+      "displayName": "CV Matt Hesketh",
+      "composePath": "/home/matt/cv-matthesketh-pro",
+      "composeFile": null,
+      "serviceName": "cv-matthesketh-pro",
+      "domains": [],
+      "port": 60611,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "cv-matthesketh-pro"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:24.921Z"
+    },
+    {
+      "name": "devilcat",
+      "displayName": "devilcat",
+      "composePath": "/home/matt/devilcat-studios/app/server",
+      "composeFile": null,
+      "serviceName": "devilcat",
+      "domains": [],
+      "port": 3019,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "devilcat-server"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:24.997Z"
+    },
+    {
+      "name": "fleet-bot",
+      "displayName": "fleet-bot",
+      "composePath": "/home/matt/fleet/bot",
+      "composeFile": null,
+      "serviceName": "fleet-bot",
+      "domains": [],
+      "port": null,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "fleet-bot"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:25.077Z"
+    },
+    {
+      "name": "glitchtip",
+      "displayName": "glitchtip",
+      "composePath": "/home/matt/glitchtip",
+      "composeFile": null,
+      "serviceName": "glitchtip",
+      "domains": [],
+      "port": null,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "glitchtip-postgres",
+        "glitchtip-redis",
+        "glitchtip-web",
+        "glitchtip-worker"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:25.157Z"
+    },
+    {
+      "name": "image-merger",
+      "displayName": "ImageMerger",
+      "composePath": "/home/matt/image-merger",
+      "composeFile": "docker-compose.imagemerger.yml",
+      "serviceName": "image-merger",
+      "domains": [],
+      "port": 3078,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "imagemerger-app",
+        "imagemerger-worker"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:25.382Z"
+    },
+    {
+      "name": "jewelleryauctionhouse",
+      "displayName": "Jewellery Auction House",
+      "composePath": "/home/matt/jewelleryauctionhouseltd.co.uk",
+      "composeFile": null,
+      "serviceName": "jewelleryauctionhouse",
+      "domains": [],
+      "port": 5677,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "jah-client",
+        "jah-server"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:25.455Z"
+    },
+    {
+      "name": "leelas-ladybirds",
+      "displayName": "Leelas Ladybirds",
+      "composePath": "/home/matt/leelas-ladybirds",
+      "composeFile": null,
+      "serviceName": "leelas-ladybirds",
+      "domains": [],
+      "port": 5002,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "leelas-ladybirds"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:25.527Z"
+    },
+    {
+      "name": "macpool-staging",
+      "displayName": "MacPool Staging",
+      "composePath": "/home/matt/macpool-staging",
+      "composeFile": "docker-compose.staging.yml",
+      "serviceName": "macpool-staging",
+      "domains": [
+        "macpool.hesketh.pro"
+      ],
+      "port": 4550,
+      "usesSharedDb": false,
+      "type": "nextjs",
+      "containers": [
+        "macpool-staging"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:25.604Z"
+    },
+    {
+      "name": "macpool",
+      "displayName": "MacPool",
+      "composePath": "/home/matt/macpool",
+      "composeFile": null,
+      "serviceName": "macpool",
+      "domains": [
+        "macpool.hesketh.pro"
+      ],
+      "port": 3549,
+      "usesSharedDb": false,
+      "type": "nextjs",
+      "containers": [
+        "macpool"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:25.678Z"
+    },
+    {
+      "name": "mattata",
+      "displayName": "Mattata",
+      "composePath": "/home/matt/mattata",
+      "composeFile": null,
+      "serviceName": "mattata",
+      "domains": [],
+      "port": null,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "mattata-bot-1"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:25.749Z"
+    },
+    {
+      "name": "matthesketh-pro",
+      "displayName": "Matt Hesketh Pro",
+      "composePath": "/home/matt/matthesketh.pro",
+      "composeFile": null,
+      "serviceName": "matthesketh-pro",
+      "domains": [
+        "matthesketh.pro",
+        "www.matthesketh.pro"
+      ],
+      "port": 60610,
+      "usesSharedDb": false,
+      "type": "proxy",
+      "containers": [
+        "matthesketh-pro"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:25.822Z"
+    },
+    {
+      "name": "moltbook-stats",
+      "displayName": "Moltbook Stats",
+      "composePath": "/home/matt/moltbook-stats",
+      "composeFile": null,
+      "serviceName": "moltbook-stats",
+      "domains": [],
+      "port": 9847,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "moltbook-stats-backend-1",
+        "moltbook-stats-db-1",
+        "moltbook-stats-frontend-1"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:25.978Z"
+    },
+    {
+      "name": "natures-art",
+      "displayName": "Nature's Art Diamonds",
+      "composePath": "/home/matt/natures-art",
+      "composeFile": null,
+      "serviceName": "natures-art",
+      "domains": [
+        "naturesartdiamonds.co.uk",
+        "www.naturesartdiamonds.co.uk"
+      ],
+      "port": 3000,
+      "usesSharedDb": true,
+      "type": "proxy",
+      "containers": [
+        "natures-art-ui"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:26.056Z"
+    },
+    {
+      "name": "nlcgroup",
+      "displayName": "NLC Group Server",
+      "composePath": "/home/matt/nlc/nlc-react/server",
+      "composeFile": null,
+      "serviceName": "nlcgroup",
+      "domains": [],
+      "port": null,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "nlcgroup"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:26.134Z"
+    },
+    {
+      "name": "saasisdead",
+      "displayName": "SaaS Is Dead",
+      "composePath": "/home/matt/saasisdead",
+      "composeFile": null,
+      "serviceName": "saasisdead",
+      "domains": [
+        "saasisde.ad",
+        "www.saasisde.ad"
+      ],
+      "port": 3099,
+      "usesSharedDb": false,
+      "type": "proxy",
+      "containers": [
+        "saasisdead-app-1"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:26.372Z"
+    },
+    {
+      "name": "trustedpets",
+      "displayName": "TrustedPets",
+      "composePath": "/home/matt/trustedpets",
+      "composeFile": null,
+      "serviceName": "trustedpets",
+      "domains": [
+        "app.trustedpets.co.uk"
+      ],
+      "port": 8080,
+      "usesSharedDb": true,
+      "type": "proxy",
+      "containers": [
+        "trustedpets-backend",
+        "trustedpets-frontend"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:26.452Z"
+    },
+    {
+      "name": "we-teach-academy-staging",
+      "displayName": "We Teach Academy Staging",
+      "composePath": "/home/matt/we-teach-academy",
+      "composeFile": "docker-compose.staging.yml",
+      "serviceName": "we-teach-academy-staging",
+      "domains": [
+        "wta-staging.hesketh.pro",
+        "www.wta-staging.hesketh.pro"
+      ],
+      "port": 4542,
+      "usesSharedDb": true,
+      "type": "nextjs",
+      "containers": [
+        "we-teach-academy",
+        "we-teach-academy-staging"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:26.537Z",
+      "lastBuiltCommit": "c50d476f796a0d2f6294887a4fb591ac7774ef6f"
+    },
+    {
+      "name": "we-teach-academy",
+      "displayName": "We Teach Academy",
+      "composePath": "/home/matt/we-teach-academy",
+      "composeFile": null,
+      "serviceName": "we-teach-academy",
+      "domains": [],
+      "port": 4541,
+      "usesSharedDb": true,
+      "type": "service",
+      "containers": [
+        "we-teach-academy",
+        "we-teach-academy-staging"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-03-22T14:43:26.615Z",
+      "gitRepo": "heskethwebdesign/we-teach-academy",
+      "gitRemoteUrl": "git@github.com:heskethwebdesign/we-teach-academy.git",
+      "gitOnboardedAt": "2026-03-23T02:07:20.777Z"
+    },
+    {
+      "name": "zmb",
+      "displayName": "ZMB Technical",
+      "composePath": "/home/matt/zmb/server",
+      "composeFile": null,
+      "serviceName": "zmb",
+      "domains": [],
+      "port": 3001,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "zmb-technical-services"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-22T14:43:26.701Z"
+    },
+    {
+      "name": "trilium",
+      "displayName": "Trilium Notes",
+      "composePath": "/home/matt/trilium",
+      "composeFile": null,
+      "serviceName": "trilium",
+      "domains": [
+        "notes.matthesketh.pro"
+      ],
+      "port": 8787,
+      "type": "service",
+      "containers": [
+        "trilium"
+      ],
+      "usesSharedDb": false,
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-03-28T20:19:43.074Z"
+    },
+    {
+      "name": "winzila-affiliate",
+      "displayName": "Shotz & Potz - Winzila Affiliate",
+      "composePath": "/home/matt/winzila/server",
+      "composeFile": null,
+      "serviceName": "winzila-affiliate",
+      "domains": [
+        "shotzandpotz.hesketh.pro"
+      ],
+      "port": 5030,
+      "type": "service",
+      "usesSharedDb": true,
+      "containers": [
+        "winzila-affiliate"
+      ],
+      "dependsOnDatabases": true,
+      "registeredAt": "2026-04-09T19:30:00.000Z"
+    },
+    {
+      "name": "shiftfaced",
+      "displayName": "ShiftFaced",
+      "composePath": "/home/matt/graft",
+      "composeFile": null,
+      "serviceName": "shiftfaced",
+      "domains": [
+        "shiftfaced.work",
+        "www.shiftfaced.work"
+      ],
+      "port": 8180,
+      "type": "proxy",
+      "containers": [
+        "shiftfaced-gateway-1",
+        "shiftfaced-api-1",
+        "shiftfaced-web-1",
+        "shiftfaced-scraper-1",
+        "shiftfaced-proxy-1",
+        "shiftfaced-tor-1",
+        "shiftfaced-osrm-car-1",
+        "shiftfaced-postgres-1",
+        "shiftfaced-redis-1"
+      ],
+      "usesSharedDb": false,
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-04-13T21:05:24.033Z"
+    },
+    {
+      "name": "pdf-hesketh",
+      "displayName": "pdf-hesketh",
+      "composePath": "/home/matt/pdf-hesketh",
+      "composeFile": null,
+      "serviceName": "pdf-hesketh",
+      "domains": [],
+      "port": null,
+      "usesSharedDb": false,
+      "type": "service",
+      "containers": [
+        "pdf-hesketh"
+      ],
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-04-21T12:33:53.011Z"
+    },
+    {
+      "name": "vikunja-kanban",
+      "displayName": "Vikunja Kanban",
+      "composePath": "/home/matt/vikunja-kanban",
+      "composeFile": null,
+      "serviceName": "vikunja-kanban",
+      "domains": [
+        "kanban.weteachacademy.co.uk"
+      ],
+      "port": 7004,
+      "type": "proxy",
+      "containers": [
+        "vikunja",
+        "vikunja-postgres"
+      ],
+      "usesSharedDb": false,
+      "dependsOnDatabases": false,
+      "registeredAt": "2026-04-25T15:22:16.517Z"
+    }
+  ],
+  "infrastructure": {
+    "databases": {
+      "serviceName": "docker-databases",
+      "composePath": "/home/matt/docker-databases"
+    },
+    "nginx": {
+      "configPath": "/etc/nginx"
+    }
+  }
+}
