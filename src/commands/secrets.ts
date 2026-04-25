@@ -5,6 +5,7 @@ import { execSafe } from '../core/exec.js';
 import { SecretsError } from '../core/errors.js';
 import { load, findApp } from '../core/registry.js';
 import { initVault, getPublicKey, loadManifest, listSecrets } from '../core/secrets.js';
+import { enumerateSecrets, enumerateAllSecrets, type EnrichedSecret } from '../core/secrets-metadata.js';
 import {
   setSecret, getSecret, importEnvFile, importDbSecrets,
   exportApp, unsealAll, sealFromRuntime, rotateKey, getStatus,
@@ -35,13 +36,14 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'seal': return secretsSeal(rest);
     case 'unseal': return secretsUnseal();
     case 'rotate': return secretsRotate(rest);
+    case 'ages': return secretsAges(rest);
     case 'validate': return secretsValidate(rest);
     case 'status': return secretsStatus(rest);
     case 'drift': return secretsDrift(rest);
     case 'restore': return secretsRestore(rest);
     case 'seal-runtime': return secretsSeal(rest);
     default:
-      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|validate|status|drift|restore>');
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|ages|validate|status|drift|restore>');
       process.exit(1);
   }
 }
@@ -189,6 +191,120 @@ async function secretsRotate(args: string[]): Promise<void> {
   info(`New: ${result.newPubkey}`);
   info(`Re-encrypted ${result.appsRotated.length} apps`);
   warn('Run "fleet secrets unseal" to update runtime secrets');
+}
+
+interface AgesOpts { json: boolean; staleOnly: boolean; }
+
+function parseAgesOpts(args: string[]): { app: string | undefined; opts: AgesOpts } {
+  const opts: AgesOpts = {
+    json: args.includes('--json'),
+    staleOnly: args.includes('--stale-only') || args.includes('--stale'),
+  };
+  const app = args.find(a => !a.startsWith('-'));
+  return { app, opts };
+}
+
+function statusLabel(s: ReturnType<typeof enumerateSecrets>[number]): string {
+  if (!s.provider) return `${c.dim}unknown${c.reset}`;
+  if (s.stale) return `${c.red}${c.bold}STALE${c.reset}`;
+  if (s.ageDays != null) {
+    const threshold = s.provider.rotationFrequencyDays * 0.8;
+    if (s.ageDays >= threshold) return `${c.yellow}aging${c.reset}`;
+  }
+  return `${c.green}fresh${c.reset}`;
+}
+
+function ageString(days: number | null): string {
+  if (days == null) return '?';
+  if (days === 0) return 'today';
+  if (days === 1) return '1 day';
+  return `${days} days`;
+}
+
+function secretsAges(args: string[]): void {
+  const { app, opts } = parseAgesOpts(args);
+
+  let secrets: Array<EnrichedSecret & { app: string }>;
+  if (app) {
+    secrets = enumerateSecrets(app).map(s => ({ app, ...s }));
+  } else {
+    secrets = enumerateAllSecrets();
+  }
+
+  if (opts.staleOnly) {
+    secrets = secrets.filter(s => s.stale);
+  }
+
+  if (opts.json) {
+    // Strip the `provider` ProviderDef object (RegExp inside) for JSON-safety;
+    // expose just its id, sensitivity, frequency.
+    const out = secrets.map(s => ({
+      app: s.app,
+      name: s.name,
+      lastRotated: s.lastRotated,
+      ageDays: s.ageDays,
+      stale: s.stale,
+      provider: s.provider
+        ? {
+            id: s.provider.id,
+            name: s.provider.name,
+            sensitivity: s.provider.sensitivity,
+            rotationFrequencyDays: s.provider.rotationFrequencyDays,
+            strategy: s.provider.strategy,
+          }
+        : null,
+    }));
+    process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+    return;
+  }
+
+  if (secrets.length === 0) {
+    if (opts.staleOnly) {
+      success('No stale secrets — everything is within rotation frequency');
+    } else if (app) {
+      warn(`No secrets in ${app}`);
+    } else {
+      warn('No secrets in vault');
+    }
+    return;
+  }
+
+  // Sort: stale first (by sensitivity desc), then aging, then fresh.
+  const sensRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  secrets.sort((a, b) => {
+    if (a.stale !== b.stale) return a.stale ? -1 : 1;
+    const sa = sensRank[a.provider?.sensitivity ?? 'low'] ?? 99;
+    const sb = sensRank[b.provider?.sensitivity ?? 'low'] ?? 99;
+    if (sa !== sb) return sa - sb;
+    if ((b.ageDays ?? 0) !== (a.ageDays ?? 0)) return (b.ageDays ?? 0) - (a.ageDays ?? 0);
+    return a.app.localeCompare(b.app) || a.name.localeCompare(b.name);
+  });
+
+  const title = app ? `Secret ages: ${app}` : `Secret ages (${secrets.length} secrets)`;
+  heading(title);
+
+  const cols = app
+    ? ['SECRET', 'AGE', 'ROTATE EVERY', 'PROVIDER', 'SENS', 'STATUS']
+    : ['APP', 'SECRET', 'AGE', 'ROTATE EVERY', 'PROVIDER', 'SENS', 'STATUS'];
+
+  const rows = secrets.map(s => {
+    const provider = s.provider?.name ?? `${c.dim}—${c.reset}`;
+    const freq = s.provider ? `${s.provider.rotationFrequencyDays}d` : '—';
+    const sens = s.provider?.sensitivity ?? '—';
+    const ageCol = ageString(s.ageDays);
+    const status = statusLabel(s);
+    return app
+      ? [s.name, ageCol, freq, provider, sens, status]
+      : [`${c.bold}${s.app}${c.reset}`, s.name, ageCol, freq, provider, sens, status];
+  });
+
+  table(cols, rows);
+  process.stdout.write('\n');
+
+  const staleCount = secrets.filter(s => s.stale).length;
+  if (staleCount > 0) {
+    warn(`${staleCount} secret(s) need rotation. Run: fleet secrets rotate <app>`);
+  }
 }
 
 function secretsValidate(args: string[]): void {
