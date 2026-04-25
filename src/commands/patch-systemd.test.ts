@@ -238,6 +238,32 @@ describe('patchSystemdCommand — databases service is not boot-start-ified', ()
     }
   });
 
+  it('regression: dedupes when docker-databases is in both reg.apps and infrastructure', () => {
+    // simulates a registry where docker-databases was added to apps (e.g. via
+    // an earlier `fleet add` or migration). without dedupe the apps entry would
+    // win and rewrite ExecStart on the shared databases service.
+    vi.mocked(load).mockReturnValue({
+      apps: [{ serviceName: 'fleet-app1' }, { serviceName: 'docker-databases' }],
+      infrastructure: { databases: { serviceName: 'docker-databases' } },
+    } as ReturnType<typeof load>);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => {
+      if (name === 'docker-databases') return dbServiceFile;
+      return '[Unit]\nDescription=app\n[Service]\nExecStart=/usr/bin/docker compose up -d\nTimeoutStartSec=300\n[Install]';
+    });
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as ReturnType<typeof execSafe>);
+
+    patchSystemdCommand([]);
+
+    const dbWrite = vi.mocked(writeFileSync).mock.calls.find(
+      (call) => typeof call[0] === 'string' && call[0].includes('docker-databases.service'),
+    );
+    expect(dbWrite).toBeDefined();
+    const written = dbWrite![1] as string;
+    expect(written).not.toContain('fleet boot-start docker-databases');
+    expect(written).toContain('ExecStart=/usr/bin/docker compose');
+  });
+
   it('does not create docker-databases.service.bak if the only change would be boot-start/timeout', () => {
     // Provide a databases service that already has StartLimitBurst — so with the fix,
     // no changes are needed and no write/backup should happen.
