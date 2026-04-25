@@ -31,11 +31,17 @@ d('boot-refresh integration — happy path', () => {
   let originDir: string;
   let workingTree: string;
   let originalRegistryPath: string | undefined;
+  let originalKillSwitch: string | undefined;
 
   beforeAll(async () => {
     workDir = await fs.mkdtemp(join(tmpdir(), 'fleet-bootrefresh-'));
     originDir = join(workDir, 'origin.git');
     workingTree = join(workDir, 'app');
+
+    // override the production kill switch path so a real /etc/fleet/no-auto-refresh
+    // on the host doesn't cause every refresh() call to short-circuit to skipped.
+    originalKillSwitch = process.env.FLEET_KILL_SWITCH;
+    process.env.FLEET_KILL_SWITCH = join(workDir, 'no-such-kill-switch');
 
     execSync(`git init --bare "${originDir}"`);
     execSync(`git init -b main "${workingTree}"`);
@@ -69,6 +75,8 @@ d('boot-refresh integration — happy path', () => {
   afterAll(async () => {
     if (originalRegistryPath) process.env.FLEET_REGISTRY_PATH = originalRegistryPath;
     else delete process.env.FLEET_REGISTRY_PATH;
+    if (originalKillSwitch) process.env.FLEET_KILL_SWITCH = originalKillSwitch;
+    else delete process.env.FLEET_KILL_SWITCH;
     await fs.rm(workDir, { recursive: true, force: true });
   });
 
