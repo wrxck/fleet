@@ -45,6 +45,13 @@ export interface AppEntry {
     maxSizeMB?: number;
     level?: 'debug' | 'info' | 'warn' | 'error';
   };
+  /** Per-app outbound egress allowlist. v1 supports `observe` and `shadow` modes
+   * only — `enforce` mode (actual drop via nftables) is deferred to Phase E. */
+  egress?: {
+    mode?: 'observe' | 'shadow';
+    /** Allowlist entries: 'host', 'host:port', or 'cidr/N'. Hosts resolved at check time. */
+    allow?: string[];
+  };
 }
 
 export interface Registry {
