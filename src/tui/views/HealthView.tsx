@@ -79,8 +79,14 @@ export function HealthView(): React.JSX.Element {
         renderItem={(result, selected) => {
           const runningCount = result.containers.filter(c => c.running).length;
           const containerStr = `${runningCount}/${result.containers.length}`;
+          // 404 → "no /health" (app never implemented one — distinct from a real failure).
+          // Keeps the TUI honest after the post-incident health-check fix.
           const httpStr = result.http
-            ? result.http.ok ? `${result.http.status}` : 'err'
+            ? result.http.ok
+              ? `${result.http.status}`
+              : result.http.endpointMissing
+                ? 'no /health'
+                : `${result.http.status ?? 'err'}`
             : 'n/a';
 
           return (
