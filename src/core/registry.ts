@@ -39,6 +39,12 @@ export interface AppEntry {
   /** Per-app age recipient public key (for fleet secrets harden --per-app).
    * When set, the vault is encrypted to (admin + this) recipients. */
   ageRecipient?: string;
+  /** Per-app log policy. If unset, defaults are applied (7 days, 100MB, info). */
+  logging?: {
+    retentionDays?: number;
+    maxSizeMB?: number;
+    level?: 'debug' | 'info' | 'warn' | 'error';
+  };
 }
 
 export interface Registry {
