@@ -17,6 +17,13 @@ vi.mock('../core/exec.js', () => ({
 
 vi.mock('../ui/output.js', () => ({
   error: vi.fn(),
+  warn: vi.fn(),
+  info: vi.fn(),
+  success: vi.fn(),
+  heading: vi.fn(),
+  table: vi.fn(),
+  c: { reset: '', bold: '', dim: '', red: '', green: '', yellow: '', blue: '',
+       magenta: '', cyan: '', white: '', gray: '' },
 }));
 
 import { load, findApp } from '../core/registry.js';

@@ -73,7 +73,7 @@ export function TestApp({ items }: { items: string[] }): React.JSX.Element {
     }
 
     if (key.tab) {
-      const topViews: View[] = ['dashboard', 'health', 'secrets'];
+      const topViews: View[] = ['dashboard', 'health', 'secrets', 'logs-multi'];
       const base = topViews.includes(state.currentView)
         ? state.currentView
         : state.previousView ?? 'dashboard';

@@ -13,15 +13,104 @@ import {
   readContainerLogs,
   type LogPolicy,
 } from '../core/logs-policy.js';
+import { startMultiTail, resolveSources, type LogLine } from '../core/logs-multi.js';
 
 export function logsCommand(args: string[]): void | Promise<void> {
   const sub = args[0];
   if (sub === 'setup') return logsSetup(args.slice(1));
   if (sub === 'status') return logsStatus(args.slice(1));
   if (sub === 'prune') return logsPrune(args.slice(1));
-  // Default: tail / follow — synchronous so existing test expectations and
-  // process.exit semantics work unchanged.
+  // --all / --apps / --containers route to the multi-source tail.
+  if (args.includes('--all') || args.includes('--apps') || args.includes('--containers')) {
+    return logsMulti(args);
+  }
+  // Default: single-app tail / follow — synchronous so existing test
+  // expectations and process.exit semantics work unchanged.
   return logsTail(args);
+}
+
+// ── Slice 1: multi-source CLI tail ─────────────────────────────────────────
+
+const SOURCE_COLORS = [c.cyan, c.green, c.yellow, c.magenta, c.blue, c.red];
+const sourceColorCache = new Map<string, string>();
+function colorForSource(name: string): string {
+  let cached = sourceColorCache.get(name);
+  if (cached) return cached;
+  // Stable hash → colour assignment so the same source always gets the same colour.
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  cached = SOURCE_COLORS[Math.abs(h) % SOURCE_COLORS.length];
+  sourceColorCache.set(name, cached);
+  return cached;
+}
+
+function logsMulti(args: string[]): Promise<void> {
+  const all = args.includes('--all');
+  const follow = args.includes('-f') || args.includes('--follow');
+
+  const valOf = (flag: string): string | undefined => {
+    const i = args.indexOf(flag);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const appsCsv = valOf('--apps');
+  const containersCsv = valOf('--containers');
+  const since = valOf('--since');
+  const grep = valOf('--grep');
+  const level = valOf('--level') as LogPolicy['level'] | undefined;
+  const tail = parseInt(valOf('--tail') ?? valOf('-n') ?? '50', 10) || 50;
+
+  if (!all && !appsCsv && !containersCsv) {
+    error('Usage: fleet logs --all [-f] [--since 15m] [--grep err] [--level warn]');
+    error('       fleet logs --apps macpool,shiftfaced [-f]');
+    error('       fleet logs --containers "*-postgres" [-f]');
+    process.exit(1);
+  }
+
+  const reg = load();
+  const sources = resolveSources(reg.apps, {
+    apps: appsCsv ? appsCsv.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+    containers: containersCsv ? containersCsv.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+  });
+  if (sources.length === 0) {
+    error('No matching containers found.');
+    process.exit(1);
+  }
+
+  // Width-align the prefix so lines stack readably.
+  const maxLabelLen = Math.max(
+    ...sources.map(s => `${s.app}/${s.container}`.length),
+  );
+
+  const onLine = (l: LogLine) => {
+    const label = `${l.app}/${l.container}`.padEnd(maxLabelLen);
+    const colour = colorForSource(`${l.app}/${l.container}`);
+    process.stdout.write(`${colour}${label}${c.reset} ${l.text}\n`);
+  };
+
+  return new Promise<void>(resolve => {
+    const handle = startMultiTail(sources, { tail, since, grep, level, follow }, onLine);
+
+    const shutdown = async (signal: NodeJS.Signals | 'exit') => {
+      process.removeListener('SIGINT', sigintHandler);
+      process.removeListener('SIGTERM', sigtermHandler);
+      await handle.stop();
+      if (signal !== 'exit') process.stderr.write(`\nStopped (${signal})\n`);
+      resolve();
+    };
+    const sigintHandler = () => { void shutdown('SIGINT'); };
+    const sigtermHandler = () => { void shutdown('SIGTERM'); };
+    process.on('SIGINT', sigintHandler);
+    process.on('SIGTERM', sigtermHandler);
+
+    // Non-follow: poll until all tailers have closed, then resolve.
+    if (!follow) {
+      const tick = () => {
+        if (handle.active() === 0) { void shutdown('exit'); return; }
+        setTimeout(tick, 100);
+      };
+      setTimeout(tick, 100);
+    }
+  });
 }
 
 function logsTail(args: string[]): void {

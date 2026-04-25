@@ -4,7 +4,8 @@ export type View =
   | 'health'
   | 'secrets'
   | 'secret-edit'
-  | 'logs';
+  | 'logs'
+  | 'logs-multi';
 
 export type SecretsSubView = 'app-list' | 'secret-list';
 
