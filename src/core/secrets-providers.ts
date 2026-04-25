@@ -52,11 +52,14 @@ export const PROVIDERS: ProviderDef[] = [
     name: 'Stripe Secret Key',
     url: 'https://dashboard.stripe.com/apikeys',
     instructions:
-      '1. Click "Create secret key"\n' +
-      '2. Set restrictions if desired (recommended: standard)\n' +
-      '3. Copy the new sk_live_... value and paste below\n' +
+      '1. Click "Create secret key" (or "Create restricted key" — both work here)\n' +
+      '2. Set restrictions if desired (RESTRICTED keys are recommended for least-privilege)\n' +
+      '3. Copy the new sk_live_... or rk_live_... value and paste below\n' +
       '4. After confirming the new key works, revoke the old one in the dashboard',
-    format: /^sk_(live|test)_[A-Za-z0-9]{40,}$/,
+    // Accept both standard (sk_) and restricted (rk_) Stripe API keys. Both are
+    // valid values for the STRIPE_SECRET_KEY env var; restricted keys are
+    // Stripe's recommended pattern for least-privilege production use.
+    format: /^(sk|rk)_(live|test)_[A-Za-z0-9]{40,}$/,
     sensitivity: 'critical',
     rotationFrequencyDays: 90,
     strategy: 'immediate',
