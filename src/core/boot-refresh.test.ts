@@ -243,6 +243,35 @@ describe('refresh', () => {
     expect(r).toEqual({ kind: 'skipped', reason: 'kill-switch' });
   });
 
+  it('honours FLEET_KILL_SWITCH override and ignores the production path', async () => {
+    const overridePath = '/tmp/fleet-test-kill-switch';
+    const previous = process.env.FLEET_KILL_SWITCH;
+    process.env.FLEET_KILL_SWITCH = overridePath;
+    try {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p) => String(p) === overridePath);
+      vi.mocked(git.isGitRepo).mockReturnValue(false);
+      const r = await refresh(app({ composePath: '/tmp/x' }));
+      expect(r).toEqual({ kind: 'skipped', reason: 'kill-switch' });
+    } finally {
+      if (previous) process.env.FLEET_KILL_SWITCH = previous;
+      else delete process.env.FLEET_KILL_SWITCH;
+    }
+  });
+
+  it('treats production path as inactive when FLEET_KILL_SWITCH points elsewhere', async () => {
+    const previous = process.env.FLEET_KILL_SWITCH;
+    process.env.FLEET_KILL_SWITCH = '/tmp/fleet-test-kill-switch-absent';
+    try {
+      vi.spyOn(fs, 'existsSync').mockImplementation((p) => String(p) === '/etc/fleet/no-auto-refresh');
+      vi.mocked(git.isGitRepo).mockReturnValue(false);
+      const r = await refresh(app({ composePath: '/tmp/x' }));
+      expect(r).toEqual({ kind: 'skipped', reason: 'not-a-git-repo' });
+    } finally {
+      if (previous) process.env.FLEET_KILL_SWITCH = previous;
+      else delete process.env.FLEET_KILL_SWITCH;
+    }
+  });
+
   it('returns skipped with preflight reason when preflight fails', async () => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(false);
     vi.mocked(git.isGitRepo).mockReturnValue(false);

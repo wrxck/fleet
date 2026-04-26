@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useStableState } from '@matthesketh/ink-stable-state';
 import { runFleetJson } from '../exec-bridge.js';
 import { useInterval } from './use-interval.js';
 import type { HealthResult } from '../../core/health.js';
@@ -11,7 +12,9 @@ interface HealthData {
 }
 
 export function useHealth(autoRefreshMs: number = 15_000): HealthData {
-  const [results, setResults] = useState<HealthResult[]>([]);
+  // useStableState short-circuits setState when the new payload is structurally
+  // equal to the previous one — no flicker on identical poll cycles.
+  const [results, setResults] = useStableState<HealthResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initialised = useRef(false);
@@ -28,7 +31,7 @@ export function useHealth(autoRefreshMs: number = 15_000): HealthData {
       }
       setLoading(false);
     });
-  }, []);
+  }, [setResults]);
 
   useEffect(() => {
     refresh();
