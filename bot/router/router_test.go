@@ -432,3 +432,41 @@ func TestParseIndex(t *testing.T) {
 		}
 	}
 }
+
+// covers the new path where the user picks an option by clicking an inline
+// keyboard button — the callback delivers the option string itself, not a
+// numeric index. before this fix the click was a no-op.
+func TestPendingSelection_SelectsOptionByText(t *testing.T) {
+	reg := command.NewRegistry()
+	cmd := newOptionsCmd()
+	reg.Register(cmd)
+
+	a := newMockAdapter("test")
+	r := New(reg)
+	r.AddAdapter(a)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() { _ = r.Run(ctx) }()
+	time.Sleep(10 * time.Millisecond)
+
+	a.send(inboxMsg("test", "chat1", "/pick"))
+	waitFor(t, time.Second, func() bool {
+		m := a.lastSent()
+		return m != nil && len(m.Options) == 3
+	})
+
+	a.send(inboxMsg("test", "chat1", "gamma"))
+	waitFor(t, time.Second, func() bool {
+		m := a.lastSent()
+		return m != nil && m.Text == "you chose: gamma"
+	})
+
+	r.mu.Lock()
+	_, hasPending := r.pending["chat1"]
+	r.mu.Unlock()
+	if hasPending {
+		t.Fatal("expected pending state to be cleared after option-text match")
+	}
+}
