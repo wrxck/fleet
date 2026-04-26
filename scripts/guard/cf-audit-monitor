@@ -34,15 +34,9 @@ NOISY_ACTIONS = {
     "search",
 }
 
-# event action types that should always create a hold (require approval)
-# instead of merely notifying. these are the destructive / hijack-shaped ones.
-HOLD_ACTIONS = {
-    "zone_delete", "zone_create", "zone_settings_change",
-    "ns_change", "transfer_in", "transfer_out",
-    "member_add", "member_remove",
-    "api_token_create", "api_token_delete",
-    "ssl_change",
-}
+# hold/notify decision is delegated to `fleet-guard policy effective` so
+# admins can override per-zone via /etc/fleet/guard.policy.json. defaults
+# match the destructive / hijack-shaped action types and live in fleet-guard.
 
 
 def read_creds():
@@ -97,6 +91,20 @@ def classify(action_type):
     return "alert"
 
 
+def policy_decision(action, zone):
+    """ask fleet-guard which bucket this action falls in for the given zone.
+    on any error fall back to 'notify' so we don't drop signals."""
+    try:
+        cmd = [GUARD, "policy", "effective", action]
+        if zone:
+            cmd.extend(["--zone", zone])
+        res = run(cmd, capture_output=True, text=True, timeout=10)
+        decision = (res.stdout or "").strip()
+        return decision if decision in ("hold", "notify") else "notify"
+    except Exception:
+        return "notify"
+
+
 def notify(title, body):
     run([NOTIFIER, title, body], check=False)
 
@@ -141,7 +149,8 @@ def main():
     alerts = [ev for ev in events if classify((ev.get("action") or {}).get("type")) == "alert"]
     for ev in alerts:
         action = (ev.get("action") or {}).get("type") or ""
-        if action in HOLD_ACTIONS:
+        zone = (ev.get("metadata") or {}).get("zone") or (ev.get("resource") or {}).get("id", "") if (ev.get("resource") or {}).get("type") == "zone" else ""
+        if policy_decision(action, zone) == "hold":
             # destructive — create a fleet-guard hold instead of just notifying.
             # the cli itself fires the notification with approval token.
             payload = {
