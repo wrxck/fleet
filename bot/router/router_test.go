@@ -34,10 +34,14 @@ func (m *mockAdapter) Start(_ context.Context, inbox chan<- adapter.InboundMessa
 	return nil
 }
 
-func (m *mockAdapter) Send(_ string, msg adapter.OutboundMessage) error {
+func (m *mockAdapter) Send(_ string, msg adapter.OutboundMessage) (string, error) {
 	m.mu.Lock()
 	m.sent = append(m.sent, msg)
 	m.mu.Unlock()
+	return "", nil
+}
+
+func (m *mockAdapter) Edit(_, _, _ string) error {
 	return nil
 }
 

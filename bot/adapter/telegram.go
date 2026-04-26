@@ -46,14 +46,16 @@ func (a *TelegramAdapter) Start(ctx context.Context, inbox chan<- InboundMessage
 	return nil
 }
 
-// Send delivers msg to the given chatID. If Options are present they are sent
-// as an inline keyboard.
-func (a *TelegramAdapter) Send(chatID string, msg OutboundMessage) error {
+// send delivers msg to the given chatID. if options are present they are sent
+// as an inline keyboard. returns the telegram message_id (decimal string) so
+// the caller can edit it later.
+func (a *TelegramAdapter) Send(chatID string, msg OutboundMessage) (string, error) {
 	id, err := strconv.ParseInt(chatID, 10, 64)
 	if err != nil {
-		return fmt.Errorf("telegram Send: invalid chatID %q: %w", chatID, err)
+		return "", fmt.Errorf("telegram Send: invalid chatID %q: %w", chatID, err)
 	}
 
+	var sent *bot.Message
 	if len(msg.Options) > 0 {
 		buttons := make([]bot.InlineKeyboardButton, len(msg.Options))
 		for i, opt := range msg.Options {
@@ -65,12 +67,27 @@ func (a *TelegramAdapter) Send(chatID string, msg OutboundMessage) error {
 		markup := &bot.InlineKeyboardMarkup{
 			InlineKeyboard: [][]bot.InlineKeyboardButton{buttons},
 		}
-		_, err = a.b.SendMessageWithReply(id, msg.Text, markup)
-		return err
+		sent, err = a.b.SendMessageWithReply(id, msg.Text, markup)
+	} else {
+		sent, err = a.b.SendMessage(id, msg.Text)
 	}
+	if err != nil || sent == nil {
+		return "", err
+	}
+	return strconv.FormatInt(sent.MessageID, 10), nil
+}
 
-	_, err = a.b.SendMessage(id, msg.Text)
-	return err
+// edit replaces the body of a previously-sent telegram message.
+func (a *TelegramAdapter) Edit(chatID, messageID, text string) error {
+	cid, err := strconv.ParseInt(chatID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("telegram Edit: invalid chatID %q: %w", chatID, err)
+	}
+	mid, err := strconv.ParseInt(messageID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("telegram Edit: invalid messageID %q: %w", messageID, err)
+	}
+	return a.b.EditMessage(cid, mid, text, nil)
 }
 
 // SendAlert delivers text to all configured alertChatIDs.

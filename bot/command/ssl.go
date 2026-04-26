@@ -105,25 +105,52 @@ func (c *SSLCmd) Execute(msg adapter.InboundMessage, args []string) (adapter.Out
 	return adapter.TextResponse(sb.String()), nil
 }
 
-// runCertbotRenew runs `certbot renew` (no specific cert) with a 5-minute
-// timeout. returns the truncated output to the user as a plain text response.
+// runCertbotRenew returns an OutboundMessage that, on adapters supporting
+// edits, shows a "running..." placeholder, ticks elapsed time every 3s while
+// certbot runs, then replaces the message with the final output. on adapters
+// that don't support edits the user just sees the placeholder; the command
+// still runs and any failures are alerted via the existing alert pipeline
+// (cert-expiry-watch picks up failures regardless).
 func runCertbotRenew() (adapter.OutboundMessage, error) {
-	res, err := exec.Run(5*time.Minute, "certbot", "renew", "--no-random-sleep-on-renew")
-	if err != nil {
-		stderr := ""
-		if res != nil && res.Stderr != "" {
-			stderr = "\n" + res.Stderr
-		}
-		return adapter.TextResponse(fmt.Sprintf("certbot renew failed: %v%s", err, stderr)), nil
-	}
-	out := res.Stdout
-	if out == "" {
-		out = "(no output — nothing was due)"
-	}
-	if len(out) > 3800 {
-		out = out[len(out)-3800:]
-	}
-	return adapter.TextResponse("certbot renew finished:\n\n" + out), nil
+	return adapter.OutboundMessage{
+		Text: "certbot renew starting...",
+		Stream: func(update adapter.Updater) {
+			done := make(chan struct{})
+			start := time.Now()
+			go func() {
+				ticker := time.NewTicker(3 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-done:
+						return
+					case <-ticker.C:
+						update(fmt.Sprintf("certbot renew running... %ds elapsed", int(time.Since(start).Seconds())))
+					}
+				}
+			}()
+
+			res, err := exec.Run(5*time.Minute, "certbot", "renew", "--no-random-sleep-on-renew")
+			close(done)
+
+			if err != nil {
+				stderr := ""
+				if res != nil && res.Stderr != "" {
+					stderr = "\n" + res.Stderr
+				}
+				update(fmt.Sprintf("certbot renew failed: %v%s", err, stderr))
+				return
+			}
+			out := res.Stdout
+			if out == "" {
+				out = "(no output — nothing was due)"
+			}
+			if len(out) > 3800 {
+				out = out[len(out)-3800:]
+			}
+			update("certbot renew finished:\n\n" + out)
+		},
+	}, nil
 }
 
 func checkSSLCert(domain, app string) sslResult {

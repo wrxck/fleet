@@ -139,27 +139,51 @@ func (c *DepsCmd) Execute(msg adapter.InboundMessage, args []string) (adapter.Ou
 	return adapter.OptionsResponse(sb.String(), options), nil
 }
 
-// runDepsFix runs `fleet deps fix <app>` and returns the output. uses an
-// extended timeout because fix shells out to npm/pip and creates a github pr.
+// runDepsFix runs `fleet deps fix <app>` with progress ticks via the stream
+// callback. fix shells out to npm/pip and opens a github pr, so it can take
+// minutes; the ticker keeps the user informed without flooding the chat.
 func runDepsFix(app string) (adapter.OutboundMessage, error) {
 	app = strings.TrimSpace(app)
 	if app == "" {
 		return adapter.TextResponse("usage: /deps fix <app>"), nil
 	}
-	res, err := exec.Run(5*time.Minute, "fleet", "deps", "fix", app)
-	if err != nil {
-		stderr := ""
-		if res != nil && res.Stderr != "" {
-			stderr = "\n" + res.Stderr
-		}
-		return adapter.TextResponse(fmt.Sprintf("deps fix %s failed: %v%s", app, err, stderr)), nil
-	}
-	out := res.Stdout
-	if out == "" {
-		out = "(no output)"
-	}
-	if len(out) > 3800 {
-		out = out[len(out)-3800:]
-	}
-	return adapter.TextResponse(fmt.Sprintf("deps fix %s:\n\n%s", app, out)), nil
+	return adapter.OutboundMessage{
+		Text: fmt.Sprintf("deps fix %s starting...", app),
+		Stream: func(update adapter.Updater) {
+			done := make(chan struct{})
+			start := time.Now()
+			go func() {
+				ticker := time.NewTicker(3 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-done:
+						return
+					case <-ticker.C:
+						update(fmt.Sprintf("deps fix %s running... %ds elapsed", app, int(time.Since(start).Seconds())))
+					}
+				}
+			}()
+
+			res, err := exec.Run(5*time.Minute, "fleet", "deps", "fix", app)
+			close(done)
+
+			if err != nil {
+				stderr := ""
+				if res != nil && res.Stderr != "" {
+					stderr = "\n" + res.Stderr
+				}
+				update(fmt.Sprintf("deps fix %s failed: %v%s", app, err, stderr))
+				return
+			}
+			out := res.Stdout
+			if out == "" {
+				out = "(no output)"
+			}
+			if len(out) > 3800 {
+				out = out[len(out)-3800:]
+			}
+			update(fmt.Sprintf("deps fix %s:\n\n%s", app, out))
+		},
+	}, nil
 }
