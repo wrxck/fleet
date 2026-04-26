@@ -74,7 +74,6 @@ export function Dashboard(): React.JSX.Element {
         {status.unhealthy > 0 && (
           <Text color={colors.error}>{status.unhealthy} unhealthy</Text>
         )}
-        {loading && <Text color={colors.muted}><Spinner type="dots" /></Text>}
       </Box>
 
       <Box marginBottom={1}>

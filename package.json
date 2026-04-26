@@ -59,7 +59,7 @@
     "@matthesketh/ink-modal": "^0.1.0",
     "@matthesketh/ink-pipeline": "^0.1.0",
     "@matthesketh/ink-rule": "^0.1.0",
-    "@matthesketh/ink-scrollable-list": "^0.1.1",
+    "@matthesketh/ink-scrollable-list": "0.2.0",
     "@matthesketh/ink-split-pane": "^0.1.0",
     "@matthesketh/ink-stable-state": "^0.1.0",
     "@matthesketh/ink-status-bar": "^0.1.0",

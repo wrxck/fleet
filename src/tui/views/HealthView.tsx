@@ -15,6 +15,10 @@ export function HealthView(): React.JSX.Element {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const { results, loading, error } = useHealth();
+  // only show spinner during the very first load. background polls (every
+  // 15s) flip `loading` true/false too, but the data is already on screen —
+  // ticking a spinner there causes the whole table to redraw at frame rate.
+  const initialLoad = loading && results.length === 0;
   const redact = useRedact();
   const availableHeight = useAvailableHeight();
 
@@ -40,7 +44,7 @@ export function HealthView(): React.JSX.Element {
 
   useRegisterHandler(handler);
 
-  if (loading && results.length === 0) {
+  if (initialLoad) {
     return (
       <Box padding={1}>
         <Text><Spinner type="dots" /> Running health checks...</Text>
@@ -65,7 +69,6 @@ export function HealthView(): React.JSX.Element {
         <Text color={colors.success}>{counts.healthy} healthy</Text>
         {counts.degraded > 0 && <Text color={colors.warning}>{counts.degraded} degraded</Text>}
         {counts.down > 0 && <Text color={colors.error}>{counts.down} down</Text>}
-        {loading && <Text color={colors.muted}><Spinner type="dots" /></Text>}
       </Box>
 
       <Text bold>
