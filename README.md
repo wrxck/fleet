@@ -102,6 +102,70 @@ graph LR
 
 Secrets are imported or set individually, encrypted with age, and stored in the vault. On boot (or manually), they are decrypted to a tmpfs mount that Docker containers reference. Sealing writes runtime changes back to the vault. Drift detection compares vault vs runtime to catch unsaved changes.
 
+### Per-secret rotation (v1.6)
+
+Each secret carries metadata (`lastRotated`, `provider`, `strategy`) so fleet knows when it's stale and how to safely rotate it.
+
+```
+fleet secrets ages [<app>]            # what's stale, who owns it, when last rotated
+fleet secrets ages --motd             # MOTD-formatted summary
+fleet secrets motd-init               # install /etc/update-motd.d/99-fleet-secrets
+
+fleet secrets rotate <app> [<KEY>]    # interactive walkthrough, [--dry-run] [--no-restart]
+fleet secrets rollback <app>          # restore latest snapshot, [--to <ts>]
+fleet secrets snapshots <app>         # list available snapshots
+fleet secrets rotate-key              # legacy: rotate the AGE master key
+```
+
+Rotation strategies (auto-detected from secret name, see `src/core/secrets-providers.ts`):
+
+| Strategy | Examples | Behaviour |
+|---|---|---|
+| `immediate` | `STRIPE_SECRET_KEY`, `GITHUB_TOKEN`, `OPENAI_API_KEY` | Replace value, old dies |
+| `dual-mode` | `JWT_SECRET`, `NEXTAUTH_SECRET`, `SESSION_SECRET` | New becomes primary, **old kept as `<NAME>_PREVIOUS`** so existing user sessions stay valid through grace period (your app must read both for verification) |
+| `at-rest-key` | `ENCRYPTION_KEY`, `FIELD_ENCRYPTION_KEY` | Refused unless `--data-migrated` passed (you must re-encrypt stored data first) |
+| `user-issued` | `USER_API_TOKEN`, `CUSTOMER_API_KEYS` | Refused — rotate per-user inside your app |
+
+Safety rails on every rotation:
+- Pre-rotation snapshot to `vault/.snapshots/<app>-<ts>.env.age` (atomic copy+rename)
+- Hidden input prompt; new value never echoed in full (only `prefix…suffix (N chars)` for confirmation)
+- Format validation against provider regex (catches paste typos)
+- Entropy check rejects placeholders (`changeme`, `password`, all-same-char, < 8 chars)
+- Auto-rollback on any failure during reseal
+- Restart + 5s healthcheck gate after re-unseal; manual `fleet rollback` always available
+- Append-only audit log at `~/.local/share/fleet/audit.jsonl` (mode 0600, never logs values)
+
+### Log lifecycle (v1.6)
+
+```
+fleet logs setup <app>                # interactive: retention/size/level
+fleet logs setup --all                # bulk default (7d / 100MB / info)
+fleet logs status [<app>]             # per-container size, driver, policy applied
+fleet logs prune <app>                # vacuum journald + truncate runaway json-file logs
+fleet logs <app> --since 30m --grep err --level warn   # filtered tail
+```
+
+`fleet logs setup` writes `<composePath>/.fleet/logging.override.yml` with json-file driver options for rotation. To activate, include the override in your compose start command (or fleet's systemd unit).
+
+MCP tools — all token-conservative with small defaults and `truncated` flags:
+- `fleet_logs_recent(app, lines=50, level=warn, sinceMinutes=15)` — bounded tail
+- `fleet_logs_summary(app, sinceMinutes=60)` — counts + top 10 distinct error messages
+- `fleet_logs_search(app, query, sinceMinutes=60, maxResults=20)` — bounded grep
+- `fleet_logs_status(app?)` — driver + size per container
+- `fleet_egress_snapshot(app)` — outbound destinations + violations
+
+### Egress observation (v1.6)
+
+```
+fleet egress observe <app>            # snapshot current outbound flows via nsenter+ss
+fleet egress show <app>               # show config + allowlist
+fleet egress allow <app> <host>       # add to allowlist (supports *.host wildcards)
+```
+
+v1 is **observe-only** — it never blocks packets, so zero risk of breaking apps. Reads each container's network namespace via `nsenter` so it sees real container egress (not just host-side NAT'd flows). Reverse-resolves remote IPs to hostnames best-effort. RFC1918 destinations don't count as violations.
+
+`enforce` mode (actual default-deny via nftables) is deferred to a future phase — by design, it requires the operator to explicitly promote a shadow-clean app, never auto-promotes.
+
 ## Deployment Flow
 
 ```mermaid
@@ -173,6 +237,25 @@ Tools cover the full surface area: app lifecycle, secrets, nginx, Git, health ch
 A Go companion bot (`bot/`) that provides remote server management through Telegram or iMessage. It runs Claude Code sessions with access to fleet's MCP tools for hands-free operations.
 
 See the [bot documentation](https://fleet.hesketh.pro/bot/setup/) for setup instructions.
+
+## Self-update
+
+When `fleet`'s TUI launches it does a non-blocking `git fetch` against `origin/develop`. If the local repo is behind, a banner appears under the header:
+
+```
+↑ Update available: 3 commits ahead — feat: ... Press U to install.
+```
+
+Pressing `U` runs `git pull --ff-only` then `npm run build` (refused if the working tree is dirty). The new binary is live for the next `fleet …` invocation. Recheck happens every 30 minutes for long-running TUI sessions.
+
+## Testing
+
+```bash
+npm test                     # unit + mocked tests (1106 passing)
+FLEET_INTEGRATION=1 npm test # also runs boot-refresh integration tests (1156 passing, 0 skipped)
+```
+
+Set `FLEET_INTEGRATION=1` to opt into integration tests that hit real systemd / docker. Skipped by default in CI.
 
 ## Development
 

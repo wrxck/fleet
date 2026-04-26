@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, type Dispatch } from 'react';
 import type { TuiState, Action, View } from './types.js';
 
-const TOP_VIEWS: View[] = ['dashboard', 'health', 'secrets'];
+const TOP_VIEWS: View[] = ['dashboard', 'health', 'secrets', 'logs-multi'];
 
 export const initialState: TuiState = {
   currentView: 'dashboard',

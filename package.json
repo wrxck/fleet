@@ -1,6 +1,6 @@
 {
   "name": "@matthesketh/fleet",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Docker production management CLI + MCP server for Claude Code",
   "type": "module",
   "main": "dist/index.js",
@@ -60,6 +60,7 @@
     "@matthesketh/ink-rule": "^0.1.0",
     "@matthesketh/ink-scrollable-list": "^0.1.1",
     "@matthesketh/ink-split-pane": "^0.1.0",
+    "@matthesketh/ink-stable-state": "^0.1.0",
     "@matthesketh/ink-status-bar": "^0.1.0",
     "@matthesketh/ink-table": "^0.1.0",
     "@matthesketh/ink-tabs": "^0.1.0",
@@ -84,7 +85,7 @@
     "@types/react": "^18.3.28",
     "ink-testing-library": "^4.0.0",
     "tsc-alias": "1.8.16",
-    "tsx": "4.19.2",
+    "tsx": "4.21.0",
     "typescript": "5.6.3",
     "vitest": "4.0.18"
   }
