@@ -28,6 +28,7 @@ const STATE_DIR = '/var/lib/fleet-guard';
 const LOG_DIR = '/var/log/fleet-guard';
 const SNAP_DIR = '/var/lib/cf-snapshots';
 const CRON_TARGET = '/etc/cron.d/cf-protect';
+const LOGROTATE_TARGET = '/etc/logrotate.d/fleet-guard';
 
 function scriptsDir(): string {
   // dist/commands/guard.js -> ../../scripts/guard relative to compiled file
@@ -90,6 +91,17 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   info(`installed cron at ${CRON_TARGET}`);
 }
 
+function installLogrotate(): void {
+  const src = join(scriptsDir(), 'logrotate.d-fleet-guard');
+  if (!existsSync(src)) {
+    info('logrotate template missing, skipping');
+    return;
+  }
+  copyFileSync(src, LOGROTATE_TARGET);
+  chmodSync(LOGROTATE_TARGET, 0o644);
+  info(`installed logrotate at ${LOGROTATE_TARGET}`);
+}
+
 function installCommand(): void {
   requireRoot();
   ensureUser();
@@ -101,6 +113,7 @@ function installCommand(): void {
   ensureDir(SNAP_DIR, 0o700);
   installScripts();
   installCron();
+  installLogrotate();
   success('fleet guard installed.');
   info('next steps:');
   info('  1. seed creds at /etc/fleet/guard.cf.json (cloudflare api key + email + accountId)');
@@ -128,6 +141,9 @@ function helpText(): string {
     '  reject <token>                     reject a pending action',
     '  show <token>                       dump one record',
     '  execute                            run all approved actions',
+    '  policy show [zone]                 print policy (or effective hold list for zone)',
+    '  policy set <zone|default> <list>   override hold list (comma-separated)',
+    '  policy reset [zone]                reset zone (or all) to defaults',
   ].join('\n');
 }
 
@@ -149,7 +165,7 @@ export function guardCommand(args: string[]): void {
     return;
   }
 
-  const passthrough = new Set(['status', 'list', 'hold', 'approve', 'reject', 'show', 'execute']);
+  const passthrough = new Set(['status', 'list', 'hold', 'approve', 'reject', 'show', 'execute', 'policy']);
   if (passthrough.has(sub)) {
     const code = delegate(sub, rest);
     if (code !== 0) process.exit(code);
