@@ -14,13 +14,13 @@ const (
 )
 
 // fleetScript returns the path to the fleet CLI script.
-// Defaults to /usr/local/lib/node_modules/@wrxck/fleet/dist/index.js but
+// Defaults to /usr/local/lib/node_modules/@matthesketh/fleet/dist/index.js but
 // can be overridden via FLEET_SCRIPT env var for local development.
 func fleetScript() string {
 	if s := os.Getenv("FLEET_SCRIPT"); s != "" {
 		return s
 	}
-	return "/usr/local/lib/node_modules/@wrxck/fleet/dist/index.js"
+	return "/usr/local/lib/node_modules/@matthesketh/fleet/dist/index.js"
 }
 
 // Fleet runs a fleet CLI command and returns the raw result.
