@@ -141,6 +141,9 @@ function helpText(): string {
     '  reject <token>                     reject a pending action',
     '  show <token>                       dump one record',
     '  execute                            run all approved actions',
+    '  policy show [zone]                 print policy (or effective hold list for zone)',
+    '  policy set <zone|default> <list>   override hold list (comma-separated)',
+    '  policy reset [zone]                reset zone (or all) to defaults',
   ].join('\n');
 }
 
@@ -162,7 +165,7 @@ export function guardCommand(args: string[]): void {
     return;
   }
 
-  const passthrough = new Set(['status', 'list', 'hold', 'approve', 'reject', 'show', 'execute']);
+  const passthrough = new Set(['status', 'list', 'hold', 'approve', 'reject', 'show', 'execute', 'policy']);
   if (passthrough.has(sub)) {
     const code = delegate(sub, rest);
     if (code !== 0) process.exit(code);
