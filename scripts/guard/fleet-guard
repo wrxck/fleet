@@ -38,11 +38,23 @@ ROOT = Path("/var/lib/fleet-guard")
 LOG = Path("/var/log/fleet-guard/audit.jsonl")
 NOTIFY = "/usr/local/sbin/notify"
 GUARD_CFG = Path("/etc/fleet/guard.json")
+POLICY_CFG = Path("/etc/fleet/guard.policy.json")
 DEFAULT_TTL = 600
 
 PENDING = ROOT / "pending"
 APPROVED = ROOT / "approved"
 PROCESSED = ROOT / "processed"
+
+# baseline policy: which audit-log action types create a hold (require
+# approval) vs just notify. cf-audit-monitor consults `policy effective`
+# per-event so admins can override per-zone via /etc/fleet/guard.policy.json.
+DEFAULT_HOLD_ACTIONS = [
+    "zone_delete", "zone_create", "zone_settings_change",
+    "ns_change", "transfer_in", "transfer_out",
+    "member_add", "member_remove",
+    "api_token_create", "api_token_delete",
+    "ssl_change",
+]
 
 
 def utcnow():
@@ -211,6 +223,78 @@ def cmd_status(args):
     return 0
 
 
+def load_policy():
+    """returns {'default': {'hold': [...]}, 'zones': {<zone>: {'hold': [...]}}}.
+    missing file or invalid json → defaults only."""
+    if not POLICY_CFG.exists():
+        return {"default": {"hold": list(DEFAULT_HOLD_ACTIONS)}, "zones": {}}
+    try:
+        raw = json.loads(POLICY_CFG.read_text())
+    except Exception:
+        return {"default": {"hold": list(DEFAULT_HOLD_ACTIONS)}, "zones": {}}
+    raw.setdefault("default", {})
+    raw["default"].setdefault("hold", list(DEFAULT_HOLD_ACTIONS))
+    raw.setdefault("zones", {})
+    return raw
+
+
+def save_policy(policy):
+    POLICY_CFG.parent.mkdir(parents=True, exist_ok=True)
+    tmp = POLICY_CFG.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(policy, indent=2, sort_keys=True))
+    tmp.rename(POLICY_CFG)
+    os.chmod(POLICY_CFG, 0o640)
+
+
+def effective_hold_list(policy, zone):
+    """zone-level override wins; falls back to default."""
+    if zone:
+        z = policy.get("zones", {}).get(zone)
+        if z and "hold" in z:
+            return z["hold"]
+    return policy.get("default", {}).get("hold", DEFAULT_HOLD_ACTIONS)
+
+
+def cmd_policy(args):
+    sub = args.policy_cmd
+    policy = load_policy()
+    if sub == "show":
+        if args.zone:
+            hold = effective_hold_list(policy, args.zone)
+            print(json.dumps({"zone": args.zone, "hold": hold}, indent=2))
+        else:
+            print(json.dumps(policy, indent=2, sort_keys=True))
+        return 0
+    if sub == "set":
+        actions = [a.strip() for a in args.actions.split(",") if a.strip()]
+        if args.zone == "default":
+            policy.setdefault("default", {})["hold"] = actions
+        else:
+            policy.setdefault("zones", {}).setdefault(args.zone, {})["hold"] = actions
+        save_policy(policy)
+        log_event({"event": "policy_set", "zone": args.zone, "actions": actions})
+        print(f"set {args.zone} hold={actions}")
+        return 0
+    if sub == "reset":
+        if args.zone == "default" or args.zone == "":
+            policy["default"] = {"hold": list(DEFAULT_HOLD_ACTIONS)}
+            policy["zones"] = {}
+        else:
+            policy.get("zones", {}).pop(args.zone, None)
+        save_policy(policy)
+        log_event({"event": "policy_reset", "zone": args.zone or "all"})
+        print(f"reset {args.zone or 'all'}")
+        return 0
+    if sub == "effective":
+        # used by cf-audit-monitor. prints "hold" or "notify" then exits 0.
+        hold = effective_hold_list(policy, args.zone)
+        decision = "hold" if args.action in hold else "notify"
+        print(decision)
+        return 0
+    print(f"unknown policy subcommand: {sub}", file=sys.stderr)
+    return 1
+
+
 def cmd_execute(args):
     """invoke executor for each approved record. external script handles each kind."""
     executor = "/usr/local/sbin/fleet-guard-execute"
@@ -273,6 +357,20 @@ def main():
 
     sp = sub.add_parser("execute")
     sp.set_defaults(fn=cmd_execute)
+
+    sp = sub.add_parser("policy", help="view/edit hold-action policy")
+    psub = sp.add_subparsers(dest="policy_cmd", required=True)
+    pshow = psub.add_parser("show", help="print policy (or effective hold list for zone)")
+    pshow.add_argument("zone", nargs="?", default="")
+    pset = psub.add_parser("set", help="set hold-action list for default or zone")
+    pset.add_argument("zone")
+    pset.add_argument("actions", help="comma-separated action types")
+    preset = psub.add_parser("reset", help="reset policy: omit zone to wipe all overrides")
+    preset.add_argument("zone", nargs="?", default="")
+    peff = psub.add_parser("effective", help="print 'hold' or 'notify' for an action+zone")
+    peff.add_argument("action")
+    peff.add_argument("--zone", default="")
+    sp.set_defaults(fn=cmd_policy)
 
     args = p.parse_args()
     sys.exit(args.fn(args))
