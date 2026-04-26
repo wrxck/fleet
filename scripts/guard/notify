@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""
+fan-out notifier. reads /etc/fleet/notify.json (an "adapters" list) and
+dispatches the same message to every adapter that's configured. each
+adapter failure is reported but doesn't block the others.
+
+usage: notify "title" "body"
+"""
+
+import json
+import sys
+import urllib.parse
+import urllib.request
+import uuid
+from pathlib import Path
+
+CFG = Path("/etc/fleet/notify.json")
+
+
+def md_escape(text):
+    # markdownv2 escape for telegram
+    specials = "_*[]()~`>#+-=|{}.!"
+    return "".join("\\" + c if c in specials else c for c in text)
+
+
+def send_telegram(adapter, title, body):
+    token = adapter["botToken"]
+    chat = adapter["chatId"]
+    text = "*" + md_escape(title) + "*"
+    if body:
+        text += "\n" + md_escape(body)
+    data = urllib.parse.urlencode({
+        "chat_id": chat,
+        "text": text,
+        "parse_mode": "MarkdownV2",
+        "disable_web_page_preview": "true",
+    }).encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data=data,
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return r.status == 200
+
+
+def send_bluebubbles(adapter, title, body):
+    base = adapter["serverUrl"].rstrip("/")
+    pwd = adapter["password"]
+    chat = adapter["chatGuid"]
+    text = title if not body else f"{title}\n{body}"
+    payload = json.dumps({
+        "chatGuid": chat,
+        "message": text,
+        "method": "apple-script",
+        "tempGuid": str(uuid.uuid4()),
+    }).encode()
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (server-notify) AppleWebKit/537.36",
+    }
+    if adapter.get("cfAccessClientId"):
+        headers["CF-Access-Client-Id"] = adapter["cfAccessClientId"]
+        headers["CF-Access-Client-Secret"] = adapter["cfAccessClientSecret"]
+    url = f"{base}/api/v1/message/text?password={urllib.parse.quote(pwd)}"
+    req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=45) as r:
+        return r.status == 200
+
+
+DISPATCH = {
+    "telegram": send_telegram,
+    "bluebubbles": send_bluebubbles,
+}
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: notify <title> [body]")
+    title = sys.argv[1]
+    body = sys.argv[2] if len(sys.argv) > 2 else ""
+
+    if not CFG.exists():
+        sys.exit(f"missing {CFG}")
+    cfg = json.loads(CFG.read_text())
+    adapters = cfg.get("adapters") or []
+    failures = []
+    for ad in adapters:
+        kind = ad.get("type")
+        fn = DISPATCH.get(kind)
+        if not fn:
+            failures.append(f"unknown adapter: {kind}")
+            continue
+        try:
+            fn(ad, title, body)
+        except Exception as e:
+            failures.append(f"{kind}: {e}")
+    if failures:
+        # write to stderr but keep going; cron mail will surface it
+        for f in failures:
+            print(f, file=sys.stderr)
+        # only fail outright if every adapter failed
+        if len(failures) == len(adapters):
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

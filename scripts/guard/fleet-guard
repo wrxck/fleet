@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+"""
+fleet-guard — pending-action queue with out-of-band approval.
+
+state layout under /var/lib/fleet-guard/:
+  pending/<token>.json   — awaiting approval. created by `hold`.
+  approved/<token>.json  — owner approved. picked up by executor.
+  processed/<token>.json — executor finished (success or fail).
+
+token format: 22-char base32 (random, single-use). 256 bits of entropy.
+
+cli verbs (all log to /var/log/fleet-guard/audit.jsonl):
+  hold <kind> <summary> [--payload '<json>']  create a pending hold + notify
+  list [pending|approved|processed]            list tokens with summaries
+  show <token>                                 dump one record
+  approve <token> [--actor <name>]             mark approved
+  reject <token>  [--actor <name>]             mark rejected (deletes record)
+  status                                       human summary
+  execute                                      run all approved actions
+
+approval is also mediated by the daemon (telegram callbacks/messages).
+this cli is the fallback path + ssh-session override.
+"""
+
+import argparse
+import base64
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+from datetime import datetime, timezone
+
+ROOT = Path("/var/lib/fleet-guard")
+LOG = Path("/var/log/fleet-guard/audit.jsonl")
+NOTIFY = "/usr/local/sbin/notify"
+GUARD_CFG = Path("/etc/fleet/guard.json")
+DEFAULT_TTL = 600
+
+PENDING = ROOT / "pending"
+APPROVED = ROOT / "approved"
+PROCESSED = ROOT / "processed"
+
+
+def utcnow():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def epoch():
+    return int(time.time())
+
+
+def log_event(event):
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"ts": utcnow(), **event}
+    with LOG.open("a") as f:
+        f.write(json.dumps(entry, default=str) + "\n")
+
+
+def gen_token():
+    return base64.b32encode(secrets.token_bytes(14)).decode().rstrip("=")
+
+
+def load_cfg():
+    if not GUARD_CFG.exists():
+        return {}
+    try:
+        return json.loads(GUARD_CFG.read_text())
+    except Exception:
+        return {}
+
+
+def write_record(dirpath, token, record):
+    dirpath.mkdir(parents=True, exist_ok=True)
+    path = dirpath / f"{token}.json"
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(record, indent=2, sort_keys=True))
+    tmp.rename(path)
+    os.chmod(path, 0o600)
+    return path
+
+
+def find_token(token):
+    """search pending/approved/processed for a token"""
+    for d in (PENDING, APPROVED, PROCESSED):
+        p = d / f"{token}.json"
+        if p.exists():
+            return d, p
+    return None, None
+
+
+def cmd_hold(args):
+    token = gen_token()
+    cfg = load_cfg()
+    ttl = int(cfg.get("tokenTtlSeconds") or DEFAULT_TTL)
+    record = {
+        "token": token,
+        "kind": args.kind,
+        "summary": args.summary,
+        "payload": json.loads(args.payload) if args.payload else {},
+        "created_at": utcnow(),
+        "expires_at_epoch": epoch() + ttl,
+        "creator": os.environ.get("SUDO_USER") or os.environ.get("USER") or "unknown",
+        "creator_uid": os.getuid(),
+    }
+    write_record(PENDING, token, record)
+    log_event({"event": "hold_created", "token": token, "kind": args.kind, "summary": args.summary})
+
+    # notify owner
+    title = f"action held: {args.kind}"
+    body = (
+        f"{args.summary}\n"
+        f"approve: send `/approve {token}` to bot\n"
+        f"or: fleet-guard approve {token}\n"
+        f"expires in {ttl // 60}m"
+    )
+    try:
+        subprocess.run([NOTIFY, title, body], check=False, timeout=15)
+    except Exception:
+        pass
+    print(token)
+    return 0
+
+
+def cmd_list(args):
+    target = {"pending": PENDING, "approved": APPROVED, "processed": PROCESSED}.get(args.where, PENDING)
+    rows = []
+    if target.exists():
+        for path in sorted(target.glob("*.json")):
+            r = json.loads(path.read_text())
+            rows.append((r["token"], r.get("kind", "?"), r.get("summary", "")[:60]))
+    for t, k, s in rows:
+        print(f"{t}  {k:<20}  {s}")
+    if not rows:
+        print(f"(no records in {args.where})")
+    return 0
+
+
+def cmd_show(args):
+    _, path = find_token(args.token)
+    if not path:
+        print(f"token not found: {args.token}", file=sys.stderr)
+        return 1
+    print(path.read_text())
+    return 0
+
+
+def _expire_check(record):
+    return epoch() > int(record.get("expires_at_epoch", 0))
+
+
+def cmd_approve(args):
+    src, path = find_token(args.token)
+    if path is None:
+        print(f"token not found: {args.token}", file=sys.stderr)
+        return 1
+    if src != PENDING:
+        print(f"token not in pending state (in {src.name})", file=sys.stderr)
+        return 1
+    record = json.loads(path.read_text())
+    if _expire_check(record):
+        log_event({"event": "approve_expired", "token": args.token, "actor": args.actor})
+        path.unlink()
+        print("token expired", file=sys.stderr)
+        return 1
+    record["approved_at"] = utcnow()
+    record["approver"] = args.actor or os.environ.get("SUDO_USER") or os.environ.get("USER") or "cli"
+    write_record(APPROVED, args.token, record)
+    path.unlink()
+    log_event({"event": "approved", "token": args.token, "kind": record.get("kind"),
+               "approver": record["approver"]})
+    # acknowledge
+    try:
+        subprocess.run([NOTIFY, "approval recorded",
+                        f"{record.get('kind')} approved by {record['approver']}"],
+                       check=False, timeout=10)
+    except Exception:
+        pass
+    print(f"approved {args.token}")
+    return 0
+
+
+def cmd_reject(args):
+    src, path = find_token(args.token)
+    if path is None or src != PENDING:
+        print(f"token not in pending state", file=sys.stderr)
+        return 1
+    record = json.loads(path.read_text())
+    record["rejected_at"] = utcnow()
+    record["rejecter"] = args.actor or os.environ.get("SUDO_USER") or os.environ.get("USER") or "cli"
+    write_record(PROCESSED, args.token, {**record, "outcome": "rejected"})
+    path.unlink()
+    log_event({"event": "rejected", "token": args.token, "actor": record["rejecter"]})
+    print(f"rejected {args.token}")
+    return 0
+
+
+def cmd_status(args):
+    counts = {}
+    for name, d in (("pending", PENDING), ("approved", APPROVED), ("processed", PROCESSED)):
+        counts[name] = len(list(d.glob("*.json"))) if d.exists() else 0
+    print(f"pending={counts['pending']} approved={counts['approved']} processed={counts['processed']}")
+    if PENDING.exists():
+        for path in sorted(PENDING.glob("*.json")):
+            r = json.loads(path.read_text())
+            ttl = int(r.get("expires_at_epoch", 0)) - epoch()
+            print(f"  {r['token']}  {r.get('kind')}  ttl={ttl}s  {r.get('summary', '')[:60]}")
+    return 0
+
+
+def cmd_execute(args):
+    """invoke executor for each approved record. external script handles each kind."""
+    executor = "/usr/local/sbin/fleet-guard-execute"
+    if not Path(executor).exists():
+        print(f"executor not installed at {executor}", file=sys.stderr)
+        return 1
+    count = 0
+    for path in sorted(APPROVED.glob("*.json")):
+        record = json.loads(path.read_text())
+        try:
+            res = subprocess.run([executor], input=json.dumps(record), capture_output=True,
+                                 text=True, timeout=120)
+            ok = res.returncode == 0
+            outcome = "executed" if ok else "execute_failed"
+            record["executed_at"] = utcnow()
+            record["outcome"] = outcome
+            record["executor_stdout"] = res.stdout[-2000:]
+            record["executor_stderr"] = res.stderr[-2000:]
+            write_record(PROCESSED, record["token"], record)
+            path.unlink()
+            log_event({"event": outcome, "token": record["token"], "kind": record.get("kind")})
+            count += 1
+        except Exception as e:
+            log_event({"event": "execute_error", "token": record["token"], "err": str(e)})
+    print(f"processed {count} approvals")
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(prog="fleet-guard")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sp = sub.add_parser("hold")
+    sp.add_argument("kind")
+    sp.add_argument("summary")
+    sp.add_argument("--payload", default="")
+    sp.set_defaults(fn=cmd_hold)
+
+    sp = sub.add_parser("list")
+    sp.add_argument("where", nargs="?", default="pending",
+                    choices=["pending", "approved", "processed"])
+    sp.set_defaults(fn=cmd_list)
+
+    sp = sub.add_parser("show")
+    sp.add_argument("token")
+    sp.set_defaults(fn=cmd_show)
+
+    sp = sub.add_parser("approve")
+    sp.add_argument("token")
+    sp.add_argument("--actor", default="")
+    sp.set_defaults(fn=cmd_approve)
+
+    sp = sub.add_parser("reject")
+    sp.add_argument("token")
+    sp.add_argument("--actor", default="")
+    sp.set_defaults(fn=cmd_reject)
+
+    sp = sub.add_parser("status")
+    sp.set_defaults(fn=cmd_status)
+
+    sp = sub.add_parser("execute")
+    sp.set_defaults(fn=cmd_execute)
+
+    args = p.parse_args()
+    sys.exit(args.fn(args))
+
+
+if __name__ == "__main__":
+    main()

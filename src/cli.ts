@@ -22,6 +22,7 @@ import { watchdogCommand } from './commands/watchdog.js';
 import { installMcpCommand } from './commands/install-mcp.js';
 import { patchSystemdCommand } from './commands/patch-systemd.js';
 import { freezeCommand, unfreezeCommand } from './commands/freeze.js';
+import { guardCommand } from './commands/guard.js';
 import { bootStartCommand } from './commands/boot-start.js';
 import { rollbackCommand } from './commands/rollback.js';
 import { routineRunCommand } from './commands/routine-run.js';
@@ -92,6 +93,7 @@ Commands:
   freeze <app>        Freeze a crash-looping service (stop + disable)
   rollback <app>      Roll back app to previous image
   unfreeze <app>      Unfreeze and restart a frozen service
+  guard <subcommand>  Cloudflare protection layer (install/status/approve/reject/...)
 
 Global flags:
   --json              Output as JSON
@@ -156,6 +158,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'freeze': return freezeCommand(rest);
     case 'rollback': return rollbackCommand(rest);
     case 'unfreeze': return unfreezeCommand(rest);
+    case 'guard': return guardCommand(rest);
     case 'mcp': return startMcpServer();
     case 'tui':
     case 'dashboard': {
