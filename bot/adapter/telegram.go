@@ -111,9 +111,16 @@ type telegramInboxHandler struct {
 	inbox          chan<- InboundMessage
 }
 
-// Handle checks authorisation, converts the update to an InboundMessage, and
-// pushes it to the inbox channel.
+// handle checks authorisation, converts the update to an inbound message, and
+// pushes it to the inbox channel. callback_query updates (inline keyboard
+// button clicks) are converted into inbound messages whose text is the
+// button's callback data, so the router's pending-selection handler can pick
+// them up the same way as numeric replies.
 func (h *telegramInboxHandler) Handle(ctx context.Context, b *bot.Bot, u bot.Update) {
+	if u.CallbackQuery != nil {
+		h.handleCallback(ctx, b, u.CallbackQuery)
+		return
+	}
 	if u.Message == nil {
 		return
 	}
@@ -134,6 +141,31 @@ func (h *telegramInboxHandler) Handle(ctx context.Context, b *bot.Bot, u bot.Upd
 		SenderID: senderID,
 		Text:     msg.Text,
 		HasPhoto: len(msg.Photo) > 0,
+		Provider: "telegram",
+	}
+
+	select {
+	case h.inbox <- inbound:
+	case <-ctx.Done():
+	}
+}
+
+// handleCallback converts an inline-keyboard button click into an inbound
+// message. always answers the callback so the spinner stops on the client.
+func (h *telegramInboxHandler) handleCallback(ctx context.Context, b *bot.Bot, cb *bot.CallbackQuery) {
+	defer b.AnswerCallback(cb.ID)
+	if cb.Message == nil {
+		return
+	}
+	chatID := cb.Message.Chat.ID
+	if !isAllowed(chatID, h.allowedChatIDs) {
+		return
+	}
+
+	inbound := InboundMessage{
+		ChatID:   strconv.FormatInt(chatID, 10),
+		SenderID: strconv.FormatInt(cb.From.ID, 10),
+		Text:     cb.Data,
 		Provider: "telegram",
 	}
 
