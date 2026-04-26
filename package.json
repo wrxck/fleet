@@ -1,6 +1,6 @@
 {
   "name": "@matthesketh/fleet",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "Docker production management CLI + MCP server for Claude Code",
   "type": "module",
   "main": "dist/index.js",
