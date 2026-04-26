@@ -202,12 +202,25 @@ func (r *Router) handlePendingSelection(msg adapter.InboundMessage, text string)
 }
 
 // respond sends a response through the adapter that originated the message.
+// if resp.Stream is non-nil, it's invoked in a goroutine with a closure that
+// edits the just-sent message in place. on adapters that don't track message
+// ids (bluebubbles), the closure is a no-op so the streaming command can run
+// the same code path on every provider.
 func (r *Router) respond(msg adapter.InboundMessage, resp adapter.OutboundMessage) {
 	a, ok := r.adapters[msg.Provider]
 	if !ok {
 		return
 	}
-	_ = a.Send(msg.ChatID, resp)
+	messageID, err := a.Send(msg.ChatID, resp)
+	if err != nil || resp.Stream == nil {
+		return
+	}
+	go resp.Stream(func(text string) {
+		if messageID == "" {
+			return
+		}
+		_ = a.Edit(msg.ChatID, messageID, text)
+	})
 }
 
 // parseCommand strips the leading '/', splits on whitespace, and separates the
