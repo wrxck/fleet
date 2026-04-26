@@ -78,6 +78,10 @@ export function recordBuiltCommit(appName: string, commit: string): void {
 }
 
 export const KILL_SWITCH = '/etc/fleet/no-auto-refresh';
+
+function killSwitchPath(): string {
+  return process.env.FLEET_KILL_SWITCH ?? KILL_SWITCH;
+}
 export const DEFAULT_WALL_CLOCK_MS = 900_000;
 
 export type RefreshResult =
@@ -106,7 +110,7 @@ async function doRefresh(app: AppEntry): Promise<RefreshResult> {
 
 function isKillSwitchActive(): boolean {
   try {
-    return existsSync(KILL_SWITCH);
+    return existsSync(killSwitchPath());
   } catch {
     return false;  // permission error or similar — assume no kill switch, let refresh proceed
   }

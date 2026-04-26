@@ -23,6 +23,8 @@ import { validateApp, validateAll } from '../core/secrets-validate.js';
 import { freezeApp, unfreezeApp } from '../commands/freeze.js';
 import { registerGitTools } from './git-tools.js';
 import { registerSecretsTools } from './secrets-tools.js';
+import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy.js';
+import { snapshotEgress } from '../core/egress.js';
 import { registerDepsTools } from './deps-tools.js';
 
 function requireApp(name: string) {
@@ -90,7 +92,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'fleet_logs',
-    'Get recent container logs for an app. For multi-service apps, specify container to pick which service.',
+    'DEPRECATED — prefer fleet_logs_recent (token-conservative defaults) or fleet_logs_summary. Get recent container logs for an app.',
     {
       app: z.string().describe('App name'),
       container: z.string().optional().describe('Container name (omit to list available containers, or get logs from first)'),
@@ -99,7 +101,6 @@ export async function startMcpServer(): Promise<void> {
     async ({ app, container, lines }) => {
       const entry = requireApp(app);
       if (entry.containers.length === 0) return text('No containers registered');
-
       if (!container && entry.containers.length > 1) {
         return text(
           `${entry.name} has ${entry.containers.length} containers. Specify one:\n` +
@@ -107,7 +108,6 @@ export async function startMcpServer(): Promise<void> {
           `\n\nOr omit container to get logs from: ${entry.containers[0]}`
         );
       }
-
       const target = container ?? entry.containers[0];
       if (!entry.containers.includes(target)) {
         return text(
@@ -115,9 +115,149 @@ export async function startMcpServer(): Promise<void> {
           entry.containers.map(c => `  - ${c}`).join('\n')
         );
       }
-
       const logs = getContainerLogs(target, lines);
       return text(logs);
+    }
+  );
+
+  // ── New token-conservative log tools ─────────────────────────────────────
+
+  server.tool(
+    'fleet_logs_recent',
+    'Get recent log lines for an app, filtered to a level and bounded in size. Defaults are SMALL (50 lines, last 15 minutes, warn+) — broaden only if needed. Returns {text, truncated, suggestion}.',
+    {
+      app: z.string().describe('App name'),
+      container: z.string().optional().describe('Container (defaults to first)'),
+      lines: z.number().optional().default(50).describe('Tail N lines (default 50)'),
+      level: z.enum(['debug', 'info', 'warn', 'error']).optional().default('warn').describe('Min level (default warn — drops debug/info noise)'),
+      sinceMinutes: z.number().optional().default(15).describe('Look back this many minutes (default 15)'),
+      grep: z.string().optional().describe('Substring filter applied after level'),
+    },
+    async ({ app, container, lines, level, sinceMinutes, grep }) => {
+      const entry = requireApp(app);
+      if (entry.containers.length === 0) return text('No containers registered');
+      const target = container ?? entry.containers[0];
+      if (!entry.containers.includes(target)) {
+        return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
+      }
+      const result = readContainerLogs(target, { lines, level, sinceMinutes, grep, maxBytes: 200_000 });
+      const suffix = result.truncated
+        ? '\n\n[truncated at 200KB — narrow with smaller lines/sinceMinutes or add grep]'
+        : '';
+      return text(result.text + suffix);
+    }
+  );
+
+  server.tool(
+    'fleet_logs_summary',
+    'Cheap aggregate: counts of log lines by level + the top 10 distinct error/warning messages over a window. Use as a first pass before fleet_logs_recent.',
+    {
+      app: z.string().describe('App name'),
+      container: z.string().optional().describe('Container (defaults to first)'),
+      sinceMinutes: z.number().optional().default(60).describe('Window in minutes (default 60)'),
+    },
+    async ({ app, container, sinceMinutes }) => {
+      const entry = requireApp(app);
+      const target = container ?? entry.containers[0];
+      if (!entry.containers.includes(target)) {
+        return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
+      }
+      const all = readContainerLogs(target, { lines: 5000, sinceMinutes, maxBytes: 5_000_000 });
+      const lines = all.text.split('\n').filter(l => l.trim());
+      const counts = { error: 0, warn: 0, info: 0, debug: 0, other: 0 };
+      const errMsgs = new Map<string, number>();
+      for (const ln of lines) {
+        if (/error|err\b|fatal|critical|exception|panic/i.test(ln)) {
+          counts.error++;
+          // canonicalise: drop timestamps, IDs
+          const norm = ln.replace(/\b[0-9a-f]{8,}\b/gi, '<id>')
+                         .replace(/\b\d{4}-\d{2}-\d{2}T[\d:.]+Z?\b/g, '<ts>')
+                         .replace(/\d+/g, 'N')
+                         .slice(0, 200);
+          errMsgs.set(norm, (errMsgs.get(norm) ?? 0) + 1);
+        } else if (/warn|warning/i.test(ln)) counts.warn++;
+        else if (/\binfo\b/i.test(ln)) counts.info++;
+        else if (/\bdebug|trace|verbose\b/i.test(ln)) counts.debug++;
+        else counts.other++;
+      }
+      const top = [...errMsgs.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([msg, n]) => `  ${n.toString().padStart(4)} × ${msg}`);
+      const lines2 = [
+        `Container: ${target}  Window: ${sinceMinutes}m  Total: ${lines.length} lines`,
+        `By level: ${counts.error} error, ${counts.warn} warn, ${counts.info} info, ${counts.debug} debug, ${counts.other} other`,
+        '',
+        top.length ? 'Top distinct error/warn messages:' : 'No error/warn messages in window.',
+        ...top,
+      ];
+      return text(lines2.join('\n'));
+    }
+  );
+
+  server.tool(
+    'fleet_logs_search',
+    'Bounded grep across recent container logs. Returns matching lines with 0 lines of context, capped at max_results. Cheaper than fleet_logs_recent + manual filtering.',
+    {
+      app: z.string().describe('App name'),
+      container: z.string().optional().describe('Container (defaults to first)'),
+      query: z.string().describe('Substring or regex'),
+      sinceMinutes: z.number().optional().default(60).describe('Window in minutes (default 60)'),
+      maxResults: z.number().optional().default(20).describe('Cap results (default 20)'),
+    },
+    async ({ app, container, query, sinceMinutes, maxResults }) => {
+      const entry = requireApp(app);
+      const target = container ?? entry.containers[0];
+      if (!entry.containers.includes(target)) {
+        return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
+      }
+      const result = readContainerLogs(target, { lines: 5000, sinceMinutes, grep: query, maxBytes: 1_000_000 });
+      const matches = result.text.split('\n').filter(l => l.trim());
+      const slice = matches.slice(0, maxResults);
+      const note = matches.length > maxResults
+        ? `\n\n[${matches.length - maxResults} more matches — narrow query or shorten window]`
+        : '';
+      return text(slice.join('\n') + note);
+    }
+  );
+
+  server.tool(
+    'fleet_egress_snapshot',
+    'Snapshot the current outbound TCP flows for an app and report which destinations are NOT in the configured allowlist. Use to seed allowlists or audit unexpected egress. v1 is observe-only — it never blocks traffic.',
+    { app: z.string().describe('App name') },
+    async ({ app }) => {
+      const entry = requireApp(app);
+      const snap = snapshotEgress(entry);
+      return text(
+        JSON.stringify(
+          {
+            takenAt: snap.takenAt,
+            app: snap.app,
+            uniqueRemotes: snap.uniqueRemotes,
+            violations: snap.violations,
+            flowCount: snap.flows.length,
+          },
+          null,
+          2,
+        ),
+      );
+    }
+  );
+
+  server.tool(
+    'fleet_logs_status',
+    'Per-container log driver, current size, and policy applied. Use to check which apps need fleet logs setup.',
+    { app: z.string().optional().describe('App name (omit for all)') },
+    async ({ app }) => {
+      const reg = load();
+      const apps = app ? [findApp(reg, app)].filter(Boolean) as AppEntry[] : reg.apps;
+      const out: Array<Record<string, unknown>> = [];
+      for (const a of apps) {
+        const policy = effectivePolicy(a);
+        const status = getLogStatus(a);
+        for (const s of status) out.push({ ...s, sizeMB: s.totalBytes != null ? +(s.totalBytes / 1024 / 1024).toFixed(2) : null, policy });
+      }
+      return text(JSON.stringify(out, null, 2));
     }
   );
 

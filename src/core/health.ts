@@ -8,7 +8,14 @@ export interface HealthResult {
   app: string;
   systemd: { ok: boolean; state: string };
   containers: ContainerHealth[];
-  http: { ok: boolean; status: number | null; error: string | null } | null;
+  http: {
+    ok: boolean;
+    status: number | null;
+    error: string | null;
+    /** True iff the endpoint returned 404 — distinguishes "no healthcheck
+     * implemented for this app" from "endpoint exists but is failing". */
+    endpointMissing?: boolean;
+  } | null;
   overall: 'healthy' | 'degraded' | 'down';
 }
 
@@ -72,7 +79,14 @@ export function checkHttp(port: number, healthPath?: string): HealthResult['http
 
   const status = parseInt(result.stdout, 10);
   if (!isNaN(status) && status > 0) {
-    return { ok: status >= 200 && status < 500, status, error: null };
+    // Healthy = 2xx (success) or 3xx (redirect, e.g. /health → /health/).
+    // 4xx and 5xx are NOT healthy. 404 specifically is flagged so the TUI
+    // can show "no healthcheck endpoint" rather than a generic failure —
+    // it means the path was reachable but the route doesn't exist (the app
+    // never implemented one). The fix is to add a /health route to the app.
+    const ok = status >= 200 && status < 400;
+    const endpointMissing = status === 404;
+    return { ok, status, error: null, endpointMissing };
   }
   return { ok: false, status: null, error: result.stderr || 'Connection failed' };
 }

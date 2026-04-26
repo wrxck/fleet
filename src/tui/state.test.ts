@@ -4,10 +4,11 @@ import { reducer, initialState, nextTopView } from './state.js';
 import type { TuiState, Action, View } from './types.js';
 
 describe('nextTopView', () => {
-  it('cycles dashboard → health → secrets → dashboard', () => {
+  it('cycles dashboard → health → secrets → logs-multi → dashboard', () => {
     expect(nextTopView('dashboard')).toBe('health');
     expect(nextTopView('health')).toBe('secrets');
-    expect(nextTopView('secrets')).toBe('dashboard');
+    expect(nextTopView('secrets')).toBe('logs-multi');
+    expect(nextTopView('logs-multi')).toBe('dashboard');
   });
 
   it('returns dashboard for unknown views', () => {
@@ -139,7 +140,7 @@ describe('reducer', () => {
   });
 
   // tab cycling through views (simulating what the router does)
-  it('simulates tab cycling: dashboard → health → secrets → dashboard', () => {
+  it('simulates tab cycling: dashboard → health → secrets → logs-multi → dashboard', () => {
     let state = initialState;
     expect(state.currentView).toBe('dashboard');
 
@@ -152,8 +153,12 @@ describe('reducer', () => {
     expect(state.previousView).toBe('health');
 
     state = reducer(state, { type: 'NAVIGATE', view: nextTopView('secrets') });
-    expect(state.currentView).toBe('dashboard');
+    expect(state.currentView).toBe('logs-multi');
     expect(state.previousView).toBe('secrets');
+
+    state = reducer(state, { type: 'NAVIGATE', view: nextTopView('logs-multi') });
+    expect(state.currentView).toBe('dashboard');
+    expect(state.previousView).toBe('logs-multi');
   });
 
   // arrow key navigation simulation
