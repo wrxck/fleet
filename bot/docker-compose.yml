@@ -25,10 +25,15 @@ services:
       # Node.js runtime for fleet CLI
       - /usr/local/bin/node:/usr/local/bin/node:ro
       - /usr/local/lib/node_modules:/usr/local/lib/node_modules:ro
-      # Runtime secrets (for fleet CLI commands)
+      # runtime secrets (for fleet cli commands)
       - /run/fleet-secrets:/run/fleet-secrets:ro
       # systemd/dbus for systemctl
       - /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
+      # fleet-guard cli + state (for /approve, /reject, /guard commands)
+      - /usr/local/sbin/fleet-guard:/usr/local/sbin/fleet-guard:ro
+      - /usr/local/sbin/notify:/usr/local/sbin/notify:ro
+      - /var/lib/fleet-guard:/var/lib/fleet-guard
+      - /var/log/fleet-guard:/var/log/fleet-guard
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
