@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""
+poll cloudflare audit log api and notify via telegram on each new event.
+- state: /var/lib/cf-audit/last-seen.txt (rfc3339 utc)
+- creds: read from /root/.claude.json (cloudflare-mcp env block)
+- runs from cron every 15m. on first run seeds the state to "now-1h".
+- categorises events: noise events are silently logged; everything else
+  fires a telegram message.
+"""
+
+import json
+import os
+import sys
+import time
+import urllib.request
+import urllib.parse
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from subprocess import run
+
+CLAUDE_CFG = Path("/root/.claude.json")
+STATE_DIR = Path("/var/lib/cf-audit")
+STATE_FILE = STATE_DIR / "last-seen.txt"
+LOG_FILE = STATE_DIR / "events.jsonl"
+NOTIFIER = "/usr/local/sbin/notify"
+GUARD = "/usr/local/sbin/fleet-guard"
+
+# events that happen routinely and shouldn't page us
+NOISY_ACTIONS = {
+    "login",
+    "purge",
+    "challenge_solve",
+    "user_read",
+    "search",
+}
+
+# event action types that should always create a hold (require approval)
+# instead of merely notifying. these are the destructive / hijack-shaped ones.
+HOLD_ACTIONS = {
+    "zone_delete", "zone_create", "zone_settings_change",
+    "ns_change", "transfer_in", "transfer_out",
+    "member_add", "member_remove",
+    "api_token_create", "api_token_delete",
+    "ssl_change",
+}
+
+
+def read_creds():
+    with CLAUDE_CFG.open() as f:
+        cfg = json.load(f)
+    env = cfg.get("mcpServers", {}).get("cloudflare-mcp", {}).get("env", {}) or {}
+    api_key = env.get("CLOUDFLARE_API_KEY")
+    email = env.get("CLOUDFLARE_EMAIL")
+    if not api_key or not email:
+        sys.exit("cf creds missing in /root/.claude.json (mcpServers.cloudflare-mcp.env)")
+    # account id needed for v2 audit endpoint
+    inf_env = cfg.get("mcpServers", {}).get("infrastructure-mcp", {}).get("env", {}) or {}
+    account_id = inf_env.get("CLOUDFLARE_ACCOUNT_ID")
+    if not account_id:
+        sys.exit("CLOUDFLARE_ACCOUNT_ID missing in infrastructure-mcp env")
+    return api_key, email, account_id
+
+
+def load_since():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if STATE_FILE.exists():
+        return STATE_FILE.read_text().strip()
+    # first run: pull last hour
+    return (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def save_since(ts):
+    STATE_FILE.write_text(ts + "\n")
+
+
+def fetch_events(api_key, email, account_id, since):
+    # cf accounts audit log v1 endpoint (free plan compatible)
+    qs = urllib.parse.urlencode({
+        "since": since,
+        "before": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "per_page": 100,
+    })
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/audit_logs?{qs}"
+    req = urllib.request.Request(url, headers={
+        "X-Auth-Email": email,
+        "X-Auth-Key": api_key,
+        "Content-Type": "application/json",
+    })
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read())
+
+
+def classify(action_type):
+    a = (action_type or "").lower()
+    if a in NOISY_ACTIONS:
+        return "noise"
+    return "alert"
+
+
+def notify(title, body):
+    run([NOTIFIER, title, body], check=False)
+
+
+def fmt_event(ev):
+    when = ev.get("when", "?")
+    who = (ev.get("actor") or {}).get("email") or "?"
+    ip = (ev.get("actor") or {}).get("ip") or "?"
+    action = (ev.get("action") or {}).get("type") or "?"
+    resource = (ev.get("resource") or {}).get("type") or "?"
+    res_id = (ev.get("resource") or {}).get("id") or ""
+    metadata = ev.get("metadata") or {}
+    extras = ", ".join(f"{k}={v}" for k, v in metadata.items() if k in ("name", "domain", "zone"))
+    line = f"{when}\n{action} {resource} by {who} from {ip}"
+    if res_id:
+        line += f"\nresource: {res_id}"
+    if extras:
+        line += f"\n{extras}"
+    return line
+
+
+def main():
+    api_key, email, account_id = read_creds()
+    since = load_since()
+    try:
+        data = fetch_events(api_key, email, account_id, since)
+    except Exception as e:
+        notify("cf-audit-monitor failed", f"fetch error: {e}")
+        sys.exit(1)
+    if not data.get("success", False):
+        errs = data.get("errors") or []
+        notify("cf-audit-monitor api error", json.dumps(errs)[:300])
+        sys.exit(1)
+
+    events = data.get("result") or []
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if events:
+        with LOG_FILE.open("a") as f:
+            for ev in events:
+                f.write(json.dumps(ev) + "\n")
+
+    alerts = [ev for ev in events if classify((ev.get("action") or {}).get("type")) == "alert"]
+    for ev in alerts:
+        action = (ev.get("action") or {}).get("type") or ""
+        if action in HOLD_ACTIONS:
+            # destructive — create a fleet-guard hold instead of just notifying.
+            # the cli itself fires the notification with approval token.
+            payload = {
+                "cf_event": ev,
+                "suggested_action": "review and approve to acknowledge",
+            }
+            try:
+                run([GUARD, "hold", f"cf_{action}", fmt_event(ev), "--payload",
+                     json.dumps(payload)], check=False, timeout=30)
+            except Exception as e:
+                notify("cf-audit hold-failed", f"{e}\n{fmt_event(ev)}")
+        else:
+            notify("cloudflare audit event", fmt_event(ev))
+
+    # advance cursor: latest "when" + 1s, or now if no events
+    if events:
+        latest = max(ev.get("when", "") for ev in events)
+        if latest:
+            save_since(latest)
+    else:
+        save_since(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+if __name__ == "__main__":
+    main()
