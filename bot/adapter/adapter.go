@@ -19,7 +19,16 @@ type OutboundMessage struct {
 	Document []byte
 	Caption  string
 	Options  []string
+
+	// stream, if non-nil, is invoked after the message is sent. it gets a
+	// closure that edits the just-sent message in place — useful for showing
+	// progress during long-running actions. on adapters that don't support
+	// edits (eg bluebubbles) the closure is a no-op.
+	Stream func(update Updater)
 }
+
+// updater edits the message that's currently being streamed.
+type Updater func(text string)
 
 // TextResponse constructs an OutboundMessage containing only text.
 func TextResponse(text string) OutboundMessage {
@@ -39,8 +48,16 @@ type Adapter interface {
 	// Start begins receiving messages, sending inbound messages to the inbox channel.
 	Start(ctx context.Context, inbox chan<- InboundMessage) error
 
-	// Send delivers a message to the given chat ID.
-	Send(chatID string, msg OutboundMessage) error
+	// send delivers a message to the given chat ID. returns the provider's
+	// message identifier (telegram message_id as decimal string, etc) so
+	// callers can edit it later via the edit method. an empty messageID
+	// with no error means the adapter doesn't track ids for this message.
+	Send(chatID string, msg OutboundMessage) (messageID string, err error)
+
+	// edit replaces the text of a previously-sent message. adapters that
+	// don't support editing (bluebubbles, sms, etc) may return nil silently
+	// and either no-op or send a follow-up message — implementation choice.
+	Edit(chatID, messageID, text string) error
 
 	// SendAlert delivers an alert message to the configured alert destination.
 	SendAlert(text string) error
