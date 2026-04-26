@@ -25,7 +25,8 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { existsSync, copyFileSync, rmSync, readFileSync } from 'node:fs';
-import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR } from './secrets.js';
+
+import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR, resolveVaultDir } from './secrets.js';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockCopyFileSync = vi.mocked(copyFileSync);
@@ -142,5 +143,63 @@ describe('removeBackup', () => {
     setupManifest({});
     removeBackup('nonexistent');
     expect(mockRmSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveVaultDir', () => {
+  const installDir = '/opt/fleet/dist/core';
+
+  it('uses FLEET_VAULT_DIR when set', () => {
+    const result = resolveVaultDir({
+      env: { FLEET_VAULT_DIR: '/custom/vault', HOME: '/home/x' },
+      installDir,
+      exists: () => true,
+    });
+    expect(result).toBe('/custom/vault');
+  });
+
+  it('trims whitespace from FLEET_VAULT_DIR', () => {
+    const result = resolveVaultDir({
+      env: { FLEET_VAULT_DIR: '  /custom/vault  ' },
+      installDir,
+      exists: () => true,
+    });
+    expect(result).toBe('/custom/vault');
+  });
+
+  it('ignores empty FLEET_VAULT_DIR and falls through to next strategy', () => {
+    const result = resolveVaultDir({
+      env: { FLEET_VAULT_DIR: '   ', HOME: '/home/x' },
+      installDir,
+      exists: (p) => p === '/home/x/.fleet/vault',
+    });
+    expect(result).toBe('/home/x/.fleet/vault');
+  });
+
+  it('uses ~/.fleet/vault when it exists and FLEET_VAULT_DIR unset', () => {
+    const result = resolveVaultDir({
+      env: { HOME: '/home/x' },
+      installDir,
+      exists: (p) => p === '/home/x/.fleet/vault',
+    });
+    expect(result).toBe('/home/x/.fleet/vault');
+  });
+
+  it('falls back to install-relative path when ~/.fleet/vault missing', () => {
+    const result = resolveVaultDir({
+      env: { HOME: '/home/x' },
+      installDir,
+      exists: () => false,
+    });
+    expect(result).toBe('/opt/fleet/vault');
+  });
+
+  it('falls back to install-relative path when HOME unset', () => {
+    const result = resolveVaultDir({
+      env: {},
+      installDir,
+      exists: () => false,
+    });
+    expect(result).toBe('/opt/fleet/vault');
   });
 });

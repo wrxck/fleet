@@ -63,6 +63,15 @@ npm install -g @matthesketh/fleet
 
 Requires Node.js 20+, Docker Compose v2, systemd, nginx, and [age](https://github.com/FiloSottile/age). See the [full setup guide](https://fleet.hesketh.pro/getting-started/) for details.
 
+### Environment variables
+
+| Var | Default | Purpose |
+|---|---|---|
+| `FLEET_VAULT_DIR` | `~/.fleet/vault` if it exists, else install-relative `<package>/vault` | Override the vault location. Set this when running fleet from a global npm install but keeping the vault under a stable path (e.g. `/var/lib/fleet/vault`) so package upgrades don't relocate your secrets. |
+| `FLEET_KEY_PATH` | `/etc/fleet/age.key` | Override the age private-key location. |
+| `FLEET_RUNTIME_DIR` | `/run/fleet-secrets` | Override the tmpfs runtime directory where decrypted secrets are written at boot. |
+| `FLEET_INTEGRATION` | unset | Set to `1` to opt into integration tests that hit real systemd / docker. |
+
 ## Key Features
 
 **Deploy and manage apps** -- `fleet deploy <app-dir>` registers, builds, and starts an app in one command. Control services with `start`, `stop`, `restart`, and `logs`.

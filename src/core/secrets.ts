@@ -6,9 +6,37 @@ import { execSafe } from './exec.js';
 import { assertAppName, assertFilePath } from './validate.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const VAULT_DIR = join(__dirname, '..', '..', 'vault');
-export const KEY_PATH = '/etc/fleet/age.key';
-export const RUNTIME_DIR = '/run/fleet-secrets';
+
+/**
+ * vault location resolution order:
+ *   1. FLEET_VAULT_DIR env var (explicit override — works for any install method)
+ *   2. ~/.fleet/vault if HOME is set and that dir exists (user-scoped, survives package reinstall)
+ *   3. <package-root>/vault (legacy default — relative to install path; breaks on npm global upgrade)
+ */
+export function resolveVaultDir(opts?: {
+  env?: NodeJS.ProcessEnv;
+  installDir?: string;
+  exists?: (p: string) => boolean;
+}): string {
+  const env = opts?.env ?? process.env;
+  const installDir = opts?.installDir ?? __dirname;
+  const exists = opts?.exists ?? existsSync;
+
+  const fromEnv = env.FLEET_VAULT_DIR;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+
+  const home = env.HOME;
+  if (home) {
+    const userVault = join(home, '.fleet', 'vault');
+    if (exists(userVault)) return userVault;
+  }
+
+  return join(installDir, '..', '..', 'vault');
+}
+
+export const VAULT_DIR = resolveVaultDir();
+export const KEY_PATH = process.env.FLEET_KEY_PATH?.trim() || '/etc/fleet/age.key';
+export const RUNTIME_DIR = process.env.FLEET_RUNTIME_DIR?.trim() || '/run/fleet-secrets';
 const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
 const SECRET_DELIMITER = '---SECRET:';
 
