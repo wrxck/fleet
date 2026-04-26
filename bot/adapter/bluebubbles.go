@@ -172,15 +172,24 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 	}
 }
 
-// Send delivers a message to the given chat ID.
-func (b *BlueBubblesAdapter) Send(chatID string, msg OutboundMessage) error {
+// send delivers a message to the given chat ID. imessage has no message id
+// callers can edit later, so the returned id is always the empty string.
+func (b *BlueBubblesAdapter) Send(chatID string, msg OutboundMessage) (string, error) {
 	text := msg.Text
 	if len(msg.Options) > 0 {
 		for i, opt := range msg.Options {
 			text += fmt.Sprintf("\n%d. %s", i+1, opt)
 		}
 	}
-	return b.sendText(chatID, text)
+	return "", b.sendText(chatID, text)
+}
+
+// edit is a no-op on imessage — the protocol doesn't support editing previous
+// messages. callers that want streaming progress should use the stream
+// callback on outboundmessage; on this adapter it's invoked with a no-op
+// updater so the same code path works on both providers.
+func (b *BlueBubblesAdapter) Edit(chatID, messageID, text string) error {
+	return nil
 }
 
 // SendAlert delivers an alert message to all configured alert chat GUIDs.
