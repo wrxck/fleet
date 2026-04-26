@@ -1,0 +1,11 @@
+# cloudflare protection layer cron entries
+# - audit log monitor: every 15 min
+# - state snapshot: every 30 min (catches changes audit log misses)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/15 * * * * root /usr/local/sbin/cf-audit-monitor >> /var/log/cf-audit-monitor.log 2>&1
+*/30 * * * * root /usr/local/sbin/cf-snapshot >> /var/log/cf-snapshot.log 2>&1
+* * * * * fleet-guard /usr/local/sbin/fleet-guard execute >> /var/log/fleet-guard/execute.log 2>&1
+17 4 * * * root /usr/local/sbin/cert-expiry-watch >> /var/log/cert-expiry-watch.log 2>&1
+*/30 * * * * root /usr/local/sbin/dns-drift-watch >> /var/log/dns-drift-watch.log 2>&1

@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""
+snapshot all cloudflare zone state (dns records + zone settings) into a
+git repo at /var/lib/cf-snapshots/. each run commits a diff so we have a
+full audit trail of what changed and when.
+
+usage: cf-snapshot
+"""
+
+import json
+import subprocess
+import sys
+import urllib.request
+from pathlib import Path
+
+CLAUDE_CFG = Path("/root/.claude.json")
+SNAP_DIR = Path("/var/lib/cf-snapshots")
+
+
+def read_creds():
+    cfg = json.loads(CLAUDE_CFG.read_text())
+    env = cfg.get("mcpServers", {}).get("cloudflare-mcp", {}).get("env", {}) or {}
+    api_key = env.get("CLOUDFLARE_API_KEY")
+    email = env.get("CLOUDFLARE_EMAIL")
+    if not api_key or not email:
+        sys.exit("cf creds missing in /root/.claude.json")
+    return api_key, email
+
+
+def cf_get(url, api_key, email):
+    req = urllib.request.Request(url, headers={
+        "X-Auth-Email": email,
+        "X-Auth-Key": api_key,
+        "Content-Type": "application/json",
+    })
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def list_zones(api_key, email):
+    out = []
+    page = 1
+    while True:
+        d = cf_get(
+            f"https://api.cloudflare.com/client/v4/zones?per_page=50&page={page}",
+            api_key, email,
+        )
+        out.extend(d.get("result") or [])
+        info = d.get("result_info") or {}
+        if page >= (info.get("total_pages") or 1):
+            break
+        page += 1
+    return out
+
+
+def snapshot_zone(zone, api_key, email):
+    zid = zone["id"]
+    name = zone["name"]
+    records = cf_get(
+        f"https://api.cloudflare.com/client/v4/zones/{zid}/dns_records?per_page=100",
+        api_key, email,
+    ).get("result") or []
+    settings = cf_get(
+        f"https://api.cloudflare.com/client/v4/zones/{zid}/settings",
+        api_key, email,
+    ).get("result") or []
+    # strip volatile fields so diffs are meaningful
+    pruned_records = []
+    for r in records:
+        pruned_records.append({
+            k: r.get(k) for k in
+            ("id", "type", "name", "content", "proxied", "ttl", "priority", "data")
+            if r.get(k) is not None
+        })
+    pruned_settings = [
+        {k: s.get(k) for k in ("id", "value")} for s in settings
+    ]
+    return {
+        "zone": {"id": zid, "name": name, "status": zone.get("status")},
+        "records": sorted(pruned_records, key=lambda x: (x.get("type", ""), x.get("name", ""))),
+        "settings": sorted(pruned_settings, key=lambda x: x.get("id", "")),
+    }
+
+
+def ensure_repo():
+    SNAP_DIR.mkdir(parents=True, exist_ok=True)
+    if not (SNAP_DIR / ".git").exists():
+        subprocess.run(["git", "init", "-q", "-b", "main", str(SNAP_DIR)], check=True)
+        subprocess.run(["git", "-C", str(SNAP_DIR), "config", "user.email", "cf-snapshot@local"], check=True)
+        subprocess.run(["git", "-C", str(SNAP_DIR), "config", "user.name", "cf-snapshot"], check=True)
+
+
+def main():
+    api_key, email = read_creds()
+    ensure_repo()
+    zones = list_zones(api_key, email)
+    written = 0
+    for z in zones:
+        snap = snapshot_zone(z, api_key, email)
+        path = SNAP_DIR / f"{z['name']}.json"
+        path.write_text(json.dumps(snap, indent=2, sort_keys=True) + "\n")
+        written += 1
+    subprocess.run(["git", "-C", str(SNAP_DIR), "add", "-A"], check=True)
+    diff = subprocess.run(
+        ["git", "-C", str(SNAP_DIR), "diff", "--cached", "--quiet"],
+        check=False,
+    )
+    if diff.returncode == 0:
+        return 0
+    msg = subprocess.run(
+        ["git", "-C", str(SNAP_DIR), "diff", "--cached", "--stat"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(SNAP_DIR), "commit", "-q", "-m", f"snapshot: {written} zones"],
+        check=True,
+    )
+    # alert if a meaningful change happened
+    subprocess.run(["/usr/local/sbin/notify", "cf-snapshot diff",
+                    msg[:1000] if msg else "(no diff stat)"], check=False)
+
+
+if __name__ == "__main__":
+    main()
