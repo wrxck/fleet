@@ -53,6 +53,7 @@ func main() {
 	reg.Register(&command.ApproveCmd{})
 	reg.Register(&command.RejectCmd{})
 	reg.Register(&command.GuardCmd{})
+	reg.Register(&command.DepsCmd{})
 	reg.Register(helpCmd)
 
 	helpCmd.SetRegistry(reg)
