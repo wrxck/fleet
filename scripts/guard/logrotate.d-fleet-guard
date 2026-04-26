@@ -1,0 +1,31 @@
+/var/log/fleet-guard/*.log
+/var/log/cf-audit-monitor.log
+/var/log/cf-snapshot.log
+/var/log/dns-drift-watch.log
+/var/log/cert-expiry-watch.log
+/var/log/refresh-cf-firewall.log
+{
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 600 fleet-guard fleet-guard
+    sharedscripts
+    su root root
+}
+
+/var/log/fleet-guard/audit.jsonl
+/var/log/mcp-audit.jsonl
+{
+    monthly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 600 root root
+    su root root
+}
