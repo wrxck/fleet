@@ -156,18 +156,29 @@ func (r *Router) handlePendingSelection(msg adapter.InboundMessage, text string)
 		return false
 	}
 
-	// Must be a plain integer in range.
-	n, valid := parseIndex(text)
-	if !valid || n < 1 || n > len(ps.options) {
+	// accept either a numeric index or the option string itself.
+	// callback_query buttons send back the option text as the message body, so
+	// match exact-string first, then fall back to "1", "2", "3" replies.
+	var chosen string
+	if n, valid := parseIndex(text); valid && n >= 1 && n <= len(ps.options) {
+		chosen = ps.options[n-1]
+	} else {
+		for _, opt := range ps.options {
+			if opt == text {
+				chosen = opt
+				break
+			}
+		}
+	}
+	if chosen == "" {
 		return false
 	}
 
-	// Consume the pending entry.
+	// consume the pending entry.
 	r.mu.Lock()
 	delete(r.pending, msg.ChatID)
 	r.mu.Unlock()
 
-	chosen := ps.options[n-1]
 	resp, err := ps.cmd.Execute(ps.original, []string{chosen})
 	if err != nil {
 		r.respond(msg, adapter.TextResponse("Error: "+err.Error()))
