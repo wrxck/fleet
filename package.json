@@ -10,6 +10,7 @@
   "files": [
     "dist/",
     "data/registry.example.json",
+    "scripts/guard/",
     "LICENSE",
     "README.md"
   ],

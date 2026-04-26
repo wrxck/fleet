@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""
+cert-expiry-watch — sweeps /etc/letsencrypt/live and reports any cert
+that's expiring soon. tiered alerts:
+- < 14 days: notify (info)
+- < 3 days: hold (renewal probably broken — needs eyes)
+
+run from cron once a day.
+"""
+
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+LIVE = Path("/etc/letsencrypt/live")
+GUARD = "/usr/local/sbin/fleet-guard"
+NOTIFY = "/usr/local/sbin/notify"
+
+
+def active_cert_paths():
+    """parse nginx -T output to find ssl_certificate paths actually in use.
+    returns set of resolved file paths (Path objects)."""
+    try:
+        out = subprocess.run(
+            ["nginx", "-T"], capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return None  # cannot determine — caller should fall back
+    if out.returncode != 0:
+        return None
+    paths = set()
+    for m in re.finditer(r"ssl_certificate\s+([^\s;]+);", out.stdout):
+        paths.add(Path(m.group(1)).resolve())
+    return paths
+
+
+def cert_is_active(cert_dir, active):
+    """check if any cert under cert_dir is referenced by nginx."""
+    if active is None:
+        return True  # nginx not parseable — fall back to flagging everything
+    candidates = [
+        cert_dir / "fullchain.pem",
+        cert_dir / "cert.pem",
+        cert_dir / "chain.pem",
+    ]
+    return any(p.resolve() in active for p in candidates if p.exists())
+
+
+def cert_not_after(path):
+    out = subprocess.run(
+        ["openssl", "x509", "-noout", "-enddate", "-in", str(path)],
+        capture_output=True, text=True, timeout=5,
+    )
+    if out.returncode != 0:
+        return None
+    line = out.stdout.strip()  # notAfter=Apr 25 12:34:56 2026 GMT
+    _, _, when = line.partition("=")
+    try:
+        return datetime.strptime(when.strip(), "%b %d %H:%M:%S %Y %Z").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def main():
+    if not LIVE.exists():
+        return 0
+    now = datetime.now(timezone.utc)
+    active = active_cert_paths()
+    soon = []
+    critical = []
+    skipped_inactive = 0
+    for cert_dir in sorted(LIVE.iterdir()):
+        if not cert_dir.is_dir():
+            continue
+        cert_path = cert_dir / "cert.pem"
+        if not cert_path.exists():
+            continue
+        if not cert_is_active(cert_dir, active):
+            skipped_inactive += 1
+            continue
+        not_after = cert_not_after(cert_path)
+        if not not_after:
+            continue
+        days_left = (not_after - now).total_seconds() / 86400
+        item = {"name": cert_dir.name, "expires": not_after.isoformat(), "days": int(days_left)}
+        if days_left < 3:
+            critical.append(item)
+        elif days_left < 14:
+            soon.append(item)
+
+    if soon:
+        body = "\n".join(f"{i['name']}: {i['days']}d left ({i['expires']})" for i in soon)
+        subprocess.run([NOTIFY, "certs expiring soon", body], check=False)
+
+    for item in critical:
+        summary = f"cert {item['name']} expires in {item['days']}d — renewal probably broken"
+        subprocess.run(
+            [GUARD, "hold", "cert_expiry_critical", summary, "--payload",
+             '{"cert":"' + item["name"] + '"}'],
+            check=False,
+        )
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
