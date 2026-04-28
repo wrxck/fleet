@@ -1,4 +1,4 @@
-import { load, save, findApp, removeApp } from '../core/registry.js';
+import { load, findApp, removeApp, withRegistry } from '../core/registry.js';
 import { stopService, disableService } from '../core/systemd.js';
 import { AppNotFoundError } from '../core/errors.js';
 import { success, error, info, warn } from '../ui/output.js';
@@ -13,22 +13,29 @@ export async function removeCommand(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (!app) throw new AppNotFoundError(appName);
+  // Read first (without the lock) so we can prompt the user / run systemctl
+  // outside the locked region. We re-resolve and remove inside withRegistry
+  // so the actual mutation runs against a fresh-loaded registry.
+  const previewReg = load();
+  const previewApp = findApp(previewReg, appName);
+  if (!previewApp) throw new AppNotFoundError(appName);
 
-  if (!yes && !await confirm(`Remove ${app.name}? This will stop and disable the service.`)) {
+  if (!yes && !await confirm(`Remove ${previewApp.name}? This will stop and disable the service.`)) {
     info('Cancelled');
     return;
   }
 
-  info(`Stopping ${app.serviceName}...`);
-  stopService(app.serviceName);
+  info(`Stopping ${previewApp.serviceName}...`);
+  stopService(previewApp.serviceName);
 
-  info(`Disabling ${app.serviceName}...`);
-  disableService(app.serviceName);
+  info(`Disabling ${previewApp.serviceName}...`);
+  disableService(previewApp.serviceName);
 
-  save(removeApp(reg, app.name));
-  success(`Removed ${app.name} from registry`);
+  await withRegistry(reg => {
+    const app = findApp(reg, appName);
+    if (!app) throw new AppNotFoundError(appName);
+    return removeApp(reg, app.name);
+  });
+  success(`Removed ${previewApp.name} from registry`);
   warn('Service file not deleted - remove manually if needed');
 }

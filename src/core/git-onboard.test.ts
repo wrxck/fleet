@@ -25,6 +25,11 @@ vi.mock('./registry.js', () => ({
   load: vi.fn().mockReturnValue({ apps: [] }),
   findApp: vi.fn().mockReturnValue(null),
   save: vi.fn(),
+  // executeOnboard now uses withRegistry; stub it to invoke the mutator
+  // against an empty registry without touching disk.
+  withRegistry: vi.fn(async (fn: (r: { apps: unknown[] }) => unknown | Promise<unknown>) => {
+    await fn({ apps: [] });
+  }),
 }));
 
 import { detectScenario, describeOnboardPlan, executeOnboard } from './git-onboard.js';
@@ -115,8 +120,8 @@ describe('executeOnboard', () => {
     vi.clearAllMocks();
   });
 
-  it('returns result with scenario, steps, repoUrl, branches', () => {
-    const result = executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
+  it('returns result with scenario, steps, repoUrl, branches', async () => {
+    const result = await executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
     expect(result.scenario).toBe('fresh');
     expect(Array.isArray(result.steps)).toBe(true);
     expect(result.repoUrl).toContain('myapp');
@@ -126,7 +131,7 @@ describe('executeOnboard', () => {
 
   it('fresh scenario initialises git and commits', async () => {
     const { gitInit, gitAdd, gitCommit } = await import('./git.js');
-    executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
+    await executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
     expect(gitInit).toHaveBeenCalledWith('/app');
     expect(gitAdd).toHaveBeenCalled();
     expect(gitCommit).toHaveBeenCalledWith('/app', 'Initial commit');
@@ -134,14 +139,14 @@ describe('executeOnboard', () => {
 
   it('migrate scenario sets remote URL', async () => {
     const { gitSetRemoteUrl, gitPushAll } = await import('./git.js');
-    executeOnboard('migrate', '/app', 'myapp', 'myapp', makeStatus());
+    await executeOnboard('migrate', '/app', 'myapp', 'myapp', makeStatus());
     expect(gitSetRemoteUrl).toHaveBeenCalled();
     expect(gitPushAll).toHaveBeenCalled();
   });
 
   it('no-remote scenario commits outstanding changes when dirty', async () => {
     const { gitAdd, gitCommit } = await import('./git.js');
-    executeOnboard('no-remote', '/app', 'myapp', 'myapp', makeStatus({ clean: false }));
+    await executeOnboard('no-remote', '/app', 'myapp', 'myapp', makeStatus({ clean: false }));
     expect(gitAdd).toHaveBeenCalled();
     expect(gitCommit).toHaveBeenCalledWith('/app', 'Pre-onboard commit');
   });
@@ -149,7 +154,7 @@ describe('executeOnboard', () => {
   it('resume scenario pushes existing commits', async () => {
     const { gitPushAll, hasCommits } = await import('./git.js');
     (hasCommits as ReturnType<typeof vi.fn>).mockReturnValue(true);
-    executeOnboard('resume', '/app', 'myapp', 'myapp', makeStatus());
+    await executeOnboard('resume', '/app', 'myapp', 'myapp', makeStatus());
     expect(gitPushAll).toHaveBeenCalled();
   });
 });
