@@ -31,6 +31,8 @@ describe('defaultConfig', () => {
     expect(config.severityOverrides.majorVersionBehind).toBe('high');
     expect(config.severityOverrides.minorVersionBehind).toBe('medium');
     expect(config.severityOverrides.patchVersionBehind).toBe('low');
+    // Privacy: do not leak the user's own scope to api.osv.dev.
+    expect(config.osvSkipPatterns).toEqual(['^@matthesketh/']);
   });
 });
 
@@ -60,6 +62,7 @@ describe('loadConfig', () => {
         minorVersionBehind: 'high',
         patchVersionBehind: 'info',
       },
+      osvSkipPatterns: ['^@matthesketh/'],
     };
     writeFileSync(filePath, JSON.stringify(stored, null, 2));
 
@@ -85,6 +88,9 @@ describe('loadConfig', () => {
     expect(config.notifications.telegram.minSeverity).toBe('info');
     expect(config.ignore).toEqual([]);
     expect(config.severityOverrides.eolDaysWarning).toBe(90);
+    // Backwards compat: an old config without osvSkipPatterns should still
+    // get the default (skip the user's own scope).
+    expect(config.osvSkipPatterns).toEqual(['^@matthesketh/']);
   });
 });
 
