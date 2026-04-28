@@ -101,12 +101,12 @@ export function validateBeforeSeal(app: string, newContent: string): SealValidat
 
 export function safeSealApp(app: string, content: string, sourceFile: string): SealValidation {
   const validation = validateBeforeSeal(app, content);
-  backupVaultFile(app);
+  const bak = backupVaultFile(app);
   try {
     sealApp(app, content, sourceFile);
-    removeBackup(app);
+    if (bak) removeBackup(app, bak);
   } catch (err) {
-    restoreVaultFile(app);
+    if (bak) restoreVaultFile(app, bak);
     throw err;
   }
   return validation;
@@ -120,12 +120,12 @@ export function safeSealDbSecrets(app: string, secretsMap: Record<string, string
   const bundleContent = parts.join('\n');
 
   const validation = validateBeforeSeal(app, bundleContent);
-  backupVaultFile(app);
+  const bak = backupVaultFile(app);
   try {
     sealDbSecrets(app, secretsMap, sourceDir);
-    removeBackup(app);
+    if (bak) removeBackup(app, bak);
   } catch (err) {
-    restoreVaultFile(app);
+    if (bak) restoreVaultFile(app, bak);
     throw err;
   }
   return validation;
@@ -200,12 +200,12 @@ export function importEnvFile(app: string, path: string): number {
   if (!existsSync(path)) throw new SecretsError(`File not found: ${path}`);
   const content = readFileSync(path, 'utf-8');
   // importEnvFile is an explicit replace — bypass validation, but still backup
-  backupVaultFile(app);
+  const bak = backupVaultFile(app);
   try {
     sealApp(app, content, path);
-    removeBackup(app);
+    if (bak) removeBackup(app, bak);
   } catch (err) {
-    restoreVaultFile(app);
+    if (bak) restoreVaultFile(app, bak);
     auditLog({ op: 'import', app, ok: false, details: `${path}: ${err}` });
     throw err;
   }
@@ -226,12 +226,12 @@ export function importDbSecrets(app: string, dir: string): number {
   }
 
   // importDbSecrets is an explicit replace — bypass validation, but still backup
-  backupVaultFile(app);
+  const bak = backupVaultFile(app);
   try {
     sealDbSecrets(app, secretsMap, dir);
-    removeBackup(app);
+    if (bak) removeBackup(app, bak);
   } catch (err) {
-    restoreVaultFile(app);
+    if (bak) restoreVaultFile(app, bak);
     throw err;
   }
   return files.length;
@@ -417,30 +417,101 @@ export function sealFromRuntime(app?: string): string[] {
   return sealed;
 }
 
+/**
+ * Rotate the age private key and re-encrypt every app's vault file with it.
+ *
+ * RECOVERY PROCEDURE (manual, only if rollback itself fails):
+ *   1. The previous private key is preserved at `<KEY_PATH>.old` while a
+ *      rotation is in flight. If you see that file lying around, a rotation
+ *      crashed mid-way.
+ *   2. Each app's pre-rotate encrypted file is preserved as
+ *      `vault/<app>.{env,secrets}.age.bak-rotate-<ts>` for the duration of
+ *      the rotation. They are removed automatically on success OR after a
+ *      successful rollback.
+ *   3. To restore by hand: copy `<KEY_PATH>.old` back to `<KEY_PATH>`
+ *      (chmod 0600), then for each `*.bak-rotate-<ts>` copy it over the
+ *      matching encrypted file. This puts the vault back into the
+ *      pre-rotation state.
+ *
+ * On a partial-failure path inside this function, that recovery is performed
+ * automatically before re-throwing.
+ */
 export function rotateKey(): { oldPubkey: string; newPubkey: string; appsRotated: string[] } {
   const manifest = loadManifest();
   const oldPubkey = getPublicKey();
 
+  // 1. Decrypt all apps with the OLD key (still on disk at KEY_PATH).
   const decrypted: Record<string, string> = {};
   for (const [app, entry] of Object.entries(manifest.apps)) {
     decrypted[app] = ageDecryptFile(join(VAULT_DIR, entry.encryptedFile));
   }
 
+  // 2. Backup the old key so we can roll back if anything below throws.
   const backupPath = KEY_PATH + '.old';
   copyFileSync(KEY_PATH, backupPath);
+
+  // 3. Generate the new key in place. If keygen fails BEFORE we've mutated
+  //    any vault file, the old key on disk is still good — clean up the
+  //    sidecar backup and bail without touching the vault.
   const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
-  if (!keygen.ok) throw new SecretsError(`Failed to generate new key: ${keygen.stderr}`);
+  if (!keygen.ok) {
+    rmSync(backupPath, { force: true });
+    throw new SecretsError(`Failed to generate new key: ${keygen.stderr}`);
+  }
   chmodSync(KEY_PATH, 0o600);
   const newPubkey = getPublicKey();
 
-  for (const [app, entry] of Object.entries(manifest.apps)) {
-    const encrypted = ageEncrypt(decrypted[app]);
-    writeFileSync(join(VAULT_DIR, entry.encryptedFile), encrypted);
-    entry.lastSealedAt = new Date().toISOString();
-  }
-  saveManifest(manifest);
+  // 4. Snapshot every app's CURRENT (still old-key-encrypted) vault file
+  //    BEFORE we start rewriting anything. Same rotation tag for all of them
+  //    so a human can grep for `bak-rotate-<ts>` if they need to recover.
+  const rotateTag = `rotate-${Date.now()}`;
+  const backups: Array<{ app: string; bak: string }> = [];
 
-  rmSync(backupPath, { force: true });
+  try {
+    for (const app of Object.keys(manifest.apps)) {
+      const b = backupVaultFile(app, rotateTag);
+      if (b) backups.push({ app, bak: b });
+    }
+
+    // 5. Re-encrypt each app's plaintext under the NEW key and overwrite
+    //    its vault file. If any encryption or write throws partway through,
+    //    we land in the catch block below.
+    for (const [app, entry] of Object.entries(manifest.apps)) {
+      const encrypted = ageEncrypt(decrypted[app]);
+      writeFileSync(join(VAULT_DIR, entry.encryptedFile), encrypted);
+      entry.lastSealedAt = new Date().toISOString();
+    }
+    saveManifest(manifest);
+
+    // 6. Success — drop the per-app rotation backups and the old-key sidecar.
+    for (const b of backups) rmSync(b.bak, { force: true });
+    rmSync(backupPath, { force: true });
+  } catch (err) {
+    // Rollback: put the old key back, then restore every vault file from the
+    // matching pre-rotate backup. If rollback itself fails we deliberately
+    // leak the .bak-rotate-* files and KEY_PATH.old so a human has the
+    // pieces needed to recover by hand (see comment at top of function).
+    try {
+      copyFileSync(backupPath, KEY_PATH);
+      chmodSync(KEY_PATH, 0o600);
+      for (const b of backups) {
+        const entry = manifest.apps[b.app];
+        if (!entry) continue;
+        copyFileSync(b.bak, join(VAULT_DIR, entry.encryptedFile));
+      }
+    } catch (rollbackErr) {
+      throw new SecretsError(
+        `rotateKey failed AND rollback failed: ${(err as Error).message}; ` +
+        `rollback: ${(rollbackErr as Error).message}; ` +
+        `manual recovery needed (KEY_PATH.old + vault/*.bak-${rotateTag} files preserved)`
+      );
+    }
+    // Rollback succeeded — vault is back where it started under the old key.
+    // Safe to clean up the per-app backups and the old-key sidecar.
+    for (const b of backups) rmSync(b.bak, { force: true });
+    rmSync(backupPath, { force: true });
+    throw new SecretsError(`rotateKey failed (rolled back): ${(err as Error).message}`);
+  }
 
   return { oldPubkey, newPubkey, appsRotated: Object.keys(manifest.apps) };
 }
