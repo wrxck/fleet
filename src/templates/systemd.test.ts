@@ -40,9 +40,10 @@ describe('generateServiceFile', () => {
     expect(result).toContain('-f "docker-compose.prod.yml"');
   });
 
-  it('quotes composeFile with spaces in path', () => {
-    const result = generateServiceFile(makeOpts({ composeFile: '/path/with spaces/docker-compose.yml' }));
-    expect(result).toContain('-f "/path/with spaces/docker-compose.yml"');
+  it('rejects composeFile with spaces (must be a bare safe filename)', () => {
+    expect(() =>
+      generateServiceFile(makeOpts({ composeFile: '/path/with spaces/docker-compose.yml' })),
+    ).toThrow(/compose filename/);
   });
 
   it('does not depend on docker-databases when dependsOnDatabases is false', () => {
@@ -94,19 +95,40 @@ describe('generateServiceFile', () => {
     expect(result).toContain('RestartSec=10');
   });
 
-  it('no command injection via composeFile with semicolons — path is quoted', () => {
-    // The -f argument value is always quoted, so shell metacharacters in the
-    // path land inside the quotes and cannot escape to become shell commands.
-    const maliciousPath = 'docker-compose.yml"; rm -rf /; echo "';
-    const result = generateServiceFile(makeOpts({ composeFile: maliciousPath }));
-    // The content is placed inside double quotes
-    expect(result).toContain(`-f "${maliciousPath}"`);
-    // Verify the quotes wrap the entire value
-    const lines = result.split('\n');
-    const execLine = lines.find(l => l.includes('-f "') && l.includes(maliciousPath));
-    expect(execLine).toBeDefined();
-    // The -f flag and the value are always together in quotes
-    expect(execLine).toMatch(/-f ".*"/);
+  it('rejects composeFile that tries to break out of the quoted -f argument', () => {
+    // The -f argument is interpolated into a systemd ExecStart directive.
+    // If a value containing a closing quote and another -f flag were
+    // accepted, the rendered unit would invoke a second compose file under
+    // attacker control, e.g. `docker compose -f "evil.yml" -f "/tmp/x.yml" down`.
+    // The validator must reject any quote/space/-f-injection attempt up front.
+    const malicious = 'evil.yml" -f "/tmp/attacker.yml';
+    expect(() => generateServiceFile(makeOpts({ composeFile: malicious }))).toThrow(/compose filename/);
+  });
+
+  it('rejects composeFile containing shell metacharacters', () => {
+    expect(() =>
+      generateServiceFile(makeOpts({ composeFile: 'docker-compose.yml; rm -rf /' })),
+    ).toThrow(/compose filename/);
+    expect(() =>
+      generateServiceFile(makeOpts({ composeFile: 'docker-compose.yml"; rm -rf /; echo "' })),
+    ).toThrow(/compose filename/);
+  });
+
+  it('rejects composeFile containing path separators', () => {
+    expect(() =>
+      generateServiceFile(makeOpts({ composeFile: '/etc/passwd.yml' })),
+    ).toThrow(/compose filename/);
+    expect(() =>
+      generateServiceFile(makeOpts({ composeFile: '../etc/passwd.yml' })),
+    ).toThrow(/compose filename/);
+  });
+
+  it('accepts a clean compose filename and emits the expected -f flag', () => {
+    const result = generateServiceFile(makeOpts({ composeFile: 'docker-compose.yml' }));
+    expect(result).toContain('-f "docker-compose.yml"');
+    expect(result).toContain('ExecStartPre=-/usr/bin/docker compose -f "docker-compose.yml" down');
+    expect(result).toContain('ExecStop=/usr/bin/docker compose -f "docker-compose.yml" down --timeout 30');
+    expect(result).toContain('ExecReload=/usr/bin/docker compose -f "docker-compose.yml" restart');
   });
 
   it('no injection via description — newlines cannot escape', () => {
