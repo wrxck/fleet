@@ -16,7 +16,7 @@ import { generateNginxConfig } from '../templates/nginx.js';
 import { composeBuild } from '../core/docker.js';
 import { execSafe } from '../core/exec.js';
 import { AppNotFoundError } from '../core/errors.js';
-import { assertAppName, assertServiceName, assertFilePath, assertDomain } from '../core/validate.js';
+import { assertAppName, assertServiceName, assertFilePath, assertDomain, assertComposeFile } from '../core/validate.js';
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets.js';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops.js';
 import { validateApp, validateAll } from '../core/secrets-validate.js';
@@ -382,7 +382,7 @@ export async function startMcpServer(): Promise<void> {
         assertAppName(params.name);
         assertFilePath(params.composePath);
         if (params.serviceName) assertServiceName(params.serviceName);
-        if (params.composeFile) assertFilePath(params.composeFile);
+        if (params.composeFile) assertComposeFile(params.composeFile);
         for (const d of (params.domains ?? [])) assertDomain(d);
       } catch (err) {
         return text(`Validation error: ${(err as Error).message}`);
