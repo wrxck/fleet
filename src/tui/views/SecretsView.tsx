@@ -52,11 +52,14 @@ export function SecretsView(): React.JSX.Element {
         return true;
       }
       if (input === 'l') {
-        const result = secrets.seal();
-        if (!result.ok) {
-          dispatch({ type: 'SET_ERROR', error: result.error ?? 'Seal failed' });
-        }
-        secrets.refresh();
+        // Seal acquires a manifest lock and may take a moment; fire-and-forget
+        // from the input handler, dispatch errors / refresh on completion.
+        secrets.seal().then(result => {
+          if (!result.ok) {
+            dispatch({ type: 'SET_ERROR', error: result.error ?? 'Seal failed' });
+          }
+          secrets.refresh();
+        });
         return true;
       }
     } else if (subView === 'secret-list') {
@@ -92,13 +95,14 @@ export function SecretsView(): React.JSX.Element {
             label: `Delete secret "${secretKey}"?`,
             description: `This will remove ${secretKey} from ${redact(appName)}'s vault.`,
             onConfirm: () => {
-              const result = secrets.deleteSecret(appName, secretKey);
-              if (result.ok) {
-                secrets.loadAppSecrets(appName);
-                secrets.refresh();
-              } else {
-                dispatch({ type: 'SET_ERROR', error: result.error ?? 'Delete failed' });
-              }
+              secrets.deleteSecret(appName, secretKey).then(result => {
+                if (result.ok) {
+                  secrets.loadAppSecrets(appName);
+                  secrets.refresh();
+                } else {
+                  dispatch({ type: 'SET_ERROR', error: result.error ?? 'Delete failed' });
+                }
+              });
             },
           },
         });

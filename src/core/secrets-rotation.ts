@@ -5,7 +5,7 @@
  * to thin wrappers so tests can run without a real vault.
  */
 
-import { decryptApp, sealApp, loadManifest, type Manifest } from './secrets.js';
+import { decryptApp, sealApp, loadManifest, lockManifest, type Manifest } from './secrets.js';
 import { snapshotApp, restoreSnapshot } from './secrets-snapshots.js';
 import { auditLog } from './secrets-audit.js';
 import { markRotated } from './secrets-metadata.js';
@@ -132,71 +132,77 @@ export interface RotationResult {
  * snapshot → seal → audit. Restart + health-gate are caller's responsibility
  * (we want the engine pure-ish so it's easy to test).
  */
-export function performRotation(
+export async function performRotation(
   app: string,
   key: string,
   newValue: string,
   opts: { dryRun?: boolean; notes?: string; dataMigrated?: boolean } = {},
-): RotationResult {
-  const manifest: Manifest = loadManifest();
-  const entry = manifest.apps[app];
-  if (!entry) throw new SecretsError(`No app in manifest: ${app}`);
-  if (entry.type !== 'env') {
-    throw new SecretsError(`Rotation only supports env-type apps, got ${entry.type}`);
-  }
-
-  const provider = classifySecret(key);
-  const strategy = provider?.strategy ?? 'immediate';
-
-  if (strategy === 'user-issued') {
-    throw new SecretsError(
-      `${key} is a user-issued token. Rotating yours doesn't help — invalidate per-user instead.`,
-    );
-  }
-  // Strict typed opt — was previously a substring match on opts.notes which
-  // could be bypassed by any caller embedding the flag in free-text notes.
-  if (strategy === 'at-rest-key' && !opts.dataMigrated) {
-    throw new SecretsError(
-      `${key} encrypts data at rest. Re-encrypt your data first, then pass --data-migrated.`,
-    );
-  }
-
-  if (opts.dryRun) {
-    auditLog({ op: 'rotate-attempted', app, secret: key, ok: true, details: 'dry-run' });
-    return { app, key, strategy, snapshot: '(dry-run)', rolledBack: false };
-  }
-
-  // 1. Snapshot before any change.
-  const snapshot = snapshotApp(app);
-  auditLog({ op: 'snapshot', app, secret: key, ok: true, details: snapshot });
-
-  try {
-    // 2. Decrypt, apply rotation, re-encrypt.
-    const plaintext = decryptApp(app);
-    const updated = applyRotation(plaintext, key, newValue, strategy);
-    sealApp(app, updated, entry.sourceFile);
-
-    // 3. Stamp metadata.
-    markRotated(app, key, { strategy, notes: opts.notes });
-
-    auditLog({ op: 'rotate', app, secret: key, ok: true, details: `strategy=${strategy}` });
-    return { app, key, strategy, snapshot, rolledBack: false };
-  } catch (err: unknown) {
-    const reason = err instanceof Error ? err.message : String(err);
-    // Restore from snapshot on any failure.
-    try {
-      restoreSnapshot(app);
-      auditLog({ op: 'rollback', app, secret: key, ok: true, details: `auto: ${reason}` });
-    } catch (rollbackErr) {
-      auditLog({
-        op: 'rollback',
-        app,
-        secret: key,
-        ok: false,
-        details: `auto rollback also failed: ${rollbackErr}`,
-      });
+): Promise<RotationResult> {
+  // Hold the manifest lock for the whole snapshot → seal → markRotated cycle
+  // so a concurrent CLI/cron writer can't slip a stale write between our
+  // seal and our metadata stamp. markRotated calls saveManifest internally;
+  // that write happens under our lock.
+  return await lockManifest(() => {
+    const manifest: Manifest = loadManifest();
+    const entry = manifest.apps[app];
+    if (!entry) throw new SecretsError(`No app in manifest: ${app}`);
+    if (entry.type !== 'env') {
+      throw new SecretsError(`Rotation only supports env-type apps, got ${entry.type}`);
     }
-    auditLog({ op: 'rotate-failed', app, secret: key, ok: false, details: reason });
-    return { app, key, strategy, snapshot, rolledBack: true, reason };
-  }
+
+    const provider = classifySecret(key);
+    const strategy = provider?.strategy ?? 'immediate';
+
+    if (strategy === 'user-issued') {
+      throw new SecretsError(
+        `${key} is a user-issued token. Rotating yours doesn't help — invalidate per-user instead.`,
+      );
+    }
+    // Strict typed opt — was previously a substring match on opts.notes which
+    // could be bypassed by any caller embedding the flag in free-text notes.
+    if (strategy === 'at-rest-key' && !opts.dataMigrated) {
+      throw new SecretsError(
+        `${key} encrypts data at rest. Re-encrypt your data first, then pass --data-migrated.`,
+      );
+    }
+
+    if (opts.dryRun) {
+      auditLog({ op: 'rotate-attempted', app, secret: key, ok: true, details: 'dry-run' });
+      return { app, key, strategy, snapshot: '(dry-run)', rolledBack: false };
+    }
+
+    // 1. Snapshot before any change.
+    const snapshot = snapshotApp(app);
+    auditLog({ op: 'snapshot', app, secret: key, ok: true, details: snapshot });
+
+    try {
+      // 2. Decrypt, apply rotation, re-encrypt.
+      const plaintext = decryptApp(app);
+      const updated = applyRotation(plaintext, key, newValue, strategy);
+      sealApp(app, updated, entry.sourceFile);
+
+      // 3. Stamp metadata.
+      markRotated(app, key, { strategy, notes: opts.notes });
+
+      auditLog({ op: 'rotate', app, secret: key, ok: true, details: `strategy=${strategy}` });
+      return { app, key, strategy, snapshot, rolledBack: false };
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : String(err);
+      // Restore from snapshot on any failure.
+      try {
+        restoreSnapshot(app);
+        auditLog({ op: 'rollback', app, secret: key, ok: true, details: `auto: ${reason}` });
+      } catch (rollbackErr) {
+        auditLog({
+          op: 'rollback',
+          app,
+          secret: key,
+          ok: false,
+          details: `auto rollback also failed: ${rollbackErr}`,
+        });
+      }
+      auditLog({ op: 'rotate-failed', app, secret: key, ok: false, details: reason });
+      return { app, key, strategy, snapshot, rolledBack: true, reason };
+    }
+  });
 }
