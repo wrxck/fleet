@@ -6,16 +6,38 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  check-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          ref: ${{ github.event.release.target_commitish }}
+
+      - name: Verify CI succeeded for this release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.event.release.target_commitish }}
+        run: |
+          status=$(gh run list --workflow=ci.yml --branch="$BRANCH" --commit="$SHA" --json conclusion --jq '.[0].conclusion')
+          echo "CI conclusion for $SHA on $BRANCH: $status"
+          if [ "$status" != "success" ]; then
+            echo "Refusing to publish: CI did not succeed for this commit (got: $status)"
+            exit 1
+          fi
+
   publish:
+    needs: check-ci
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
