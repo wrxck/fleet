@@ -38,9 +38,9 @@ export function SecretEdit(): React.JSX.Element {
     }
   }, [isNew, selectedApp, selectedSecret]);
 
-  const save = () => {
+  const save = async () => {
     if (!selectedApp || !keyName) return;
-    const result = secrets.saveSecret(selectedApp, keyName, value);
+    const result = await secrets.saveSecret(selectedApp, keyName, value);
     if (result.ok) {
       setStatus('Saved and re-sealed');
       timerRef.current = setTimeout(() => {
