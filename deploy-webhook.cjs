@@ -92,11 +92,17 @@ const server = http.createServer((req, res) => {
       }
 
       console.log(`[deploy] Starting deploy for ${app}...`);
-      const output = execSync(`fleet deploy ${app}`, {
+      const result = spawnSync("fleet", ["deploy", app], {
         timeout: 300_000, // 5 minutes
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
       });
+      if (result.error || result.status !== 0) {
+        throw new Error(
+          result.stderr || result.error?.message || `exit ${result.status}`
+        );
+      }
+      const output = result.stdout;
 
       console.log(`[deploy] ${app} deployed successfully`);
       res.writeHead(200, { "Content-Type": "application/json" });
