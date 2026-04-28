@@ -7,7 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 import { getStatusData } from '../commands/status.js';
-import { load, findApp, save, addApp, type AppEntry } from '../core/registry.js';
+import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry.js';
 import { startService, stopService, restartService } from '../core/systemd.js';
 import { getContainerLogs, getContainersByCompose } from '../core/docker.js';
 import { checkHealth, checkAllHealth } from '../core/health.js';
@@ -392,9 +392,6 @@ export async function startMcpServer(): Promise<void> {
         return text(`Error: composePath does not exist: ${params.composePath}`);
       }
 
-      const reg = load();
-      const existing = findApp(reg, params.name);
-
       let containers = params.containers;
       if (!containers || containers.length === 0) {
         containers = getContainersByCompose(params.composePath, params.composeFile ?? null);
@@ -416,9 +413,13 @@ export async function startMcpServer(): Promise<void> {
         registeredAt: new Date().toISOString(),
       };
 
-      save(addApp(reg, entry));
+      let existed = false;
+      await withRegistry(reg => {
+        existed = !!findApp(reg, params.name);
+        return addApp(reg, entry);
+      });
 
-      const action = existing ? 'Updated' : 'Registered';
+      const action = existed ? 'Updated' : 'Registered';
       return text(`${action} app "${params.name}":\n${JSON.stringify(entry, null, 2)}`);
     }
   );
@@ -431,7 +432,7 @@ export async function startMcpServer(): Promise<void> {
       reason: z.string().optional().describe('Reason for freezing'),
     },
     async ({ app, reason }) => {
-      freezeApp(app, reason);
+      await freezeApp(app, reason);
       return text(`Frozen ${app}${reason ? `: ${reason}` : ''}`);
     }
   );
@@ -441,7 +442,7 @@ export async function startMcpServer(): Promise<void> {
     'Unfreeze a frozen service: clear frozen state, enable and start the service.',
     { app: z.string().describe('App name') },
     async ({ app }) => {
-      unfreezeApp(app);
+      await unfreezeApp(app);
       return text(`Unfrozen ${app} — service enabled and started`);
     }
   );

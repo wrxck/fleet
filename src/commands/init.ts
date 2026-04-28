@@ -1,19 +1,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import { load, save } from '../core/registry.js';
+import { load, withRegistry } from '../core/registry.js';
 import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd.js';
 import { listContainers, getContainersByCompose } from '../core/docker.js';
 import { listSites, readConfig, extractPortFromConfig, extractDomainsFromConfig } from '../core/nginx.js';
 import { heading, success, info, warn } from '../ui/output.js';
-import type { AppEntry } from '../core/registry.js';
+import type { AppEntry, Registry } from '../core/registry.js';
 
 const SKIP_SERVICES = ['docker-databases'];
 
-export function initCommand(args: string[]): void {
+export async function initCommand(args: string[]): Promise<void> {
   const json = args.includes('--json');
   heading('Fleet Init - Auto-discovering apps');
 
-  const reg = load();
   const services = discoverServices();
   const containers = listContainers();
   const sites = listSites();
@@ -23,61 +22,67 @@ export function initCommand(args: string[]): void {
   info(`Found ${sites.length} nginx sites`);
 
   let added = 0;
+  let finalReg: Registry | null = null;
 
-  for (const serviceName of services) {
-    if (SKIP_SERVICES.includes(serviceName)) continue;
+  await withRegistry(reg => {
+    for (const serviceName of services) {
+      if (SKIP_SERVICES.includes(serviceName)) continue;
 
-    const content = readServiceFile(serviceName);
-    if (!content) continue;
+      const content = readServiceFile(serviceName);
+      if (!content) continue;
 
-    const parsed = parseServiceFile(content);
-    if (!parsed.workingDirectory) continue;
+      const parsed = parseServiceFile(content);
+      if (!parsed.workingDirectory) continue;
 
-    const composePath = parsed.workingDirectory;
-    const composeFile = parsed.composeFile;
-    const composeContainers = getContainersByCompose(composePath, composeFile);
+      const composePath = parsed.workingDirectory;
+      const composeFile = parsed.composeFile;
+      const composeContainers = getContainersByCompose(composePath, composeFile);
 
-    const port = detectPort(composePath, composeFile, composeContainers, containers);
-    const domains = detectDomains(serviceName, sites, port);
-    const usesSharedDb = detectSharedDb(composePath, composeFile);
-    const type = detectType(composePath, composeFile, domains);
-    const displayName = detectDisplayName(serviceName, content);
+      const port = detectPort(composePath, composeFile, composeContainers, containers);
+      const domains = detectDomains(serviceName, sites, port);
+      const usesSharedDb = detectSharedDb(composePath, composeFile);
+      const type = detectType(composePath, composeFile, domains);
+      const displayName = detectDisplayName(serviceName, content);
 
-    const app: AppEntry = {
-      name: serviceName,
-      displayName,
-      composePath,
-      composeFile,
-      serviceName,
-      domains,
-      port,
-      usesSharedDb,
-      type,
-      containers: composeContainers.length > 0 ? composeContainers : [serviceName],
-      dependsOnDatabases: parsed.dependsOnDatabases,
-      registeredAt: new Date().toISOString(),
-    };
+      const app: AppEntry = {
+        name: serviceName,
+        displayName,
+        composePath,
+        composeFile,
+        serviceName,
+        domains,
+        port,
+        usesSharedDb,
+        type,
+        containers: composeContainers.length > 0 ? composeContainers : [serviceName],
+        dependsOnDatabases: parsed.dependsOnDatabases,
+        registeredAt: new Date().toISOString(),
+      };
 
-    const existing = reg.apps.findIndex(a => a.name === serviceName);
-    if (existing >= 0) {
-      const prev = reg.apps[existing];
-      if (prev.healthPath) app.healthPath = prev.healthPath;
-      if (prev.gitRepo) app.gitRepo = prev.gitRepo;
-      if (prev.gitRemoteUrl) app.gitRemoteUrl = prev.gitRemoteUrl;
-      if (prev.gitOnboardedAt) app.gitOnboardedAt = prev.gitOnboardedAt;
-      if (prev.secretsManaged) app.secretsManaged = prev.secretsManaged;
-      reg.apps[existing] = app;
-    } else {
-      reg.apps.push(app);
+      const existing = reg.apps.findIndex(a => a.name === serviceName);
+      if (existing >= 0) {
+        const prev = reg.apps[existing];
+        if (prev.healthPath) app.healthPath = prev.healthPath;
+        if (prev.gitRepo) app.gitRepo = prev.gitRepo;
+        if (prev.gitRemoteUrl) app.gitRemoteUrl = prev.gitRemoteUrl;
+        if (prev.gitOnboardedAt) app.gitOnboardedAt = prev.gitOnboardedAt;
+        if (prev.secretsManaged) app.secretsManaged = prev.secretsManaged;
+        reg.apps[existing] = app;
+      } else {
+        reg.apps.push(app);
+      }
+      added++;
+      success(`${serviceName} (${composePath})`);
     }
-    added++;
-    success(`${serviceName} (${composePath})`);
-  }
-
-  save(reg);
+    finalReg = reg;
+    return reg;
+  });
 
   if (json) {
-    process.stdout.write(JSON.stringify(reg, null, 2) + '\n');
+    // finalReg is set inside withRegistry above; fall back to a fresh load if
+    // the mutator never ran (e.g. an empty fleet). load() outside the lock is
+    // safe — we're past the mutation.
+    process.stdout.write(JSON.stringify(finalReg ?? load(), null, 2) + '\n');
   } else {
     info(`Registered ${added} apps`);
     success('Init complete');
