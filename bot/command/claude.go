@@ -1,8 +1,11 @@
 package command
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,6 +14,35 @@ import (
 	"fleet-bot/adapter"
 	"fleet-bot/exec"
 )
+
+// claudeFilteredEnv mirrors claude.filteredEnv: a minimal allowlist of env
+// vars passed to the claude subprocess. The bot inherits secrets like the
+// telegram bot token and openai key — none of which the claude CLI needs.
+// Restricting the surface stops a prompt-injection vector from exfiltrating
+// those secrets via tool calls.
+func claudeFilteredEnv() []string {
+	keep := map[string]bool{
+		"PATH": true, "HOME": true, "USER": true, "LANG": true, "LC_ALL": true,
+		"TERM": true, "TZ": true,
+		"CLAUDE_BIN": true, "FLEET_SCRIPT": true, "ANTHROPIC_API_KEY": true,
+	}
+	out := []string{}
+	for _, e := range os.Environ() {
+		eq := strings.IndexByte(e, '=')
+		if eq < 0 {
+			continue
+		}
+		key := e[:eq]
+		if keep[key] {
+			out = append(out, e)
+			continue
+		}
+		if strings.HasPrefix(key, "FLEET_") {
+			out = append(out, e)
+		}
+	}
+	return out
+}
 
 func claudeProjectsDir() string {
 	if h := os.Getenv("HOME"); h != "" {
@@ -105,25 +137,48 @@ func claudeRun(prompt, workDir string) (adapter.OutboundMessage, error) {
 		}
 	}
 
-	cmdArgs := []string{"--print", "--output-format", "text", prompt}
+	// Bot exposes Claude Code via Telegram/iMessage chat. We default to
+	// read-only tools so a chat user (or prompt-injection vector) cannot
+	// escalate to host writes. Power users can extend via fleet-guard
+	// approval (TODO).
+	cmdArgs := []string{
+		"--print",
+		"--output-format", "text",
+		"--allowed-tools", "Read,Glob,Grep,WebSearch,WebFetch",
+		"--disallowed-tools", "Bash,Write,Edit,NotebookEdit",
+		prompt,
+	}
 
-	res, err := exec.Run(5*time.Minute, "claude", cmdArgs...)
-	if err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	cmd := osexec.CommandContext(ctx, "claude", cmdArgs...)
+	cmd.Dir = workDir
+	cmd.Env = claudeFilteredEnv()
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr := cmd.Run()
+	stdoutStr := exec.StripANSI(stdout.String())
+	stderrStr := exec.StripANSI(stderr.String())
+
+	if ctx.Err() == context.DeadlineExceeded {
+		runErr = fmt.Errorf("command timed out")
+	}
+
+	if runErr != nil {
 		detail := ""
-		if res != nil {
-			if res.Stderr != "" {
-				detail = "\n" + res.Stderr
-			} else if res.Stdout != "" {
-				detail = "\n" + res.Stdout
-			}
+		if stderrStr != "" {
+			detail = "\n" + stderrStr
+		} else if stdoutStr != "" {
+			detail = "\n" + stdoutStr
 		}
-		return adapter.TextResponse(fmt.Sprintf("Claude error: %s%s", err, detail)), nil
+		return adapter.TextResponse(fmt.Sprintf("Claude error: %s%s", runErr, detail)), nil
 	}
 
-	output := ""
-	if res != nil {
-		output = strings.TrimSpace(res.Stdout)
-	}
+	output := strings.TrimSpace(stdoutStr)
 	if output == "" {
 		output = "(no output)"
 	}
