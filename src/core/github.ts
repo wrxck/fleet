@@ -6,7 +6,7 @@ import { execSafe } from './exec.js';
 import { GitError } from './errors.js';
 import { assertAppName } from './validate.js';
 
-export const GITHUB_ORG = 'heskethwebdesign';
+export const GITHUB_ORG = process.env.FLEET_GITHUB_ORG ?? 'wrxck';
 
 export interface PullRequest {
   number: number;

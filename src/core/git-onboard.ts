@@ -17,14 +17,13 @@ export interface OnboardResult {
 
 export function detectScenario(status: GitStatus): OnboardScenario {
   if (!status.initialised) return 'fresh';
-  if (status.remoteUrl && status.remoteUrl.includes('heskethwebdesign/')) return 'resume';
-  if (status.remoteUrl && status.remoteUrl.includes('wrxck/')) return 'migrate';
   if (!status.remoteUrl) return 'no-remote';
-  return 'fresh';
+  if (status.remoteUrl.includes(`${github.GITHUB_ORG}/`)) return 'resume';
+  return 'migrate';
 }
 
 export function describeOnboardPlan(scenario: OnboardScenario, repoName: string, _status: GitStatus): string[] {
-  const repoUrl = `git@github.com:heskethwebdesign/${repoName}.git`;
+  const repoUrl = `git@github.com:${github.GITHUB_ORG}/${repoName}.git`;
   const steps: string[] = [];
 
   switch (scenario) {
@@ -32,7 +31,7 @@ export function describeOnboardPlan(scenario: OnboardScenario, repoName: string,
       steps.push('generate .gitignore');
       steps.push('git init -b main');
       steps.push('git add . && git commit -m "initial commit"');
-      steps.push(`create private repo heskethwebdesign/${repoName}`);
+      steps.push(`create private repo ${github.GITHUB_ORG}/${repoName}`);
       steps.push(`add remote origin ${repoUrl}`);
       steps.push('push main');
       steps.push('create and push develop branch');
@@ -41,7 +40,7 @@ export function describeOnboardPlan(scenario: OnboardScenario, repoName: string,
       break;
     case 'migrate':
       steps.push('ensure .gitignore exists');
-      steps.push(`create private repo heskethwebdesign/${repoName}`);
+      steps.push(`create private repo ${github.GITHUB_ORG}/${repoName}`);
       steps.push(`git remote set-url origin ${repoUrl}`);
       steps.push('git push --all origin');
       steps.push('ensure develop branch exists');
@@ -51,7 +50,7 @@ export function describeOnboardPlan(scenario: OnboardScenario, repoName: string,
     case 'no-remote':
       steps.push('ensure .gitignore exists');
       steps.push('commit any outstanding changes');
-      steps.push(`create private repo heskethwebdesign/${repoName}`);
+      steps.push(`create private repo ${github.GITHUB_ORG}/${repoName}`);
       steps.push(`add remote origin ${repoUrl}`);
       steps.push('git push --all origin');
       steps.push('ensure develop branch exists');
@@ -103,7 +102,7 @@ export function executeOnboard(
       steps.push('created initial commit');
 
       github.createRepo(repoName);
-      steps.push(`created private repo heskethwebdesign/${repoName}`);
+      steps.push(`created private repo ${github.GITHUB_ORG}/${repoName}`);
 
       gitAddRemote(cwd, 'origin', repoUrl);
       gitPush(cwd, 'main', true);
@@ -117,7 +116,7 @@ export function executeOnboard(
 
     case 'migrate': {
       github.createRepo(repoName);
-      steps.push(`created private repo heskethwebdesign/${repoName}`);
+      steps.push(`created private repo ${github.GITHUB_ORG}/${repoName}`);
 
       gitSetRemoteUrl(cwd, repoUrl);
       steps.push(`updated remote to ${repoUrl}`);
@@ -143,7 +142,7 @@ export function executeOnboard(
       }
 
       github.createRepo(repoName);
-      steps.push(`created private repo heskethwebdesign/${repoName}`);
+      steps.push(`created private repo ${github.GITHUB_ORG}/${repoName}`);
 
       gitAddRemote(cwd, 'origin', repoUrl);
       gitPushAll(cwd);
@@ -178,7 +177,7 @@ export function executeOnboard(
   const reg = load();
   const app = findApp(reg, appName);
   if (app) {
-    app.gitRepo = `heskethwebdesign/${repoName}`;
+    app.gitRepo = `${github.GITHUB_ORG}/${repoName}`;
     app.gitRemoteUrl = repoUrl;
     app.gitOnboardedAt = new Date().toISOString();
     save(reg);

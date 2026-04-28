@@ -41,8 +41,17 @@ beforeEach(() => {
 });
 
 describe('GITHUB_ORG', () => {
-  it('is heskethwebdesign', () => {
-    expect(GITHUB_ORG).toBe('heskethwebdesign');
+  it('defaults to wrxck when FLEET_GITHUB_ORG is not set', () => {
+    expect(GITHUB_ORG).toBe('wrxck');
+  });
+
+  it('respects FLEET_GITHUB_ORG override on fresh module import', async () => {
+    vi.stubEnv('FLEET_GITHUB_ORG', 'some-other-org');
+    vi.resetModules();
+    const fresh = await import('./github.js');
+    expect(fresh.GITHUB_ORG).toBe('some-other-org');
+    vi.unstubAllEnvs();
+    vi.resetModules();
   });
 });
 
@@ -102,7 +111,7 @@ describe('repoExists', () => {
 describe('getRepoUrl', () => {
   it('returns SSH git URL for the org', () => {
     const url = getRepoUrl('myapp');
-    expect(url).toBe('git@github.com:heskethwebdesign/myapp.git');
+    expect(url).toBe(`git@github.com:${GITHUB_ORG}/myapp.git`);
   });
 
   it('includes the app name in the URL', () => {
@@ -147,7 +156,7 @@ describe('createPullRequest', () => {
     const prData = {
       number: 42,
       title: 'My PR',
-      url: 'https://github.com/heskethwebdesign/myapp/pull/42',
+      url: `https://github.com/${GITHUB_ORG}/myapp/pull/42`,
       headRefName: 'feat/x',
       baseRefName: 'develop',
       state: 'open',
