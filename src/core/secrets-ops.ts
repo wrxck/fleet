@@ -34,6 +34,7 @@ import {
   sealApp, sealDbSecrets, ageEncrypt, ageDecryptFile,
   getPublicKey, isInitialized, isSealed,
   backupVaultFile, restoreVaultFile, removeBackup,
+  lockManifest,
 } from './secrets.js';
 
 // --- helpers ---
@@ -98,6 +99,13 @@ export function validateBeforeSeal(app: string, newContent: string): SealValidat
 }
 
 // --- Phase 8: Safe seal wrappers ---
+//
+// safeSealApp / safeSealDbSecrets are the "validate + backup + seal +
+// cleanup" primitives. They do NOT take the manifest lock themselves because
+// they're called from inside already-locked outer flows (setSecret,
+// sealFromRuntime). External callers that need concurrency safety should go
+// via setSecret / importEnvFile / importDbSecrets / sealFromRuntime instead;
+// those wrap the whole flow in lockManifest().
 
 export function safeSealApp(app: string, content: string, sourceFile: string): SealValidation {
   const validation = validateBeforeSeal(app, content);
@@ -131,12 +139,12 @@ export function safeSealDbSecrets(app: string, secretsMap: Record<string, string
   return validation;
 }
 
-export function setSecret(
+export async function setSecret(
   app: string,
   key: string,
   value: string,
   opts: { allowWeak?: boolean } = {},
-): void {
+): Promise<void> {
   assertAppName(app);
   assertSecretKey(key);
 
@@ -151,25 +159,31 @@ export function setSecret(
     }
   }
 
-  const plaintext = decryptApp(app);
-  const manifest = loadManifest();
-  const entry = manifest.apps[app];
-  if (entry.type !== 'env') throw new SecretsError(`Cannot set key/value on secrets-dir type for ${app}`);
+  // Hold the manifest lock for the entire decrypt → mutate → re-seal cycle so
+  // a parallel CLI/cron writer can't insert a stale write between our read
+  // and our seal. safeSealApp does its own loadManifest/saveManifest inside —
+  // those reads/writes happen under our lock.
+  await lockManifest(() => {
+    const plaintext = decryptApp(app);
+    const manifest = loadManifest();
+    const entry = manifest.apps[app];
+    if (entry.type !== 'env') throw new SecretsError(`Cannot set key/value on secrets-dir type for ${app}`);
 
-  const lines = plaintext.split('\n');
-  let found = false;
-  const updated = lines.map(line => {
-    const eqIdx = line.indexOf('=');
-    if (eqIdx > 0 && line.substring(0, eqIdx) === key) {
-      found = true;
-      return `${key}=${value}`;
-    }
-    return line;
+    const lines = plaintext.split('\n');
+    let found = false;
+    const updated = lines.map(line => {
+      const eqIdx = line.indexOf('=');
+      if (eqIdx > 0 && line.substring(0, eqIdx) === key) {
+        found = true;
+        return `${key}=${value}`;
+      }
+      return line;
+    });
+    if (!found) updated.push(`${key}=${value}`);
+
+    safeSealApp(app, updated.join('\n'), entry.sourceFile);
+    auditLog({ op: 'set', app, secret: key, ok: true });
   });
-  if (!found) updated.push(`${key}=${value}`);
-
-  safeSealApp(app, updated.join('\n'), entry.sourceFile);
-  auditLog({ op: 'set', app, secret: key, ok: true });
 }
 
 export function getSecret(app: string, key: string): string | null {
@@ -196,25 +210,27 @@ export function getSecret(app: string, key: string): string | null {
 // other fleet operations (sealing, validation, drift) are not audited to
 // avoid log noise.
 
-export function importEnvFile(app: string, path: string): number {
+export async function importEnvFile(app: string, path: string): Promise<number> {
   if (!existsSync(path)) throw new SecretsError(`File not found: ${path}`);
   const content = readFileSync(path, 'utf-8');
-  // importEnvFile is an explicit replace — bypass validation, but still backup
-  backupVaultFile(app);
-  try {
-    sealApp(app, content, path);
-    removeBackup(app);
-  } catch (err) {
-    restoreVaultFile(app);
-    auditLog({ op: 'import', app, ok: false, details: `${path}: ${err}` });
-    throw err;
-  }
-  const manifest = loadManifest();
-  auditLog({ op: 'import', app, ok: true, details: `${path}: ${manifest.apps[app].keyCount} keys` });
-  return manifest.apps[app].keyCount;
+  return await lockManifest(() => {
+    // importEnvFile is an explicit replace — bypass validation, but still backup
+    backupVaultFile(app);
+    try {
+      sealApp(app, content, path);
+      removeBackup(app);
+    } catch (err) {
+      restoreVaultFile(app);
+      auditLog({ op: 'import', app, ok: false, details: `${path}: ${err}` });
+      throw err;
+    }
+    const manifest = loadManifest();
+    auditLog({ op: 'import', app, ok: true, details: `${path}: ${manifest.apps[app].keyCount} keys` });
+    return manifest.apps[app].keyCount;
+  });
 }
 
-export function importDbSecrets(app: string, dir: string): number {
+export async function importDbSecrets(app: string, dir: string): Promise<number> {
   if (!existsSync(dir)) throw new SecretsError(`Directory not found: ${dir}`);
   const stat = statSync(dir);
   if (!stat.isDirectory()) throw new SecretsError(`Not a directory: ${dir}`);
@@ -225,16 +241,18 @@ export function importDbSecrets(app: string, dir: string): number {
     secretsMap[file] = readFileSync(join(dir, file), 'utf-8');
   }
 
-  // importDbSecrets is an explicit replace — bypass validation, but still backup
-  backupVaultFile(app);
-  try {
-    sealDbSecrets(app, secretsMap, dir);
-    removeBackup(app);
-  } catch (err) {
-    restoreVaultFile(app);
-    throw err;
-  }
-  return files.length;
+  return await lockManifest(() => {
+    // importDbSecrets is an explicit replace — bypass validation, but still backup
+    backupVaultFile(app);
+    try {
+      sealDbSecrets(app, secretsMap, dir);
+      removeBackup(app);
+    } catch (err) {
+      restoreVaultFile(app);
+      throw err;
+    }
+    return files.length;
+  });
 }
 
 export function exportApp(app: string): string {
@@ -388,61 +406,65 @@ export function unsealAll(): void {
   }
 }
 
-export function sealFromRuntime(app?: string): string[] {
-  const manifest = loadManifest();
-  const apps = app ? [app] : Object.keys(manifest.apps);
-  const sealed: string[] = [];
+export async function sealFromRuntime(app?: string): Promise<string[]> {
+  return await lockManifest(() => {
+    const manifest = loadManifest();
+    const apps = app ? [app] : Object.keys(manifest.apps);
+    const sealed: string[] = [];
 
-  for (const a of apps) {
-    const entry = manifest.apps[a];
-    if (!entry) throw new SecretsError(`No secrets found for app: ${a}`);
+    for (const a of apps) {
+      const entry = manifest.apps[a];
+      if (!entry) throw new SecretsError(`No secrets found for app: ${a}`);
 
-    if (entry.type === 'env') {
-      const runtimePath = join(RUNTIME_DIR, a, '.env');
-      if (!existsSync(runtimePath)) throw new SecretsError(`Runtime file not found: ${runtimePath}`);
-      const content = readFileSync(runtimePath, 'utf-8');
-      safeSealApp(a, content, entry.sourceFile);
-    } else {
-      const runtimeDir = join(RUNTIME_DIR, a, 'secrets');
-      if (!existsSync(runtimeDir)) throw new SecretsError(`Runtime dir not found: ${runtimeDir}`);
-      const dirFiles = readdirSync(runtimeDir);
-      const secretsMap: Record<string, string> = {};
-      for (const f of dirFiles) {
-        secretsMap[f] = readFileSync(join(runtimeDir, f), 'utf-8');
+      if (entry.type === 'env') {
+        const runtimePath = join(RUNTIME_DIR, a, '.env');
+        if (!existsSync(runtimePath)) throw new SecretsError(`Runtime file not found: ${runtimePath}`);
+        const content = readFileSync(runtimePath, 'utf-8');
+        safeSealApp(a, content, entry.sourceFile);
+      } else {
+        const runtimeDir = join(RUNTIME_DIR, a, 'secrets');
+        if (!existsSync(runtimeDir)) throw new SecretsError(`Runtime dir not found: ${runtimeDir}`);
+        const dirFiles = readdirSync(runtimeDir);
+        const secretsMap: Record<string, string> = {};
+        for (const f of dirFiles) {
+          secretsMap[f] = readFileSync(join(runtimeDir, f), 'utf-8');
+        }
+        safeSealDbSecrets(a, secretsMap, entry.sourceFile);
       }
-      safeSealDbSecrets(a, secretsMap, entry.sourceFile);
+      sealed.push(a);
     }
-    sealed.push(a);
-  }
-  return sealed;
+    return sealed;
+  });
 }
 
-export function rotateKey(): { oldPubkey: string; newPubkey: string; appsRotated: string[] } {
-  const manifest = loadManifest();
-  const oldPubkey = getPublicKey();
+export async function rotateKey(): Promise<{ oldPubkey: string; newPubkey: string; appsRotated: string[] }> {
+  return await lockManifest(() => {
+    const manifest = loadManifest();
+    const oldPubkey = getPublicKey();
 
-  const decrypted: Record<string, string> = {};
-  for (const [app, entry] of Object.entries(manifest.apps)) {
-    decrypted[app] = ageDecryptFile(join(VAULT_DIR, entry.encryptedFile));
-  }
+    const decrypted: Record<string, string> = {};
+    for (const [app, entry] of Object.entries(manifest.apps)) {
+      decrypted[app] = ageDecryptFile(join(VAULT_DIR, entry.encryptedFile));
+    }
 
-  const backupPath = KEY_PATH + '.old';
-  copyFileSync(KEY_PATH, backupPath);
-  const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
-  if (!keygen.ok) throw new SecretsError(`Failed to generate new key: ${keygen.stderr}`);
-  chmodSync(KEY_PATH, 0o600);
-  const newPubkey = getPublicKey();
+    const backupPath = KEY_PATH + '.old';
+    copyFileSync(KEY_PATH, backupPath);
+    const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
+    if (!keygen.ok) throw new SecretsError(`Failed to generate new key: ${keygen.stderr}`);
+    chmodSync(KEY_PATH, 0o600);
+    const newPubkey = getPublicKey();
 
-  for (const [app, entry] of Object.entries(manifest.apps)) {
-    const encrypted = ageEncrypt(decrypted[app]);
-    writeFileSync(join(VAULT_DIR, entry.encryptedFile), encrypted);
-    entry.lastSealedAt = new Date().toISOString();
-  }
-  saveManifest(manifest);
+    for (const [app, entry] of Object.entries(manifest.apps)) {
+      const encrypted = ageEncrypt(decrypted[app]);
+      writeFileSync(join(VAULT_DIR, entry.encryptedFile), encrypted);
+      entry.lastSealedAt = new Date().toISOString();
+    }
+    saveManifest(manifest);
 
-  rmSync(backupPath, { force: true });
+    rmSync(backupPath, { force: true });
 
-  return { oldPubkey, newPubkey, appsRotated: Object.keys(manifest.apps) };
+    return { oldPubkey, newPubkey, appsRotated: Object.keys(manifest.apps) };
+  });
 }
 
 export function getStatus(): {

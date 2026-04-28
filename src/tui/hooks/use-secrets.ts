@@ -27,13 +27,13 @@ interface SecretsState {
 interface SecretsActions {
   refresh: () => void;
   loadAppSecrets: (app: string) => void;
-  saveSecret: (app: string, key: string, value: string) => { ok: boolean; error?: string };
-  deleteSecret: (app: string, key: string) => { ok: boolean; error?: string };
+  saveSecret: (app: string, key: string, value: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteSecret: (app: string, key: string) => Promise<{ ok: boolean; error?: string }>;
   revealSecret: (app: string, key: string) => void;
   hideSecret: (key: string) => void;
   unseal: () => { ok: boolean; error?: string };
-  seal: () => { ok: boolean; error?: string };
-  importEnv: (app: string, path: string) => { ok: boolean; error?: string };
+  seal: () => Promise<{ ok: boolean; error?: string }>;
+  importEnv: (app: string, path: string) => Promise<{ ok: boolean; error?: string }>;
 }
 
 export function useSecrets(): SecretsState & SecretsActions {
@@ -86,9 +86,9 @@ export function useSecrets(): SecretsState & SecretsActions {
     }
   }, []);
 
-  const saveSecret = useCallback((app: string, key: string, value: string): { ok: boolean; error?: string } => {
+  const saveSecret = useCallback(async (app: string, key: string, value: string): Promise<{ ok: boolean; error?: string }> => {
     try {
-      setSecret(app, key, value);
+      await setSecret(app, key, value);
       // Re-unseal to update runtime
       try { unsealAll(); } catch { /* runtime may not exist yet */ }
       return { ok: true };
@@ -97,7 +97,7 @@ export function useSecrets(): SecretsState & SecretsActions {
     }
   }, []);
 
-  const deleteSecret = useCallback((app: string, key: string): { ok: boolean; error?: string } => {
+  const deleteSecret = useCallback(async (app: string, key: string): Promise<{ ok: boolean; error?: string }> => {
     try {
       const plaintext = decryptApp(app);
       const manifest = loadManifest();
@@ -148,9 +148,9 @@ export function useSecrets(): SecretsState & SecretsActions {
     }
   }, []);
 
-  const seal = useCallback((): { ok: boolean; error?: string } => {
+  const seal = useCallback(async (): Promise<{ ok: boolean; error?: string }> => {
     try {
-      sealFromRuntime();
+      await sealFromRuntime();
       setState(prev => ({ ...prev, sealed: true }));
       return { ok: true };
     } catch (err) {
@@ -158,9 +158,9 @@ export function useSecrets(): SecretsState & SecretsActions {
     }
   }, []);
 
-  const importEnv = useCallback((app: string, path: string): { ok: boolean; error?: string } => {
+  const importEnv = useCallback(async (app: string, path: string): Promise<{ ok: boolean; error?: string }> => {
     try {
-      importEnvFile(app, path);
+      await importEnvFile(app, path);
       try { unsealAll(); } catch { /* ok */ }
       return { ok: true };
     } catch (err) {
