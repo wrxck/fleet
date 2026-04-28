@@ -2,7 +2,9 @@ package waf
 
 import (
 	"fmt"
+	"net"
 	"os"
+	"strings"
 	"time"
 
 	"fleet-bot/exec"
@@ -10,9 +12,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ConfigPath is the location of the truewaf YAML config. It is a var (rather
+// than a const) so tests can point it at a temp file.
+var ConfigPath = "/etc/truewaf/truewaf.yaml"
+
 const (
-	ConfigPath = "/etc/truewaf/truewaf.yaml"
 	wafTimeout = 5 * time.Second
+	// maxWhitelist caps the number of whitelist entries to prevent unbounded
+	// growth from misuse or bot-level abuse.
+	maxWhitelist = 256
+	// minCIDRPrefix is the smallest (widest) CIDR prefix length we accept.
+	// /0..-/7 is wider than any reasonable allowlist (a /7 covers 33M IPv4
+	// addresses) — refuse those outright so a chat operator cannot disable
+	// the WAF for the entire address space.
+	minCIDRPrefix = 8
 )
 
 // Config represents the truewaf YAML configuration.
@@ -102,11 +115,48 @@ func IsActive() string {
 	return res.Stdout
 }
 
+// validateWhitelistIP rejects empty input, malformed IPs/CIDRs, and overly
+// wide CIDR ranges. Returning a normalised string keeps the on-disk config
+// canonical so duplicate-detection works as expected.
+func validateWhitelistIP(ip string) (string, error) {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
+		return "", fmt.Errorf("ip is empty")
+	}
+	if strings.Contains(ip, "/") {
+		_, ipnet, err := net.ParseCIDR(ip)
+		if err != nil {
+			return "", fmt.Errorf("invalid CIDR: %w", err)
+		}
+		ones, _ := ipnet.Mask.Size()
+		if ones < minCIDRPrefix {
+			return "", fmt.Errorf("CIDR /%d is too wide: refuse to whitelist (minimum allowed is /%d)", ones, minCIDRPrefix)
+		}
+		return ip, nil
+	}
+	if net.ParseIP(ip) == nil {
+		return "", fmt.Errorf("invalid IP address: %q", ip)
+	}
+	return ip, nil
+}
+
 // AddWhitelistIP adds an IP to the whitelist, writes config, and reloads.
+// The input is validated to reject malformed addresses and overly wide CIDR
+// ranges (e.g. 0.0.0.0/0) that would effectively disable the WAF.
 func AddWhitelistIP(ip string) error {
+	ip, err := validateWhitelistIP(ip)
+	if err != nil {
+		return err
+	}
+
 	cfg, err := Read()
 	if err != nil {
 		return err
+	}
+
+	// Cap whitelist length so misuse can't grow it without bound.
+	if len(cfg.Whitelist.IPs) >= maxWhitelist {
+		return fmt.Errorf("whitelist full (%d entries)", maxWhitelist)
 	}
 
 	// Check if already whitelisted
