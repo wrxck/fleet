@@ -60,6 +60,14 @@ export interface DepsConfig {
     minorVersionBehind: Severity;
     patchVersionBehind: Severity;
   };
+  /**
+   * Regex strings (matched against bare package name) of packages that must
+   * NOT be queried against OSV (https://api.osv.dev). OSV is a third-party
+   * service operated by Google; sending private/internal package names there
+   * leaks the proprietary dependency manifest. Default skips the user's own
+   * npm scope.
+   */
+  osvSkipPatterns: string[];
 }
 
 export interface DepsCache {
