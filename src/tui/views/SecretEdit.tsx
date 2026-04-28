@@ -6,7 +6,6 @@ import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
 import { useAppState, useAppDispatch } from '../state.js';
 import { useSecrets } from '../hooks/use-secrets.js';
-import { getSecret as getCoreSecret } from '../../core/secrets-ops.js';
 import { colors } from '../theme.js';
 
 export function SecretEdit(): React.JSX.Element {
@@ -27,20 +26,20 @@ export function SecretEdit(): React.JSX.Element {
     };
   }, []);
 
-  useEffect(() => {
-    if (!isNew && selectedApp && selectedSecret) {
-      try {
-        const existing = getCoreSecret(selectedApp, selectedSecret);
-        if (existing) setValue(existing);
-      } catch {
-        // ignore
-      }
-    }
-  }, [isNew, selectedApp, selectedSecret]);
+  // SECURITY: existing secret values are NEVER preloaded into editor state.
+  // The TextInput's `mask="*"` only changes the rendered glyph — the
+  // underlying React state would still hold plaintext, exposing it to
+  // DevTools dumps, error boundary captures, and process memory dumps.
+  // Editing requires re-typing the value, matching the CLI posture in
+  // `src/commands/secrets.ts` which rejects argv values for the same reason.
 
   const save = () => {
     if (!selectedApp || !keyName) return;
     const result = secrets.saveSecret(selectedApp, keyName, value);
+    // Clear the local plaintext from React state immediately, regardless of
+    // success/failure. The state holds plaintext only for the duration of
+    // the save call.
+    setValue('');
     if (result.ok) {
       setStatus('Saved and re-sealed');
       timerRef.current = setTimeout(() => {
@@ -105,6 +104,14 @@ export function SecretEdit(): React.JSX.Element {
           </Text>
         </Box>
       )}
+
+      <Box marginTop={1}>
+        <Text color={colors.muted}>
+          {isNew
+            ? 'Adding new secret. Type the key name, then the value.'
+            : `Editing ${keyName} - paste new value to replace. (Current value not displayed.)`}
+        </Text>
+      </Box>
 
       <Box marginTop={1}>
         <Text color={colors.muted}>Enter to save | Esc to cancel</Text>
