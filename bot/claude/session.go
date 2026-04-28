@@ -37,6 +37,37 @@ func defaultWorkDir() string {
 	return "/root"
 }
 
+// filteredEnv returns a minimal env slice for the claude subprocess. We avoid
+// inheriting the bot's full environment because it contains secrets (telegram
+// bot token, openai key, etc) which Claude Code has no business seeing — and
+// because a prompt-injection vector reading env via a tool would otherwise
+// exfiltrate those secrets verbatim. Only the keys an unprivileged process
+// needs to function are passed through, plus FLEET_* vars used by fleet
+// scripts the bot may invoke.
+func filteredEnv() []string {
+	keep := map[string]bool{
+		"PATH": true, "HOME": true, "USER": true, "LANG": true, "LC_ALL": true,
+		"TERM": true, "TZ": true,
+		"CLAUDE_BIN": true, "FLEET_SCRIPT": true, "ANTHROPIC_API_KEY": true,
+	}
+	out := []string{}
+	for _, e := range os.Environ() {
+		eq := strings.IndexByte(e, '=')
+		if eq < 0 {
+			continue
+		}
+		key := e[:eq]
+		if keep[key] {
+			out = append(out, e)
+			continue
+		}
+		if strings.HasPrefix(key, "FLEET_") {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // StreamMsg represents a line from Claude Code --output-format stream-json.
 type StreamMsg struct {
 	Type      string  `json:"type"`
@@ -209,6 +240,12 @@ func (s *Session) Run(prompt string, onUpdate func(StatusUpdate)) (*RunResult, e
 		"--verbose",
 		"--model", model,
 		"--max-turns", fmt.Sprintf("%d", DefaultMaxTurns),
+		// Bot exposes Claude Code via Telegram/iMessage chat. We default to
+		// read-only tools so a chat user (or prompt-injection vector) cannot
+		// escalate to host writes. Power users can extend via fleet-guard
+		// approval (TODO).
+		"--allowed-tools", "Read,Glob,Grep,WebSearch,WebFetch",
+		"--disallowed-tools", "Bash,Write,Edit,NotebookEdit",
 		"--append-system-prompt", "You are being controlled via a Telegram bot. Keep your final response concise — summarise what you did rather than showing full file contents. The user is an experienced developer.",
 	}
 	if sessionID != "" {
@@ -223,7 +260,7 @@ func (s *Session) Run(prompt string, onUpdate func(StatusUpdate)) (*RunResult, e
 
 	cmd := exec.CommandContext(ctx, claudeBin(), args...)
 	cmd.Dir = workDir
-	cmd.Env = os.Environ()
+	cmd.Env = filteredEnv()
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -21,10 +21,11 @@ type BlueBubblesConfig struct {
 }
 
 type TelegramConfig struct {
-	Enabled        bool    `json:"enabled"`
-	BotToken       string  `json:"botToken"`
-	AllowedChatIDs []int64 `json:"allowedChatIds"`
-	AlertChatIDs   []int64 `json:"alertChatIds"`
+	Enabled          bool    `json:"enabled"`
+	BotToken         string  `json:"botToken"`
+	AllowedChatIDs   []int64 `json:"allowedChatIds"`
+	AllowedSenderIDs []int64 `json:"allowedSenderIds"`
+	AlertChatIDs     []int64 `json:"alertChatIds"`
 }
 
 type AlertsConfig struct {
