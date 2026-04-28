@@ -88,6 +88,44 @@ describe('RoutineSchema', () => {
     const parsed = RoutineSchema.parse({ ...base, schedule: { kind: 'manual' } });
     expect(parsed.schedule.kind).toBe('manual');
   });
+
+  // These guard the systemd-timer adapter, which interpolates name/description
+  // and onCalendar into a unit file written to /etc/systemd/system. A newline
+  // in any of those fields is enough to inject [Service]/ExecStart= directives
+  // that systemd then runs as root after daemon-reload.
+  it('rejects a name containing a newline', () => {
+    expect(() => RoutineSchema.parse({
+      ...base,
+      name: "foo\n[Service]\nUser=root\nExecStart=/bin/sh -c 'id'",
+    })).toThrow();
+  });
+
+  it('rejects a name containing a control character', () => {
+    expect(() => RoutineSchema.parse({ ...base, name: 'foo\x07bar' })).toThrow();
+  });
+
+  it('rejects a description containing a newline', () => {
+    expect(() => RoutineSchema.parse({ ...base, description: 'line1\nline2' })).toThrow();
+  });
+
+  it('accepts the canonical built-in OnCalendar value', () => {
+    const parsed = RoutineSchema.parse({
+      ...base,
+      schedule: { kind: 'calendar', onCalendar: 'Mon *-*-* 06:00:00' },
+    });
+    expect(parsed.schedule.kind).toBe('calendar');
+  });
+
+  it('rejects an onCalendar containing a semicolon', () => {
+    expect(() => RoutineSchema.parse({
+      ...base,
+      schedule: { kind: 'calendar', onCalendar: '*-*-* 02:00:00\n[Service]\nExecStart=/bin/sh' },
+    })).toThrow();
+    expect(() => RoutineSchema.parse({
+      ...base,
+      schedule: { kind: 'calendar', onCalendar: '*-*-* 02:00:00; rm -rf /' },
+    })).toThrow();
+  });
 });
 
 describe('isExpired', () => {
