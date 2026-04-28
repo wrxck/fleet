@@ -4,12 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { SecretsError, VaultNotInitializedError } from './errors.js';
 import { execSafe } from './exec.js';
 import { assertAppName, assertFilePath } from './validate.js';
+import { withFileLock } from './file-lock.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const VAULT_DIR = join(__dirname, '..', '..', 'vault');
 export const KEY_PATH = '/etc/fleet/age.key';
 export const RUNTIME_DIR = '/run/fleet-secrets';
-const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
+export const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
 const SECRET_DELIMITER = '---SECRET:';
 
 export interface SecretMetadata {
@@ -96,6 +97,41 @@ export function loadManifest(): Manifest {
 
 export function saveManifest(manifest: Manifest): void {
   writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
+}
+
+/**
+ * Run an arbitrary transaction under the manifest's inter-process lock.
+ * The callback receives no manifest — it's responsible for any load / save
+ * it needs (the seal flows do their own validate → backup → seal → cleanup
+ * dance and don't fit a simple load/mutate/save shape).
+ *
+ * Important: NOT reentrant. Wrap only the outermost RMW boundary; inner
+ * helpers should call plain `loadManifest` / `saveManifest`.
+ */
+export async function lockManifest<T>(fn: () => Promise<T> | T): Promise<T> {
+  return withFileLock(MANIFEST_PATH, fn);
+}
+
+/**
+ * Run a simple load → mutate → save transaction against the secrets
+ * manifest under an inter-process lock. Used by callers that need a
+ * straightforward RMW with no extra side-effects.
+ *
+ * The mutator may return a different Manifest object or mutate the input
+ * and return it. The returned value is persisted on a successful run; if
+ * the mutator throws, no save happens and the lock is released.
+ *
+ * Important: NOT reentrant. Wrap only the outermost RMW boundary; inner
+ * helpers should call plain `loadManifest` / `saveManifest`.
+ */
+export async function withManifest(
+  fn: (m: Manifest) => Manifest | Promise<Manifest>,
+): Promise<void> {
+  await lockManifest(async () => {
+    const manifest = loadManifest();
+    const next = await fn(manifest);
+    saveManifest(next);
+  });
 }
 
 export function backupVaultFile(app: string): string | null {
