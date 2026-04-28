@@ -16,7 +16,7 @@ function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
     composeFile: null, serviceName: 'test-app', domains: [], port: 3000,
     usesSharedDb: false, type: 'service', containers: ['test-app'],
     dependsOnDatabases: false, registeredAt: '2026-01-01T00:00:00Z',
-    gitRepo: 'heskethwebdesign/test-app',
+    gitRepo: 'wrxck/test-app',
     ...overrides,
   };
 }

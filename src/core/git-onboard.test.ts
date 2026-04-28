@@ -16,7 +16,8 @@ vi.mock('./git.js', () => ({
 }));
 
 vi.mock('./github.js', () => ({
-  getRepoUrl: vi.fn().mockImplementation((name: string) => `git@github.com:heskethwebdesign/${name}.git`),
+  GITHUB_ORG: 'wrxck',
+  getRepoUrl: vi.fn().mockImplementation((name: string) => `git@github.com:wrxck/${name}.git`),
   createRepo: vi.fn(),
   protectBranch: vi.fn().mockReturnValue(true),
 }));
@@ -47,20 +48,20 @@ describe('detectScenario', () => {
     expect(detectScenario(makeStatus({ initialised: false }))).toBe('fresh');
   });
 
-  it('returns resume when remote URL has heskethwebdesign/', () => {
-    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:heskethwebdesign/myapp.git' }))).toBe('resume');
+  it('returns resume when remote URL is on the configured org', () => {
+    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:wrxck/myapp.git' }))).toBe('resume');
   });
 
-  it('returns migrate when remote URL has wrxck/', () => {
-    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:wrxck/myapp.git' }))).toBe('migrate');
+  it('returns migrate when remote URL is on a different org', () => {
+    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:heskethwebdesign/myapp.git' }))).toBe('migrate');
   });
 
   it('returns no-remote when initialised but no remote', () => {
     expect(detectScenario(makeStatus({ remoteUrl: null }))).toBe('no-remote');
   });
 
-  it('returns fresh when remote is unrecognised', () => {
-    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:other/myapp.git' }))).toBe('fresh');
+  it('returns migrate when remote is on an unrelated org', () => {
+    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:other/myapp.git' }))).toBe('migrate');
   });
 });
 
