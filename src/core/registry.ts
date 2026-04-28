@@ -2,6 +2,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, renam
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { withFileLock } from './file-lock.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function resolveRegistryPath(): string {
@@ -149,4 +151,32 @@ export function removeApp(reg: Registry, name: string): Registry {
 
 export function registryPath(): string {
   return resolveRegistryPath();
+}
+
+/**
+ * Run a read-modify-write transaction against the registry under an
+ * inter-process lock. The lock is held for the full load → mutate → save
+ * cycle, so concurrent CLI / cron / systemd / bot invocations don't lose
+ * each other's updates.
+ *
+ * The mutator may return a different Registry object (e.g. one returned by
+ * `addApp` / `removeApp`, which mutate in place but also return the registry
+ * for chaining) or simply mutate the input and return it. The returned value
+ * is what gets persisted.
+ *
+ * Returns void: callers needing the post-save state should re-load. Keeping
+ * this side-effecting matches how `load()` + `save()` are used today.
+ *
+ * Important: do not call this from inside another `withRegistry` block on the
+ * same process — proper-lockfile is not reentrant and will deadlock.
+ */
+export async function withRegistry(
+  fn: (reg: Registry) => Registry | Promise<Registry>,
+): Promise<void> {
+  const path = resolveRegistryPath();
+  await withFileLock(path, async () => {
+    const reg = load();
+    const next = await fn(reg);
+    save(next);
+  });
 }
