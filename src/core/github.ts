@@ -56,25 +56,33 @@ export function createPullRequest(
     '--body', opts.body ?? '',
     '--head', opts.head,
     '--base', opts.base,
-    '--json', 'number,title,url,headRefName,baseRefName,state',
   ], { timeout: 30_000 });
   if (!r.ok) throw new GitError(`failed to create PR: ${r.stderr}`);
 
-  try {
-    const data = JSON.parse(r.stdout);
-    return {
-      number: data.number,
-      title: data.title,
-      url: data.url,
-      head: data.headRefName,
-      base: data.baseRefName,
-      state: data.state,
-    };
-  } catch {
-    // gh pr create outputs the url on success without --json working on create
-    const url = r.stdout.trim().split('\n').pop() || '';
-    return { number: 0, title: opts.title, url, head: opts.head, base: opts.base, state: 'open' };
+  // gh pr create prints the new PR URL on the last line of stdout. fetch the
+  // structured fields with a follow-up gh pr view since `pr create` doesn't
+  // support --json.
+  const url = r.stdout.trim().split('\n').pop() || '';
+  const view = execSafe('gh', [
+    'pr', 'view', url,
+    '--json', 'number,title,url,headRefName,baseRefName,state',
+  ], { timeout: 15_000 });
+  if (view.ok) {
+    try {
+      const data = JSON.parse(view.stdout);
+      return {
+        number: data.number,
+        title: data.title,
+        url: data.url,
+        head: data.headRefName,
+        base: data.baseRefName,
+        state: data.state,
+      };
+    } catch {
+      // fall through to url-only return
+    }
   }
+  return { number: 0, title: opts.title, url, head: opts.head, base: opts.base, state: 'open' };
 }
 
 export function listPullRequests(repo: string, state: 'open' | 'closed' | 'all' = 'open'): PullRequest[] {
