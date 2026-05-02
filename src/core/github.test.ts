@@ -143,7 +143,7 @@ describe('createPullRequest', () => {
     ).toThrow(GitError);
   });
 
-  it('returns PR data from JSON response', () => {
+  it('returns PR data from follow-up gh pr view JSON', () => {
     const prData = {
       number: 42,
       title: 'My PR',
@@ -154,16 +154,18 @@ describe('createPullRequest', () => {
     };
     mockExec
       .mockReturnValueOnce({ ok: true, stdout: '', stderr: '' })  // auth
-      .mockReturnValueOnce({ ok: true, stdout: JSON.stringify(prData), stderr: '' });
+      .mockReturnValueOnce({ ok: true, stdout: 'https://github.com/heskethwebdesign/myapp/pull/42\n', stderr: '' })  // pr create (url-only)
+      .mockReturnValueOnce({ ok: true, stdout: JSON.stringify(prData), stderr: '' });  // pr view
     const pr = createPullRequest('myapp', { title: 'My PR', head: 'feat/x', base: 'develop' });
     expect(pr.number).toBe(42);
     expect(pr.url).toContain('pull/42');
   });
 
-  it('falls back gracefully when JSON parse fails', () => {
+  it('falls back to url-only when pr view fails', () => {
     mockExec
       .mockReturnValueOnce({ ok: true, stdout: '', stderr: '' })  // auth
-      .mockReturnValueOnce({ ok: true, stdout: 'https://github.com/org/repo/pull/1\n', stderr: '' });
+      .mockReturnValueOnce({ ok: true, stdout: 'https://github.com/org/repo/pull/1\n', stderr: '' })  // pr create
+      .mockReturnValueOnce({ ok: false, stdout: '', stderr: 'view failed' });  // pr view
     const pr = createPullRequest('myapp', { title: 'PR', head: 'feat/x', base: 'main' });
     expect(pr.title).toBe('PR');
     expect(pr.url).toContain('https://');
