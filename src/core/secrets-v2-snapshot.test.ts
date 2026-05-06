@@ -114,6 +114,19 @@ describe('restoreSnapshot', () => {
     expect(readFileSync(join(composeDir, 'docker-compose.yml'), 'utf-8')).toContain('env_file');
     expect(readFileSync(unitFile, 'utf-8')).toContain('Description=a');
   });
+
+  it('does not touch live unit file when snapshot was taken without one', () => {
+    const { input, unitFile } = fixture();
+    const noUnitInput = { ...input, appUnitFile: join(TMP, 'never-existed.service') };
+    const snap = snapshotApp(noUnitInput);
+
+    // write a "live" unit file at the original location after the snapshot
+    writeFileSync(unitFile, 'NEW-UNIT-WRITTEN-AFTER-SNAPSHOT');
+
+    // restoring the no-unit snapshot must not delete or change the live unit
+    restoreSnapshot(noUnitInput, snap);
+    expect(readFileSync(unitFile, 'utf-8')).toBe('NEW-UNIT-WRITTEN-AFTER-SNAPSHOT');
+  });
 });
 
 describe('listSnapshots', () => {
