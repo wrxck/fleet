@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -26,6 +27,9 @@ export interface Snapshot {
   manifestEntry: unknown;    // the manifest entry at snapshot time (object, not JSON string)
 }
 
+// callers must serialise migration operations: same-millisecond invocations
+// would write to the same backup dir and silently overwrite each other.
+// migrate-v2 (Task 21) is the only caller and is invoked one app at a time.
 function makeTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
@@ -39,6 +43,14 @@ function makeTimestamp(): string {
  */
 export function snapshotApp(input: SnapshotInput): Snapshot {
   const { app, backupRoot, vaultDir, encryptedFile, composeDir, composeFile, appUnitFile } = input;
+
+  // ensure backupRoot exists at 0700 — mkdirSync only sets mode on newly
+  // created dirs; if it pre-existed with a looser mode, chmod it explicitly.
+  if (!existsSync(backupRoot)) {
+    mkdirSync(backupRoot, { recursive: true, mode: 0o700 });
+  } else {
+    chmodSync(backupRoot, 0o700);
+  }
 
   const timestamp = makeTimestamp();
   const snapDir = join(backupRoot, timestamp, app);
@@ -89,7 +101,7 @@ export function restoreSnapshot(input: SnapshotInput, snap: Snapshot): void {
     apps: Record<string, unknown>;
   };
   manifest.apps[app] = snapEntry;
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
 
   // 3. compose file
   copyFileSync(join(snapDir, composeFile), join(composeDir, composeFile));
@@ -128,11 +140,19 @@ export function listSnapshots(backupRoot: string, app: string): Snapshot[] {
       continue;
     }
 
+    let manifestEntry: unknown = null;
+    const mPath = join(appDir, 'manifest.json');
+    if (existsSync(mPath)) {
+      try {
+        manifestEntry = JSON.parse(readFileSync(mPath, 'utf-8'));
+      } catch { /* leave null */ }
+    }
+
     results.push({
       app,
       timestamp: entry,
       dir: appDir,
-      manifestEntry: {},
+      manifestEntry,
     });
   }
 
