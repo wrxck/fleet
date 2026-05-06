@@ -15,7 +15,7 @@ export function generateKeypair(): Keypair {
   if (!pub || !priv) {
     const safeOut = r.stdout
       .split('\n')
-      .filter(l => !l.startsWith('AGE-SECRET-KEY-'))
+      .filter(l => !l.includes('AGE-SECRET-KEY-'))
       .join('\n')
       .slice(0, 200);
     throw new SecretsError(`could not parse age-keygen output: ${safeOut}`);
