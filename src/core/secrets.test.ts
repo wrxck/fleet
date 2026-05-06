@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { join } from 'node:path';
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import type { ManifestEntry } from './secrets.js';
 
 const KEY_PATH = '/etc/fleet/age.key';
 
@@ -142,5 +145,44 @@ describe('removeBackup', () => {
     setupManifest({});
     removeBackup('nonexistent');
     expect(mockRmSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('ManifestEntry mode field', () => {
+  it('accepts mode: "unseal"', () => {
+    const e: ManifestEntry = {
+      type: 'env',
+      encryptedFile: 'a.env.age',
+      sourceFile: '/a/.env',
+      lastSealedAt: '2026-01-01T00:00:00.000Z',
+      keyCount: 1,
+      mode: 'unseal',
+    };
+    expect(e.mode).toBe('unseal');
+  });
+
+  it('accepts mode: "socket"', () => {
+    const e: ManifestEntry = {
+      type: 'env',
+      encryptedFile: 'a.env.age',
+      sourceFile: '/a/.env',
+      lastSealedAt: '2026-01-01T00:00:00.000Z',
+      keyCount: 1,
+      mode: 'socket',
+      recipient: 'age1abc...',
+    };
+    expect(e.mode).toBe('socket');
+    expect(e.recipient).toMatch(/^age1/);
+  });
+
+  it('mode is optional (backward compat)', () => {
+    const e: ManifestEntry = {
+      type: 'env',
+      encryptedFile: 'a.env.age',
+      sourceFile: '/a/.env',
+      lastSealedAt: '2026-01-01T00:00:00.000Z',
+      keyCount: 1,
+    };
+    expect(e.mode).toBeUndefined();
   });
 });
