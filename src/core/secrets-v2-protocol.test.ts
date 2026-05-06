@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseRequest, ProtocolError } from './secrets-v2-protocol.js';
+import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol.js';
 
 describe('parseRequest', () => {
   it('parses GET /secrets', () => {
@@ -46,5 +46,31 @@ describe('parseRequest', () => {
     const big = 'é'.repeat(513);
     const buf = Buffer.from(`POST /refresh HTTP/1.1\r\nContent-Length: ${Buffer.byteLength(big)}\r\n\r\n${big}`);
     expect(() => parseRequest(buf)).toThrow(/body too large/i);
+  });
+});
+
+describe('writeResponse', () => {
+  it('writes a 200 with JSON body', () => {
+    const out = writeResponse(200, { foo: 'bar' });
+    const text = out.toString('utf-8');
+    expect(text).toContain('HTTP/1.1 200 OK');
+    expect(text).toContain('Content-Type: application/json');
+    expect(text).toContain('Content-Length: 13');
+    expect(text).toContain('\r\n\r\n{"foo":"bar"}');
+  });
+
+  it('writes a 404', () => {
+    const out = writeResponse(404, { error: 'not_found' });
+    expect(out.toString('utf-8')).toContain('HTTP/1.1 404 Not Found');
+  });
+
+  it('writes a 429', () => {
+    const out = writeResponse(429, { error: 'rate_limited' });
+    expect(out.toString('utf-8')).toContain('HTTP/1.1 429 Too Many Requests');
+  });
+
+  it('writes a 500', () => {
+    const out = writeResponse(500, { error: 'internal' });
+    expect(out.toString('utf-8')).toContain('HTTP/1.1 500 Internal Server Error');
   });
 });
