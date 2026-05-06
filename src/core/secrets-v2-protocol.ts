@@ -50,3 +50,26 @@ export function parseRequest(buf: Buffer): ParsedRequest {
 
   return { method: method as 'GET' | 'POST', path, body };
 }
+
+const STATUS: Record<number, string> = {
+  200: '200 OK',
+  400: '400 Bad Request',
+  404: '404 Not Found',
+  405: '405 Method Not Allowed',
+  413: '413 Payload Too Large',
+  429: '429 Too Many Requests',
+  500: '500 Internal Server Error',
+};
+
+export function writeResponse(status: number, body: unknown): Buffer {
+  const statusLine = STATUS[status] ?? `${status} Unknown`;
+  const json = JSON.stringify(body);
+  const buf = Buffer.from(json, 'utf-8');
+  const head =
+    `HTTP/1.1 ${statusLine}\r\n` +
+    `Content-Type: application/json\r\n` +
+    `Content-Length: ${buf.length}\r\n` +
+    `Connection: close\r\n` +
+    `\r\n`;
+  return Buffer.concat([Buffer.from(head, 'utf-8'), buf]);
+}
