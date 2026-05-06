@@ -37,7 +37,14 @@ describe('parseRequest', () => {
     expect(() => parseRequest(Buffer.from('PATCH /secrets HTTP/1.1\r\n\r\n'))).toThrow(ProtocolError);
   });
 
-  it('strips path query string (no query support)', () => {
+  it('rejects path with query string (no query support)', () => {
     expect(() => parseRequest(Buffer.from('GET /secrets?x=1 HTTP/1.1\r\n\r\n'))).toThrow(/query string not supported/i);
+  });
+
+  it('rejects multi-byte body exceeding MAX_BODY in bytes', () => {
+    // 513 copies of é (u+00e9) = 513 string chars but 1026 bytes (utf-8 2 bytes each)
+    const big = 'é'.repeat(513);
+    const buf = Buffer.from(`POST /refresh HTTP/1.1\r\nContent-Length: ${Buffer.byteLength(big)}\r\n\r\n${big}`);
+    expect(() => parseRequest(buf)).toThrow(/body too large/i);
   });
 });
