@@ -13,7 +13,12 @@ export function generateKeypair(): Keypair {
   const pub = lines.find(l => l.startsWith('# public key: '))?.slice('# public key: '.length).trim();
   const priv = lines.find(l => l.startsWith('AGE-SECRET-KEY-'))?.trim();
   if (!pub || !priv) {
-    throw new SecretsError(`could not parse age-keygen output: ${r.stdout.slice(0, 100)}`);
+    const safeOut = r.stdout
+      .split('\n')
+      .filter(l => !l.startsWith('AGE-SECRET-KEY-'))
+      .join('\n')
+      .slice(0, 200);
+    throw new SecretsError(`could not parse age-keygen output: ${safeOut}`);
   }
   return { publicKey: pub, privateKey: priv };
 }
