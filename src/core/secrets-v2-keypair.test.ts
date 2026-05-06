@@ -38,4 +38,16 @@ describe('generateKeypair', () => {
     vi.mocked(execSafe).mockReturnValueOnce(ok('# public key: age1pub\n'));
     expect(() => generateKeypair()).toThrow(/could not parse/);
   });
+
+  it('does not include the private key in parse-failure error message', () => {
+    // stdout has a private key line but is missing the public key line, so parse fails
+    vi.mocked(execSafe).mockReturnValueOnce(
+      ok('# created: 2026-05-06T00:00:00Z\nAGE-SECRET-KEY-1MUST_NOT_APPEAR_IN_ERROR_MSG\n'),
+    );
+    let caught: Error | null = null;
+    try { generateKeypair(); } catch (e) { caught = e as Error; }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).not.toContain('AGE-SECRET-KEY-');
+    expect(caught!.message).not.toContain('MUST_NOT_APPEAR_IN_ERROR_MSG');
+  });
 });
