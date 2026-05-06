@@ -50,4 +50,32 @@ describe('generateKeypair', () => {
     expect(caught!.message).not.toContain('AGE-SECRET-KEY-');
     expect(caught!.message).not.toContain('MUST_NOT_APPEAR_IN_ERROR_MSG');
   });
+
+  it('does not leak private key with leading whitespace in parse-failure error', () => {
+    // hostile or corrupted age-keygen variant: emits the key with leading spaces
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: true,
+      stdout: '# created: 2026-05-06T00:00:00Z\n  AGE-SECRET-KEY-1WHITESPACE_LEAK_MARKER\n',
+      stderr: '', exitCode: 0,
+    } satisfies ExecResult);
+    let caught: Error | null = null;
+    try { generateKeypair(); } catch (e) { caught = e as Error; }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).not.toContain('AGE-SECRET-KEY-');
+    expect(caught!.message).not.toContain('WHITESPACE_LEAK_MARKER');
+  });
+
+  it('does not leak private key embedded mid-line in parse-failure error', () => {
+    // hostile variant: emits key inline in a synthesised log line
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: true,
+      stdout: '# created: 2026-05-06T00:00:00Z\nlog: generated AGE-SECRET-KEY-1INLINE_LEAK_MARKER successfully\n',
+      stderr: '', exitCode: 0,
+    } satisfies ExecResult);
+    let caught: Error | null = null;
+    try { generateKeypair(); } catch (e) { caught = e as Error; }
+    expect(caught).not.toBeNull();
+    expect(caught!.message).not.toContain('AGE-SECRET-KEY-');
+    expect(caught!.message).not.toContain('INLINE_LEAK_MARKER');
+  });
 });
