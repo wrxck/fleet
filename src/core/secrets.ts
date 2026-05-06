@@ -29,8 +29,10 @@ export interface ManifestEntry {
   /** Per-secret metadata, keyed by secret name. Backwards-compatible: missing means
    * lastRotated falls back to lastSealedAt and provider is auto-classified at read time. */
   secrets?: Record<string, SecretMetadata>;
-  /** Per-app age recipient public key, used by harden --per-app to limit blast radius. */
+  /** per-app age recipient public key. required when mode === 'socket'. */
   recipient?: string;
+  /** delivery mode. defaults to 'unseal' (v1 tmpfs path) when undefined for backward compat. */
+  mode?: 'unseal' | 'socket';
 }
 
 export interface Manifest {
