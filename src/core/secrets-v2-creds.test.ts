@@ -1,4 +1,5 @@
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import * as nodefs from 'node:fs';
 import { statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./exec.js', () => ({
   execSafe: vi.fn(),
 }));
+
+// mock node:fs so we can override chmodSync per-test while keeping real implementations
+vi.mock('node:fs', async (importOriginal) => {
+  const real = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...real,
+    chmodSync: vi.fn(real.chmodSync),
+  };
+});
 
 import { execSafe } from './exec.js';
 import type { ExecResult } from './exec.js';
@@ -151,5 +161,61 @@ describe('removeCredential', () => {
 
   it('is a silent no-op when the cred file does not exist', () => {
     expect(() => removeCredential('definitely-absent-xyz')).not.toThrow();
+  });
+});
+
+describe('credentialPathFor path-traversal guard', () => {
+  it('rejects path-traversal app names', () => {
+    // these escape CRED_DIR after path.join normalisation
+    expect(() => credentialPathFor('../../etc/passwd')).toThrow(/invalid app name/i);
+    expect(() => credentialPathFor('../sibling')).toThrow(/invalid app name/i);
+    expect(() => credentialPathFor('subdir/../../etc/passwd')).toThrow(/invalid app name/i);
+    // sanity: a normal name still works
+    expect(credentialPathFor('foo')).toBe(`${CRED_DIR}/foo.cred`);
+  });
+});
+
+describe('encryptCredential empty-plaintext sanitisation', () => {
+  it('preserves error readability when plaintext is empty', () => {
+    const outputPath = join(TMP, 'age-key.cred');
+    const stderrMsg = 'systemd-creds: missing file argument';
+    vi.mocked(execSafe).mockReturnValueOnce(fail(stderrMsg));
+
+    let caught: Error | null = null;
+    try {
+      encryptCredential({ name: 'age-key', plaintext: '', outputPath });
+    } catch (e) {
+      caught = e as Error;
+    }
+
+    expect(caught).not.toBeNull();
+    // the literal stderr must appear verbatim in the error message (not corrupted)
+    expect(caught!.message).toContain(stderrMsg);
+  });
+});
+
+describe('encryptCredential chmod failure cleanup', () => {
+  it('cleans up partial file and throws SecretsError when chmod fails', () => {
+    const outputPath = join(TMP, 'age-key.cred');
+
+    vi.mocked(execSafe).mockImplementationOnce(() => {
+      writeFileSync(outputPath, 'encrypted');
+      return ok();
+    });
+
+    vi.mocked(nodefs.chmodSync).mockImplementationOnce(() => {
+      throw new Error('EROFS');
+    });
+
+    let caught: Error | null = null;
+    try {
+      encryptCredential({ name: 'age-key', plaintext: 'secret', outputPath });
+    } catch (e) {
+      caught = e as Error;
+    }
+
+    expect(caught).not.toBeNull();
+    expect(caught!.message).toMatch(/chmod failed/i);
+    expect(existsSync(outputPath)).toBe(false);
   });
 });
