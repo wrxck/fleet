@@ -1,7 +1,10 @@
-import { existsSync } from 'node:fs';
+import { createServer as netCreateServer } from 'node:net';
+import type { Socket } from 'node:net';
+import { existsSync, unlinkSync, chmodSync } from 'node:fs';
 
 import { execSafe } from './exec.js';
 import { SecretsError } from './errors.js';
+import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol.js';
 
 export function decryptVaultBlob(privateKeyPath: string, blobPath: string): Record<string, string> {
   if (!existsSync(blobPath)) throw new SecretsError(`vault blob not found: ${blobPath}`);
@@ -30,4 +33,88 @@ function parseEnvFormat(content: string): Record<string, string> {
     }
   }
   return map;
+}
+
+const MAX_REQUEST_BYTES = 8192;
+
+export interface AgentDeps {
+  app: string;
+  getSecrets: () => Record<string, string>;
+  refresh: () => void;
+}
+
+export interface Server {
+  listen(path: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+export function createServer(deps: AgentDeps): Server {
+  const server = netCreateServer((sock) => handleConnection(sock, deps));
+  let socketPath = '';
+
+  return {
+    listen: (path) => new Promise<void>((resolve, reject) => {
+      socketPath = path;
+      if (existsSync(path)) {
+        try { unlinkSync(path); } catch { /* race; let listen fail naturally */ }
+      }
+      const onError = (err: Error) => reject(err);
+      server.once('error', onError);
+      server.listen(path, () => {
+        server.off('error', onError);
+        try { chmodSync(path, 0o660); } catch { /* non-fatal; listen succeeded */ }
+        resolve();
+      });
+    }),
+    close: () => new Promise<void>((resolve) => {
+      server.close(() => {
+        if (socketPath && existsSync(socketPath)) {
+          try { unlinkSync(socketPath); } catch { /* ignore */ }
+        }
+        resolve();
+      });
+    }),
+  };
+}
+
+function handleConnection(sock: Socket, deps: AgentDeps): void {
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  let handled = false;
+
+  const handle = () => {
+    if (handled) return;
+    handled = true;
+    const buf = Buffer.concat(chunks);
+    try {
+      const req = parseRequest(buf);
+      const resp = dispatch(req, deps);
+      sock.end(resp);
+    } catch (err) {
+      const isProto = err instanceof ProtocolError;
+      const status = isProto ? 400 : 500;
+      const message = isProto ? (err as Error).message : 'internal';
+      sock.end(writeResponse(status, { error: message }));
+    }
+  };
+
+  sock.on('data', (chunk: Buffer) => {
+    chunks.push(chunk);
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_REQUEST_BYTES) {
+      handled = true;
+      sock.end(writeResponse(413, { error: 'request too large' }));
+      return;
+    }
+    if (Buffer.concat(chunks).includes(Buffer.from('\r\n\r\n'))) {
+      handle();
+    }
+  });
+  sock.on('end', () => { if (!handled) handle(); });
+  sock.on('error', () => { /* connection-level errors are fatal for that connection only */ });
+}
+
+function dispatch(req: { method: string; path: string }, _deps: AgentDeps): Buffer {
+  // routes wired in tasks 11-15; default 404 for now
+  return writeResponse(404, { error: 'not_found' });
 }
