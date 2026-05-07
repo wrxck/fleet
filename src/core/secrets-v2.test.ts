@@ -65,10 +65,10 @@ describe('decryptVaultBlob', () => {
     vi.mocked(execSafe).mockReturnValueOnce(ok('FOO=bar\n'));
     decryptVaultBlob(privateKeyPath, blobPath);
     expect(vi.mocked(execSafe)).toHaveBeenCalledOnce();
-    expect(vi.mocked(execSafe)).toHaveBeenCalledWith(
-      'age',
-      ['-d', '-i', privateKeyPath, blobPath],
-    );
+    const call = vi.mocked(execSafe).mock.calls[0];
+    expect(call[0]).toBe('age');
+    expect(call[1]).toEqual(['-d', '-i', privateKeyPath, blobPath]);
+    expect(call[2]).toBeUndefined();
   });
 
   it('preserves empty values: EMPTY= gives empty string', () => {
