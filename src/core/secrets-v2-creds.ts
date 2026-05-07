@@ -7,7 +7,11 @@ import { SecretsError } from './errors.js';
 export const CRED_DIR = '/etc/fleet/credentials';
 
 export function credentialPathFor(app: string): string {
-  return join(CRED_DIR, `${app}.cred`);
+  const p = join(CRED_DIR, `${app}.cred`);
+  if (!p.startsWith(CRED_DIR + '/')) {
+    throw new SecretsError(`invalid app name: ${app}`);
+  }
+  return p;
 }
 
 export function encryptCredential(args: { name: string; plaintext: string; outputPath: string }): void {
@@ -20,10 +24,17 @@ export function encryptCredential(args: { name: string; plaintext: string; outpu
     { input: args.plaintext },
   );
   if (!r.ok) {
-    const safeSterr = r.stderr.split(args.plaintext).join('[redacted]');
-    throw new SecretsError(`systemd-creds encrypt failed: ${safeSterr}`);
+    const safeStderr = args.plaintext.length > 0
+      ? r.stderr.split(args.plaintext).join('[redacted]')
+      : r.stderr;
+    throw new SecretsError(`systemd-creds encrypt failed: ${safeStderr}`);
   }
-  chmodSync(args.outputPath, 0o600);
+  try {
+    chmodSync(args.outputPath, 0o600);
+  } catch (chmodErr) {
+    try { unlinkSync(args.outputPath); } catch { /* ignore */ }
+    throw new SecretsError(`chmod failed for ${args.outputPath}: ${(chmodErr as Error).message}`);
+  }
 }
 
 export function credentialExists(app: string): boolean {
