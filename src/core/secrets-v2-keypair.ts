@@ -6,6 +6,23 @@ export interface Keypair {
   privateKey: string;
 }
 
+export function reencryptForRecipient(args: {
+  ciphertext: string;
+  oldKeyPath: string;
+  newRecipient: string;
+}): string {
+  const dec = execSafe('age', ['-d', '-i', args.oldKeyPath], { input: args.ciphertext });
+  if (!dec.ok) {
+    throw new SecretsError(`decrypt failed: ${dec.stderr}`);
+  }
+  const plaintext = dec.stdout;
+  const enc = execSafe('age', ['-r', args.newRecipient, '--armor'], { input: plaintext });
+  if (!enc.ok) {
+    throw new SecretsError(`encrypt failed: ${enc.stderr}`);
+  }
+  return enc.stdout;
+}
+
 export function generateKeypair(): Keypair {
   const r = execSafe('age-keygen', []);
   if (!r.ok) throw new SecretsError(`age-keygen failed: ${r.stderr}`);
