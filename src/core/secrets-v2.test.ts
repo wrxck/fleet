@@ -210,4 +210,47 @@ describe('createServer (socket server)', () => {
     const resp = await request(socketPath, body);
     expect(resp).toMatch(/^HTTP\/1\.1 413 Payload Too Large/);
   });
+
+  it('GET /secrets returns 200 with secrets map', async () => {
+    const secrets = { STRIPE_KEY: 'sk_test', DATABASE_URL: 'postgres://x' };
+    await server.close();
+    server = createAgentServer(makeDeps({ getSecrets: () => secrets }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body).toEqual(secrets);
+  });
+
+  it('GET /secrets returns 200 with empty secrets map', async () => {
+    await server.close();
+    server = createAgentServer(makeDeps({ getSecrets: () => ({}) }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body).toEqual({});
+  });
+
+  it('calls getSecrets each request', async () => {
+    const spy = vi.fn(() => ({ KEY: 'val' }));
+    await server.close();
+    server = createAgentServer(makeDeps({ getSecrets: spy }));
+    await server.listen(socketPath);
+    await request(socketPath, 'GET /secrets HTTP/1.1\r\n\r\n');
+    await request(socketPath, 'GET /secrets HTTP/1.1\r\n\r\n');
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('GET /something-else still returns 404', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /something-else HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
+  });
+
+  it('POST /secrets returns 404 (only GET is supported)', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'POST /secrets HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
+  });
 });
