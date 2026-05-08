@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { execSafe } from './exec.js';
 import type { ExecResult } from './exec.js';
 import { SecretsError } from './errors.js';
-import { decryptVaultBlob, createServer as createAgentServer, type AgentDeps, _resetRateLimit, IDLE_TIMEOUT_MS } from './secrets-v2.js';
+import { decryptVaultBlob, createServer as createAgentServer, type AgentDeps, _resetRateLimit, IDLE_TIMEOUT_MS, parseArgs, main } from './secrets-v2.js';
 
 // partial mock: spread real node:fs but stub existsSync; real impl exposed as __realExistsSync
 vi.mock('node:fs', async (importOriginal) => {
@@ -541,5 +541,97 @@ describe('multi-chunk request handling', () => {
     });
 
     expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+  });
+});
+
+// parseArgs tests
+describe('parseArgs', () => {
+  it('parses all required flags', () => {
+    const args = parseArgs(['--app', 'foo', '--vault', '/home/matt/fleet/vault', '--socket', '/run/fleet-secrets/foo.sock']);
+    expect(args).toEqual({ app: 'foo', vault: '/home/matt/fleet/vault', socket: '/run/fleet-secrets/foo.sock' });
+  });
+
+  it('throws on missing --app', () => {
+    expect(() => parseArgs(['--vault', '/vault', '--socket', '/sock'])).toThrow(SecretsError);
+  });
+
+  it('throws on missing --vault', () => {
+    expect(() => parseArgs(['--app', 'foo', '--socket', '/sock'])).toThrow(SecretsError);
+  });
+
+  it('throws on missing --socket', () => {
+    expect(() => parseArgs(['--app', 'foo', '--vault', '/vault'])).toThrow(SecretsError);
+  });
+
+  it('accepts optional --credential', () => {
+    const args = parseArgs(['--app', 'foo', '--vault', '/vault', '--socket', '/sock', '--credential', '/run/creds/key']);
+    expect(args.credential).toBe('/run/creds/key');
+  });
+
+  it('throws on unknown flag', () => {
+    expect(() => parseArgs(['--app', 'foo', '--vault', '/vault', '--socket', '/sock', '--unknown', 'val'])).toThrow(SecretsError);
+  });
+
+  it('throws on flag without value (trailing flag)', () => {
+    expect(() => parseArgs(['--app'])).toThrow(SecretsError);
+  });
+
+  it('parses multiple flags in any order', () => {
+    const args = parseArgs(['--socket', '/sock', '--app', 'bar', '--vault', '/v']);
+    expect(args.app).toBe('bar');
+    expect(args.vault).toBe('/v');
+    expect(args.socket).toBe('/sock');
+  });
+});
+
+// chmod warning tests
+describe('chmod warning', () => {
+  it('logs a WARNING to stderr when chmodSync throws', async () => {
+    const chmodSync = await import('node:fs').then((m) => m.chmodSync);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const chmodSpy = vi.spyOn(await import('node:fs'), 'chmodSync').mockImplementationOnce(() => {
+      throw new Error('EPERM: operation not permitted');
+    });
+
+    vi.mocked(existsSync).mockReset();
+    vi.mocked(existsSync).mockImplementation(
+      (p: Parameters<typeof existsSync>[0]) => statSync(p as string, { throwIfNoEntry: false }) !== undefined,
+    );
+
+    const tmpDir = mkdtempSync(join(tmpdir(), 'fleet-v2-chmod-test-'));
+    const socketPath = join(tmpDir, 'agent.sock');
+    const server = createAgentServer({
+      app: 'testapp',
+      getSecrets: () => ({}),
+      refresh: () => {},
+    });
+
+    try {
+      await server.listen(socketPath);
+      const calls = stderrSpy.mock.calls.map((c) => String(c[0]));
+      const warnCall = calls.find((s) => s.includes('chmod') && s.includes('WARNING'));
+      expect(warnCall).toBeDefined();
+    } finally {
+      await server.close();
+      rmSync(tmpDir, { recursive: true, force: true });
+      stderrSpy.mockRestore();
+      chmodSpy.mockRestore();
+      vi.mocked(existsSync).mockReset();
+    }
+  });
+});
+
+// main() input validation tests
+describe('main', () => {
+  it('throws SecretsError when no credential path is available', async () => {
+    const origCredsDir = process.env.CREDENTIALS_DIRECTORY;
+    delete process.env.CREDENTIALS_DIRECTORY;
+    try {
+      await expect(
+        main(['--app', 'foo', '--vault', '/nonexistent/vault', '--socket', '/nonexistent/sock']),
+      ).rejects.toThrow(SecretsError);
+    } finally {
+      if (origCredsDir !== undefined) process.env.CREDENTIALS_DIRECTORY = origCredsDir;
+    }
   });
 });
