@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { addAgentDependency } from '../templates/app-unit-edit.js';
@@ -50,10 +50,20 @@ const STEP_NAMES: Record<number, string> = {
   11: 'health check app via HTTP /health',
 };
 
-function pollHealth(url: string): boolean {
-  const deadline = Date.now() + 30_000;
+async function pollHealth(url: string, deadlineMs: number = 30_000): Promise<boolean> {
+  const deadline = Date.now() + deadlineMs;
   while (Date.now() < deadline) {
     if (execSafe('curl', ['-sf', '--max-time', '5', url]).ok) return true;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  return false;
+}
+
+async function waitForSocket(socketPath: string, timeoutMs: number = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (existsSync(socketPath)) return true;
+    await new Promise(r => setTimeout(r, 100));
   }
   return false;
 }
@@ -69,6 +79,10 @@ function doRollback(opts: {
   composePath: string;
 }): void {
   try { restoreSnapshot(opts.snapInput, opts.snap); } catch { /* best-effort */ }
+  const bakPath = join(VAULT_DIR, `${opts.app}.env.age.v1.bak`);
+  if (existsSync(bakPath)) {
+    try { unlinkSync(bakPath); } catch { /* best-effort */ }
+  }
   if (opts.credentialWritten) {
     try { removeCredential(opts.app); } catch { /* best-effort */ }
   }
@@ -77,6 +91,7 @@ function doRollback(opts: {
       execSafe('systemctl', ['disable', '--now', `fleet-secrets-agent@${opts.app}.service`]);
     } catch { /* best-effort */ }
   }
+  try { execSafe('systemctl', ['daemon-reload']); } catch { /* best-effort */ }
   if (!opts.noRestartApp && opts.failedStep >= 10) {
     try {
       execSafe('docker', ['compose', 'up', '-d', '--force-recreate'], { cwd: opts.composePath });
@@ -224,15 +239,17 @@ export async function migrateAppToV2(opts: MigrateOpts): Promise<MigrateResult> 
 
   // step 9
   try {
-    execSafe('systemctl', ['daemon-reload']);
-    execSafe('systemctl', ['enable', '--now', `fleet-secrets-agent@${app}.service`]);
+    const reload = execSafe('systemctl', ['daemon-reload']);
+    if (!reload.ok) throw new SecretsError(`systemctl daemon-reload failed: ${reload.stderr}`);
+    const enable = execSafe('systemctl', ['enable', '--now', `fleet-secrets-agent@${app}.service`]);
+    if (!enable.ok) throw new SecretsError(`systemctl enable failed: ${enable.stderr}`);
     agentEnabled = true;
     const active = execSafe('systemctl', ['is-active', `fleet-secrets-agent@${app}.service`]);
     if (active.stdout.trim() !== 'active') {
       throw new SecretsError(`agent not active: ${active.stdout.trim()}`);
     }
-    if (!existsSync(`/run/fleet-secrets/${app}.sock`)) {
-      throw new SecretsError(`socket missing: /run/fleet-secrets/${app}.sock`);
+    if (!await waitForSocket(`/run/fleet-secrets/${app}.sock`)) {
+      throw new SecretsError(`agent socket did not appear within 5s: /run/fleet-secrets/${app}.sock`);
     }
     push(9, true);
   } catch (err) {
@@ -258,7 +275,7 @@ export async function migrateAppToV2(opts: MigrateOpts): Promise<MigrateResult> 
     try {
       const port = appEntry.port;
       const url = port ? `http://localhost:${port}/health` : 'http://localhost/health';
-      if (!pollHealth(url)) throw new SecretsError(`health check timed out after 30s for ${url}`);
+      if (!await pollHealth(url)) throw new SecretsError(`health check timed out after 30s for ${url}`);
       push(11, true);
     } catch (err) {
       rb(11, err); return { app, snapshotDir: snap.dir, steps, rolledBack: true };

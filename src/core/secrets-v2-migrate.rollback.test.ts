@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { snapshotApp, restoreSnapshot } from './secrets-v2-snapshot.js';
 import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair.js';
@@ -53,6 +53,7 @@ vi.mock('node:fs', async (importOriginal) => {
     readFileSync: vi.fn(real.readFileSync),
     writeFileSync: vi.fn(),
     renameSync: vi.fn(),
+    unlinkSync: vi.fn(),
     copyFileSync: vi.fn(),
     mkdirSync: vi.fn(),
     chmodSync: vi.fn(),
@@ -230,8 +231,10 @@ describe('migrateAppToV2 rollback - step 11 (curl healthcheck times out)', () =>
       return ok();
     });
     vi.spyOn(Date, 'now')
-      .mockReturnValueOnce(0)
-      .mockReturnValue(31_000);
+      .mockReturnValueOnce(0)      // waitForSocket deadline setup
+      .mockReturnValueOnce(0)      // waitForSocket while-check (socket found, returns)
+      .mockReturnValueOnce(0)      // pollHealth deadline setup: deadline = 30000
+      .mockReturnValue(31_000);    // pollHealth while-check: 31000 >= 30000, exits
   });
 
   it('calls restoreSnapshot and re-runs docker compose for v1 restart', async () => {
@@ -240,5 +243,163 @@ describe('migrateAppToV2 rollback - step 11 (curl healthcheck times out)', () =>
     expect(vi.mocked(restoreSnapshot)).toHaveBeenCalledOnce();
     const dockerCalls = vi.mocked(execSafe).mock.calls.filter(c => c[0] === 'docker');
     expect(dockerCalls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// regression tests for code-review findings
+
+describe('regression: step 11 healthcheck polls with sleep (not CPU spin)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupHappyPath();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('curl calls are spaced ≥200ms apart — confirms 250ms sleep exists between polls', async () => {
+    const curlCallTimes: number[] = [];
+    const realDateNow = Date.now.bind(Date);
+    let curlCount = 0;
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('active');
+      if (cmd === 'curl') {
+        curlCallTimes.push(realDateNow());
+        curlCount++;
+        // succeed on 3rd curl so the migration completes and we can inspect timing
+        if (curlCount >= 3) return ok('200');
+        return fail('connection refused');
+      }
+      return ok();
+    });
+
+    const result = await migrateAppToV2({ app: 'myapp' });
+    expect(result.rolledBack).toBeFalsy();
+
+    // 3 curl calls happened; verify consecutive calls are spaced >=200ms apart
+    expect(curlCallTimes.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < curlCallTimes.length; i++) {
+      expect(curlCallTimes[i] - curlCallTimes[i - 1]).toBeGreaterThanOrEqual(200);
+    }
+  }, 15_000);
+});
+
+describe('regression: step 9 socket race — polls until socket appears', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupHappyPath();
+  });
+
+  it('does not roll back if socket appears on 4th existsSync poll', async () => {
+    let sockCallCount = 0;
+    vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+      const s = p.toString();
+      if (s === '/run/fleet-secrets/myapp.sock') {
+        sockCallCount++;
+        return sockCallCount >= 4; // false on polls 1-3, true on 4th
+      }
+      if (s === '/etc/systemd/system/fleet-secrets-agent@.service') return false;
+      if (s.includes('docker-compose.yml')) return true;
+      if (s.includes('myapp.service')) return true;
+      if (s.includes('myapp.env.age')) return true;
+      return false;
+    });
+
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('active');
+      if (cmd === 'curl') return ok('200');
+      return ok();
+    });
+
+    const result = await migrateAppToV2({ app: 'myapp' });
+    expect(result.rolledBack).toBeFalsy();
+    expect(sockCallCount).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('regression: step 9 socket truly missing — rollback with clear error', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupHappyPath();
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('active');
+      if (cmd === 'curl') return ok('200');
+      return ok();
+    });
+    vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+      const s = p.toString();
+      if (s === '/run/fleet-secrets/myapp.sock') return false;
+      if (s === '/etc/systemd/system/fleet-secrets-agent@.service') return false;
+      if (s.includes('docker-compose.yml')) return true;
+      if (s.includes('myapp.service')) return true;
+      if (s.includes('myapp.env.age')) return true;
+      return false;
+    });
+  });
+
+  it('rolls back and step 9 error mentions "did not appear"', async () => {
+    const result = await migrateAppToV2({ app: 'myapp' });
+    expect(result.rolledBack).toBeTruthy();
+    const step9 = result.steps.find(s => s.step === 9);
+    expect(step9).toBeDefined();
+    expect(step9!.ok).toBeFalsy();
+    expect(step9!.detail).toMatch(/did not appear/);
+    expect(vi.mocked(restoreSnapshot)).toHaveBeenCalledOnce();
+  }, 8_000);
+});
+
+describe('regression: rollback cleans up .v1.bak orphan from partial step 3', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupHappyPath();
+    // renameSync succeeds (vault renamed to .v1.bak) then writeFileSync throws on vault write
+    vi.mocked(fs.renameSync).mockImplementation(() => {});
+    let writeCount = 0;
+    vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike | number) => {
+      const s = p.toString();
+      if (s.endsWith('myapp.env.age') && writeCount === 0) {
+        writeCount++;
+        throw new Error('disk full');
+      }
+      writeCount++;
+    });
+  });
+
+  it('rollback attempts to unlink the .v1.bak file', async () => {
+    const unlinkSpy = vi.spyOn(fs, 'unlinkSync').mockImplementation(() => {});
+
+    const result = await migrateAppToV2({ app: 'myapp' });
+    expect(result.rolledBack).toBeTruthy();
+
+    const bakPath = '/tmp/fleet-vault/myapp.env.age.v1.bak';
+    const existsCalls = vi.mocked(fs.existsSync).mock.calls.map(c => c[0].toString());
+    expect(existsCalls.some(p => p === bakPath)).toBeTruthy();
+    const unlinkCalls = unlinkSpy.mock.calls.map(c => c[0].toString());
+    expect(unlinkCalls.some(p => p === bakPath)).toBeTruthy();
+  });
+});
+
+describe('regression: step 9 daemon-reload failure — rollback with clear error', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupHappyPath();
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args[0] === 'daemon-reload') return fail('dbus connection failed');
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('active');
+      if (cmd === 'curl') return ok('200');
+      return ok();
+    });
+  });
+
+  it('rolls back with error mentioning "daemon-reload failed", not "is-active"', async () => {
+    const result = await migrateAppToV2({ app: 'myapp' });
+    expect(result.rolledBack).toBeTruthy();
+    const step9 = result.steps.find(s => s.step === 9);
+    expect(step9).toBeDefined();
+    expect(step9!.ok).toBeFalsy();
+    expect(step9!.detail).toMatch(/daemon-reload failed/);
+    expect(step9!.detail).not.toMatch(/is-active/);
+    expect(vi.mocked(restoreSnapshot)).toHaveBeenCalledOnce();
   });
 });
