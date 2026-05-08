@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { execSafe } from './exec.js';
 import type { ExecResult } from './exec.js';
 import { SecretsError } from './errors.js';
-import { decryptVaultBlob, createServer as createAgentServer, type AgentDeps } from './secrets-v2.js';
+import { decryptVaultBlob, createServer as createAgentServer, type AgentDeps, _resetRateLimit, IDLE_TIMEOUT_MS } from './secrets-v2.js';
 
 // partial mock: spread real node:fs but stub existsSync; real impl exposed as __realExistsSync
 vi.mock('node:fs', async (importOriginal) => {
@@ -370,5 +370,176 @@ describe('createServer (socket server)', () => {
     await server.listen(socketPath);
     const resp = await request(socketPath, 'POST /health HTTP/1.1\r\n\r\n');
     expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
+  });
+});
+
+// rate limiter tests
+describe('rate limiter', () => {
+  let tmpDir: string;
+  let socketPath: string;
+  let server: ReturnType<typeof createAgentServer>;
+
+  beforeEach(async () => {
+    _resetRateLimit();
+    vi.mocked(existsSync).mockReset();
+    vi.mocked(existsSync).mockImplementation(
+      (p: Parameters<typeof existsSync>[0]) => statSync(p as string, { throwIfNoEntry: false }) !== undefined,
+    );
+    tmpDir = mkdtempSync(join(tmpdir(), 'fleet-v2-rl-test-'));
+    socketPath = join(tmpDir, 'agent.sock');
+    server = createAgentServer(makeDeps());
+    await server.listen(socketPath);
+  });
+
+  afterEach(async () => {
+    await server.close();
+    rmSync(tmpDir, { recursive: true, force: true });
+    vi.mocked(existsSync).mockReset();
+  });
+
+  it('next request after bucket is empty returns 429', async () => {
+    // start with 1 token — first succeeds, second is immediately rate limited
+    _resetRateLimit(1);
+
+    const first = await request(socketPath, 'GET /health HTTP/1.1\r\n\r\n');
+    expect(first).toMatch(/^HTTP\/1\.1 200/);
+
+    const second = await request(socketPath, 'GET /health HTTP/1.1\r\n\r\n');
+    expect(second).toMatch(/^HTTP\/1\.1 429/);
+    const body = JSON.parse(second.split('\r\n\r\n')[1]);
+    expect(body.error).toBe('rate_limited');
+  });
+
+  it('bucket refills: after exhaustion, waiting 100ms allows ~10 more requests', async () => {
+    // exhaust the bucket
+    _resetRateLimit(0);
+
+    // wait 100ms — refills ~10 tokens (100 tokens/sec * 0.1s)
+    await new Promise<void>((resolve) => setTimeout(resolve, 110));
+
+    let successCount = 0;
+    for (let i = 0; i < 10; i++) {
+      const resp = await request(socketPath, 'GET /health HTTP/1.1\r\n\r\n');
+      if (resp.startsWith('HTTP/1.1 200')) successCount++;
+    }
+    expect(successCount).toBeGreaterThanOrEqual(5);
+    expect(successCount).toBe(10);
+  }, 15_000);
+});
+
+// idle timeout tests
+describe('idle timeout', () => {
+  it('IDLE_TIMEOUT_MS is 30000', () => {
+    expect(IDLE_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it('connection remains open for at least 200ms without data (timeout is not too aggressive)', async () => {
+    vi.mocked(existsSync).mockReset();
+    vi.mocked(existsSync).mockImplementation(
+      (p: Parameters<typeof existsSync>[0]) => statSync(p as string, { throwIfNoEntry: false }) !== undefined,
+    );
+    const tmpDir = mkdtempSync(join(tmpdir(), 'fleet-v2-idle-test-'));
+    const socketPath = join(tmpDir, 'agent.sock');
+    const server = createAgentServer(makeDeps());
+    await server.listen(socketPath);
+
+    try {
+      const stillOpen = await new Promise<boolean>((resolve) => {
+        const sock = createConnection(socketPath);
+        let closed = false;
+        sock.on('connect', () => {
+          setTimeout(() => {
+            if (!closed) {
+              sock.destroy();
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          }, 200);
+        });
+        sock.on('close', () => { closed = true; });
+        sock.on('error', () => { closed = true; });
+      });
+      expect(stillOpen).toBeTruthy();
+    } finally {
+      await server.close();
+      rmSync(tmpDir, { recursive: true, force: true });
+      vi.mocked(existsSync).mockReset();
+    }
+  });
+});
+
+// multi-chunk header scan tests
+describe('multi-chunk request handling', () => {
+  let tmpDir: string;
+  let socketPath: string;
+  let server: ReturnType<typeof createAgentServer>;
+
+  beforeEach(async () => {
+    _resetRateLimit();
+    vi.mocked(existsSync).mockReset();
+    vi.mocked(existsSync).mockImplementation(
+      (p: Parameters<typeof existsSync>[0]) => statSync(p as string, { throwIfNoEntry: false }) !== undefined,
+    );
+    tmpDir = mkdtempSync(join(tmpdir(), 'fleet-v2-chunk-test-'));
+    socketPath = join(tmpDir, 'agent.sock');
+    server = createAgentServer(makeDeps());
+    await server.listen(socketPath);
+  });
+
+  afterEach(async () => {
+    await server.close();
+    rmSync(tmpDir, { recursive: true, force: true });
+    vi.mocked(existsSync).mockReset();
+  });
+
+  it('request sent in small 4-byte chunks gets 200 response', async () => {
+    const raw = 'GET /health HTTP/1.1\r\n\r\n';
+    const chunkSize = 4;
+
+    const resp = await new Promise<string>((resolve, reject) => {
+      const sock = createConnection(socketPath);
+      const chunks: Buffer[] = [];
+      sock.on('connect', () => {
+        let offset = 0;
+        const writeNextChunk = () => {
+          if (offset >= raw.length) return;
+          const slice = raw.slice(offset, offset + chunkSize);
+          sock.write(slice);
+          offset += chunkSize;
+          if (offset < raw.length) {
+            setTimeout(writeNextChunk, 5);
+          }
+        };
+        writeNextChunk();
+      });
+      sock.on('data', (c: Buffer) => chunks.push(c));
+      sock.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+      sock.on('error', reject);
+      sock.setTimeout(3000, () => { sock.destroy(); reject(new Error('timeout')); });
+    });
+
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+  });
+
+  it('\\r\\n\\r\\n split across chunk boundary is detected correctly', async () => {
+    // terminator split across two writes: part1 ends with \r\n, part2 is \r\n
+    const part1 = 'GET /health HTTP/1.1\r\n';
+    const part2 = '\r\n';
+
+    const resp = await new Promise<string>((resolve, reject) => {
+      const sock = createConnection(socketPath);
+      const chunks: Buffer[] = [];
+      sock.on('connect', () => {
+        sock.write(part1);
+        setTimeout(() => sock.write(part2), 10);
+      });
+      sock.on('data', (c: Buffer) => chunks.push(c));
+      sock.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+      sock.on('error', reject);
+      sock.setTimeout(3000, () => { sock.destroy(); reject(new Error('timeout')); });
+    });
+
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
   });
 });

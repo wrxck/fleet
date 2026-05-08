@@ -6,6 +6,31 @@ import { execSafe } from './exec.js';
 import { SecretsError } from './errors.js';
 import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol.js';
 
+export const IDLE_TIMEOUT_MS = 30_000;
+
+const TERM = Buffer.from('\r\n\r\n');
+
+// module-level token bucket — limits total throughput to 100 req/sec across all connections
+let _tokens = 100;
+let _lastRefill = Date.now();
+
+function takeToken(): boolean {
+  const now = Date.now();
+  const elapsed = (now - _lastRefill) / 1000;
+  if (elapsed > 0) {
+    _tokens = Math.min(100, _tokens + elapsed * 100);
+    _lastRefill = now;
+  }
+  if (_tokens < 1) return false;
+  _tokens -= 1;
+  return true;
+}
+
+export function _resetRateLimit(initialTokens = 100): void {
+  _tokens = initialTokens;
+  _lastRefill = Date.now();
+}
+
 export function decryptVaultBlob(privateKeyPath: string, blobPath: string): Record<string, string> {
   if (!existsSync(blobPath)) throw new SecretsError(`vault blob not found: ${blobPath}`);
   if (!existsSync(privateKeyPath)) throw new SecretsError(`private key not found: ${privateKeyPath}`);
@@ -81,10 +106,17 @@ function handleConnection(sock: Socket, deps: AgentDeps): void {
   const chunks: Buffer[] = [];
   let totalBytes = 0;
   let handled = false;
+  let searchedUpTo = 0;
+
+  sock.setTimeout(IDLE_TIMEOUT_MS, () => sock.destroy());
 
   const handle = () => {
     if (handled) return;
     handled = true;
+    if (!takeToken()) {
+      sock.end(writeResponse(429, { error: 'rate_limited' }));
+      return;
+    }
     const buf = Buffer.concat(chunks);
     try {
       const req = parseRequest(buf);
@@ -106,8 +138,12 @@ function handleConnection(sock: Socket, deps: AgentDeps): void {
       sock.end(writeResponse(413, { error: 'request too large' }));
       return;
     }
-    if (Buffer.concat(chunks).includes(Buffer.from('\r\n\r\n'))) {
+    const buf = Buffer.concat(chunks);
+    const idx = buf.indexOf(TERM, Math.max(0, searchedUpTo - 3));
+    if (idx >= 0) {
       handle();
+    } else {
+      searchedUpTo = buf.length;
     }
   });
   sock.on('end', () => { if (!handled) handle(); });
