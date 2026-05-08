@@ -253,4 +253,49 @@ describe('createServer (socket server)', () => {
     const resp = await request(socketPath, 'POST /secrets HTTP/1.1\r\n\r\n');
     expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
   });
+
+  // GET /secrets/<KEY> tests
+  it('GET /secrets/<KEY> returns 200 with key value', async () => {
+    await server.close();
+    server = createAgentServer(makeDeps({ getSecrets: () => ({ FOO: 'bar' }) }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets/FOO HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body).toEqual({ value: 'bar' });
+  });
+
+  it('GET /secrets/<KEY> returns 404 for unknown key', async () => {
+    await server.close();
+    server = createAgentServer(makeDeps({ getSecrets: () => ({ FOO: 'bar' }) }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets/MISSING HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body.error).toBe('not_found');
+  });
+
+  it('GET /secrets/<KEY> returns 400 for invalid key with hyphen', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets/foo-bar HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 400 Bad Request/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body.error).toBe('invalid_key');
+  });
+
+  it('GET /secrets/<KEY> returns 400 for key starting with digit', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets/1FOO HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 400 Bad Request/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body.error).toBe('invalid_key');
+  });
+
+  it('GET /secrets/<KEY> returns 400 for empty key (trailing slash)', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /secrets/ HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 400 Bad Request/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body.error).toBe('invalid_key');
+  });
 });
