@@ -118,5 +118,14 @@ function dispatch(req: { method: string; path: string }, deps: AgentDeps): Buffe
   if (req.method === 'GET' && req.path === '/secrets') {
     return writeResponse(200, deps.getSecrets());
   }
+  if (req.method === 'GET' && req.path.startsWith('/secrets/')) {
+    const key = req.path.slice('/secrets/'.length);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      return writeResponse(400, { error: 'invalid_key' });
+    }
+    const m = deps.getSecrets();
+    if (key in m) return writeResponse(200, { value: m[key] });
+    return writeResponse(404, { error: 'not_found' });
+  }
   return writeResponse(404, { error: 'not_found' });
 }
