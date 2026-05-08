@@ -87,7 +87,11 @@ export function createServer(deps: AgentDeps): Server {
       server.once('error', onError);
       server.listen(path, () => {
         server.off('error', onError);
-        try { chmodSync(path, 0o660); } catch { /* non-fatal; listen succeeded */ }
+        try {
+          chmodSync(path, 0o660);
+        } catch (err) {
+          process.stderr.write(`[fleet-agent] WARNING: chmod 0660 on ${path} failed: ${(err as Error).message}\n`);
+        }
         resolve();
       });
     }),
@@ -148,6 +152,96 @@ function handleConnection(sock: Socket, deps: AgentDeps): void {
   });
   sock.on('end', () => { if (!handled) handle(); });
   sock.on('error', () => { /* connection-level errors are fatal for that connection only */ });
+}
+
+export interface AgentArgs {
+  app: string;
+  vault: string;
+  socket: string;
+  credential?: string;
+}
+
+const KNOWN_FLAGS = new Set(['--app', '--vault', '--socket', '--credential']);
+
+const USAGE = 'Usage: fleet-agent --app <name> --vault <dir> --socket <path> [--credential <path>]';
+
+export function parseArgs(argv: string[]): AgentArgs {
+  const parsed: Record<string, string> = {};
+  let i = 0;
+  while (i < argv.length) {
+    const flag = argv[i];
+    if (!flag.startsWith('--')) {
+      throw new SecretsError(`unexpected argument: ${flag}\n${USAGE}`);
+    }
+    if (!KNOWN_FLAGS.has(flag)) {
+      throw new SecretsError(`unknown flag: ${flag}\n${USAGE}`);
+    }
+    i++;
+    if (i >= argv.length || argv[i].startsWith('--')) {
+      throw new SecretsError(`flag ${flag} requires a value\n${USAGE}`);
+    }
+    parsed[flag.slice(2)] = argv[i];
+    i++;
+  }
+  for (const required of ['app', 'vault', 'socket']) {
+    if (!parsed[required]) {
+      throw new SecretsError(`missing required flag --${required}\n${USAGE}`);
+    }
+  }
+  return {
+    app: parsed['app'],
+    vault: parsed['vault'],
+    socket: parsed['socket'],
+    ...(parsed['credential'] !== undefined ? { credential: parsed['credential'] } : {}),
+  };
+}
+
+export async function main(argv: string[]): Promise<void> {
+  const args = parseArgs(argv);
+  const credentialPath = args.credential
+    ?? (process.env.CREDENTIALS_DIRECTORY
+      ? `${process.env.CREDENTIALS_DIRECTORY}/age-key`
+      : undefined);
+  if (!credentialPath) {
+    throw new SecretsError(
+      'no credential path: pass --credential or run under systemd with LoadCredential',
+    );
+  }
+  const vaultBlobPath = `${args.vault}/${args.app}.env.age`;
+
+  let secrets = decryptVaultBlob(credentialPath, vaultBlobPath);
+
+  const deps: AgentDeps = {
+    app: args.app,
+    getSecrets: () => secrets,
+    refresh: () => {
+      secrets = decryptVaultBlob(credentialPath, vaultBlobPath);
+    },
+  };
+
+  const server = createServer(deps);
+  await server.listen(args.socket);
+
+  const notify = process.env.NOTIFY_SOCKET;
+  if (notify) {
+    const r = execSafe('systemd-notify', ['--ready'], {});
+    if (!r.ok) {
+      process.stderr.write(`[fleet-agent ${args.app}] systemd-notify failed: ${r.stderr}\n`);
+    }
+  }
+
+  return new Promise<void>((resolve) => {
+    let shuttingDown = false;
+    const handleSignal = async (sig: string) => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      process.stderr.write(`[fleet-agent ${args.app}] ${sig}, shutting down\n`);
+      try { await server.close(); } catch { /* ignore */ }
+      resolve();
+    };
+    process.once('SIGTERM', () => handleSignal('SIGTERM'));
+    process.once('SIGINT', () => handleSignal('SIGINT'));
+  });
 }
 
 function dispatch(req: { method: string; path: string }, deps: AgentDeps): Buffer {
