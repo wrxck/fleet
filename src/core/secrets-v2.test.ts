@@ -298,4 +298,38 @@ describe('createServer (socket server)', () => {
     const body = JSON.parse(resp.split('\r\n\r\n')[1]);
     expect(body.error).toBe('invalid_key');
   });
+
+  // POST /refresh tests
+  it('POST /refresh calls deps.refresh()', async () => {
+    const spy = vi.fn();
+    await server.close();
+    server = createAgentServer(makeDeps({ refresh: spy }));
+    await server.listen(socketPath);
+    await request(socketPath, 'POST /refresh HTTP/1.1\r\n\r\n');
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  it('POST /refresh returns 200 with reloaded:true', async () => {
+    await server.close();
+    server = createAgentServer(makeDeps());
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'POST /refresh HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body).toEqual({ reloaded: true });
+  });
+
+  it('GET /refresh returns 404 (only POST is supported)', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /refresh HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
+  });
+
+  it('POST to other paths returns 404', async () => {
+    await server.listen(socketPath);
+    const resp1 = await request(socketPath, 'POST /secrets HTTP/1.1\r\n\r\n');
+    expect(resp1).toMatch(/^HTTP\/1\.1 404 Not Found/);
+    const resp2 = await request(socketPath, 'POST /random HTTP/1.1\r\n\r\n');
+    expect(resp2).toMatch(/^HTTP\/1\.1 404 Not Found/);
+  });
 });
