@@ -114,7 +114,9 @@ function handleConnection(sock: Socket, deps: AgentDeps): void {
   sock.on('error', () => { /* connection-level errors are fatal for that connection only */ });
 }
 
-function dispatch(req: { method: string; path: string }, _deps: AgentDeps): Buffer {
-  // routes wired in tasks 11-15; default 404 for now
+function dispatch(req: { method: string; path: string }, deps: AgentDeps): Buffer {
+  if (req.method === 'GET' && req.path === '/secrets') {
+    return writeResponse(200, deps.getSecrets());
+  }
   return writeResponse(404, { error: 'not_found' });
 }
