@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "fleet": "dist/index.js"
+    "fleet": "dist/index.js",
+    "fleet-agent": "dist/bin/fleet-agent.js"
   },
   "files": [
     "dist/",
