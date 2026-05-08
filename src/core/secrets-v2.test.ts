@@ -332,4 +332,43 @@ describe('createServer (socket server)', () => {
     const resp2 = await request(socketPath, 'POST /random HTTP/1.1\r\n\r\n');
     expect(resp2).toMatch(/^HTTP\/1\.1 404 Not Found/);
   });
+
+  // GET /health tests
+  it('GET /health returns 200 with app and secret count', async () => {
+    await server.close();
+    const secrets = { STRIPE_KEY: 'sk_test', DATABASE_URL: 'postgres://x', JWT_SECRET: 'abc' };
+    server = createAgentServer(makeDeps({ app: 'myapp', getSecrets: () => secrets }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /health HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body).toEqual({ app: 'myapp', secrets: 3 });
+  });
+
+  it('GET /health returns count 0 when secrets map is empty', async () => {
+    await server.close();
+    server = createAgentServer(makeDeps({ app: 'myapp', getSecrets: () => ({}) }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /health HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const body = JSON.parse(resp.split('\r\n\r\n')[1]);
+    expect(body).toEqual({ app: 'myapp', secrets: 0 });
+  });
+
+  it('GET /health body does not leak secret names or values', async () => {
+    await server.close();
+    server = createAgentServer(makeDeps({ app: 'myapp', getSecrets: () => ({ MYSECRET: 'foo' }) }));
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'GET /health HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 200 OK/);
+    const bodyText = resp.split('\r\n\r\n')[1];
+    expect(bodyText).not.toContain('MYSECRET');
+    expect(bodyText).not.toContain('foo');
+  });
+
+  it('POST /health returns 404 (GET only)', async () => {
+    await server.listen(socketPath);
+    const resp = await request(socketPath, 'POST /health HTTP/1.1\r\n\r\n');
+    expect(resp).toMatch(/^HTTP\/1\.1 404 Not Found/);
+  });
 });
