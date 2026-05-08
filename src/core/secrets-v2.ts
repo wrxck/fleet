@@ -115,6 +115,10 @@ function handleConnection(sock: Socket, deps: AgentDeps): void {
 }
 
 function dispatch(req: { method: string; path: string }, deps: AgentDeps): Buffer {
+  if (req.method === 'POST' && req.path === '/refresh') {
+    deps.refresh();
+    return writeResponse(200, { reloaded: true });
+  }
   if (req.method === 'GET' && req.path === '/secrets') {
     return writeResponse(200, deps.getSecrets());
   }
