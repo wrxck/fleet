@@ -91,8 +91,10 @@ describe('detectV2Drift - all checks pass', () => {
     server = spawnSocketServer(tmp.sock, JSON.stringify({ app: 'myapp', secrets: 3, ok: true }));
   });
 
-  afterEach((done) => {
-    server.close(done);
+  afterEach(async () => {
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
     fs.rmSync(tmp.dir, { recursive: true, force: true });
   });
 
@@ -267,8 +269,10 @@ describe('detectV2Drift - sample_fetch_keys: wrong app name in response', () => 
     server = spawnSocketServer(tmp.sock, JSON.stringify({ app: 'other', secrets: 5, ok: true }));
   });
 
-  afterEach((done) => {
-    server.close(done);
+  afterEach(async () => {
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
     fs.rmSync(tmp.dir, { recursive: true, force: true });
   });
 
