@@ -202,7 +202,29 @@ describe('revertAppFromV2 - systemctl disable failure is best-effort', () => {
   it('continues and calls restoreSnapshot despite disable failure', async () => {
     const result = await revertAppFromV2({ app: 'myapp' });
     expect(result.ok).toBeTruthy();
+    const disableStep = result.steps.find(s => s.step === 1);
+    expect(disableStep?.ok).toBeFalsy();
+    expect(disableStep?.detail).toMatch(/unit not found/);
     expect(vi.mocked(restoreSnapshot)).toHaveBeenCalledOnce();
+  });
+});
+
+// 6b. removeCredential exception recorded as ok:false but does not abort
+describe('revertAppFromV2 - removeCredential exception is best-effort', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupHappyPath();
+    vi.mocked(removeCredential).mockImplementationOnce(() => {
+      throw new Error('credential file is read-only');
+    });
+  });
+
+  it('best-effort: removeCredential exception is recorded as ok:false but does not abort', async () => {
+    const result = await revertAppFromV2({ app: 'myapp' });
+    const removeCredStep = result.steps.find(s => s.step === 2);
+    expect(removeCredStep?.ok).toBeFalsy();
+    expect(removeCredStep?.detail).toMatch(/read-only/);
+    expect(vi.mocked(restoreSnapshot)).toHaveBeenCalled();
   });
 });
 
