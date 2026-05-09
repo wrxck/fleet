@@ -183,4 +183,27 @@ services:
 
     expect(m2).toBe(m1);
   });
+
+  it('revertComposeFromV2 restores v1 path into seq form and preserves other entries', () => {
+    // input has env_file as array with only an unrelated entry (no v1 path yet)
+    const input = `
+services:
+  app:
+    image: myapp:latest
+    env_file:
+      - ./other.env
+    environment:
+      FLEET_SECRETS_SOCKET: /run/fleet.sock
+    volumes:
+      - /run/fleet-secrets/foo.sock:/run/fleet.sock:ro
+`.trimStart();
+
+    // revertComposeFromV2 should unshift the v1 path into the existing seq
+    const reverted = revertComposeFromV2(input, 'foo', 'app');
+
+    expect(reverted).toContain('/run/fleet-secrets/foo/.env');
+    expect(reverted).toContain('./other.env');
+    expect(reverted).not.toContain('FLEET_SECRETS_SOCKET');
+    expect(reverted).not.toContain('/run/fleet-secrets/foo.sock:/run/fleet.sock:ro');
+  });
 });

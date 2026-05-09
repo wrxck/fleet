@@ -1,4 +1,4 @@
-import { parseDocument, YAMLMap, YAMLSeq, isMap, isSeq, isScalar } from 'yaml';
+import { parseDocument, YAMLMap, YAMLSeq, Scalar, isMap, isSeq, isScalar } from 'yaml';
 
 const FLEET_ENV_KEY = 'FLEET_SECRETS_SOCKET';
 const FLEET_ENV_VAL = '/run/fleet.sock';
@@ -155,7 +155,7 @@ function restoreEnvFile(svc: YAMLMap, app: string): void {
     const seq = raw as YAMLSeq;
     const already = seq.items.some(item => isScalar(item) && item.value === v1Path);
     if (!already) {
-      seq.items.unshift(seq.createNode(v1Path));
+      seq.items.unshift(new Scalar(v1Path));
     }
   }
 }
