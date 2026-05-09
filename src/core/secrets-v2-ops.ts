@@ -5,6 +5,22 @@ import { credentialPathFor } from './secrets-v2-creds.js';
 import { execSafe } from './exec.js';
 import { loadManifest } from './secrets.js';
 
+export interface V2AppStatus {
+  name: string;
+  mode: 'unseal' | 'socket';
+  agentActive: boolean;
+  socketOk: boolean;
+  lastSealedAt: string;
+  recipient?: string;
+  keyCount: number;
+}
+
+export interface V2StatusReport {
+  apps: V2AppStatus[];
+  v1Count: number;
+  v2Count: number;
+}
+
 export interface V2DriftCheck {
   name: string;
   ok: boolean;
@@ -157,6 +173,34 @@ async function checkSampleFetchKeys(app: string, socketPath: string, keyCount: n
  *   pass a temp-dir path to avoid mocking node:net. Do not set this in
  *   production code.
  */
+export function getV2Status(): V2StatusReport {
+  const manifest = loadManifest();
+  const apps: V2AppStatus[] = [];
+  let v1Count = 0;
+  let v2Count = 0;
+  for (const [name, entry] of Object.entries(manifest.apps)) {
+    const mode = (entry.mode ?? 'unseal') as 'unseal' | 'socket';
+    let agentActive = false;
+    let socketOk = false;
+    if (mode === 'socket') {
+      v2Count++;
+      const isActive = execSafe('systemctl', ['is-active', `fleet-secrets-agent@${name}.service`]);
+      agentActive = isActive.ok && isActive.stdout.trim() === 'active';
+      const socketPath = `/run/fleet-secrets/${name}.sock`;
+      if (existsSync(socketPath)) {
+        try {
+          const perms = statSync(socketPath).mode & 0o777;
+          socketOk = perms === 0o660;
+        } catch { /* keep socketOk false */ }
+      }
+    } else {
+      v1Count++;
+    }
+    apps.push({ name, mode, agentActive, socketOk, lastSealedAt: entry.lastSealedAt, recipient: entry.recipient, keyCount: entry.keyCount });
+  }
+  return { apps, v1Count, v2Count };
+}
+
 export async function detectV2Drift(
   app: string,
   socketPathOverride?: string,
