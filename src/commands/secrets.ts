@@ -32,6 +32,7 @@ import { summariseSecrets, formatSecretsMotd, generateSecretsMotdScript } from '
 import { migrateAppToV2, revertAppFromV2 } from '../core/secrets-v2-migrate.js';
 import { cleanupV2Backups } from '../core/secrets-v2-cleanup.js';
 import { getV2Status } from '../core/secrets-v2-ops.js';
+import { installV2 } from '../core/secrets-v2-install.js';
 
 function getDbSecretsDir(): string {
   const reg = load();
@@ -66,8 +67,9 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'revert-v2': return secretsRevertV2(rest);
     case 'cleanup-v2': return secretsCleanupV2(rest);
     case 'status-v2': return secretsStatusV2(rest);
+    case 'install-v2': return secretsInstallV2(rest);
     default:
-      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|rollback|snapshots|validate|status|drift|restore|migrate-v2|revert-v2|cleanup-v2|status-v2>');
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|rollback|snapshots|validate|status|drift|restore|migrate-v2|revert-v2|cleanup-v2|status-v2|install-v2>');
       process.exit(1);
   }
 }
@@ -880,6 +882,25 @@ async function secretsCleanupV2(args: string[]): Promise<void> {
     success('Cleanup complete');
   } catch (err) {
     error(`Cleanup failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+async function secretsInstallV2(args: string[]): Promise<void> {
+  const dryRun = args.includes('--dry-run');
+  heading(`Installing fleet-secrets-agent v2 host components`);
+  if (dryRun) info('DRY RUN');
+  try {
+    const result = await installV2({ dryRun });
+    if (result.agentBinaryInstalled) success('Agent binary installed at /usr/local/bin/fleet-agent');
+    else info('Agent binary already current');
+    if (result.unitFileInstalled) success('Templated unit installed at /etc/systemd/system/fleet-secrets-agent@.service');
+    else info('Unit file already current');
+    if (result.daemonReloaded) success('systemctl daemon-reload completed');
+    if (!result.templateParseable && !dryRun) warn('Templated unit did not parse cleanly — investigate');
+    else if (!dryRun) success('Templated unit verified');
+  } catch (err) {
+    error(`Install failed: ${(err as Error).message}`);
     process.exit(1);
   }
 }
