@@ -353,19 +353,19 @@ export async function revertAppFromV2(opts: RevertOpts): Promise<RevertResult> {
     steps.push({ step, name: REVERT_STEP_NAMES[step] ?? `step ${step}`, ok, detail });
 
   // step 1 — best-effort: disable agent unit
-  try {
-    execSafe('systemctl', ['disable', '--now', `fleet-secrets-agent@${app}.service`]);
-    push(1, true);
-  } catch {
-    push(1, true, 'agent unit disable skipped (not running or not found)');
+  const disableResult = execSafe('systemctl', ['disable', '--now', `fleet-secrets-agent@${app}.service`]);
+  if (!disableResult.ok) {
+    push(1, false, `disable failed (best-effort): ${disableResult.stderr}`);
+  } else {
+    push(1, true, 'agent unit disabled');
   }
 
   // step 2 — best-effort: remove credential
   try {
     removeCredential(app);
-    push(2, true);
-  } catch {
-    push(2, true, 'credential removal skipped (not present)');
+    push(2, true, 'credential removed');
+  } catch (err) {
+    push(2, false, `removeCredential failed (best-effort): ${(err as Error).message}`);
   }
 
   // step 3 — best-effort: remove v1 backup file
@@ -375,8 +375,8 @@ export async function revertAppFromV2(opts: RevertOpts): Promise<RevertResult> {
       unlinkSync(bakPath);
     }
     push(3, true);
-  } catch {
-    push(3, true, '.v1.bak removal skipped');
+  } catch (err) {
+    push(3, false, `.v1.bak removal failed (best-effort): ${(err as Error).message}`);
   }
 
   // step 4 — restore snapshot (mandatory)
@@ -419,5 +419,7 @@ export async function revertAppFromV2(opts: RevertOpts): Promise<RevertResult> {
     throw err;
   }
 
-  return { app, snapshotUsed: snap.timestamp, steps, ok: true };
+  const mandatoryStepNums = new Set([4, 5, 6, 7]);
+  const ok = steps.filter(s => mandatoryStepNums.has(s.step)).every(s => s.ok);
+  return { app, snapshotUsed: snap.timestamp, steps, ok };
 }
