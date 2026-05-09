@@ -5,7 +5,7 @@ import * as path from 'node:path';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { detectV2Drift } from './secrets-v2-ops.js';
+import { detectV2Drift, getV2Status } from './secrets-v2-ops.js';
 
 vi.mock('./secrets.js', () => ({ loadManifest: vi.fn() }));
 vi.mock('./secrets-v2-creds.js', () => ({
@@ -278,5 +278,153 @@ describe('detectV2Drift - sample_fetch_keys: wrong app name in response', () => 
     const check = result.checks.find(c => c.name === 'sample_fetch_keys');
     expect(check!.ok).toBeFalsy();
     expect(check!.detail).toMatch(/app.*mismatch/i);
+  });
+});
+
+// getV2Status tests
+
+describe('getV2Status - empty manifest', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(loadManifest).mockReturnValue({ version: 1, apps: {} });
+  });
+
+  it('returns empty apps array with zero counts', () => {
+    const result = getV2Status();
+    expect(result.apps.length).toBe(0);
+    expect(result.v1Count).toBe(0);
+    expect(result.v2Count).toBe(0);
+  });
+});
+
+describe('getV2Status - mixed modes', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(loadManifest).mockReturnValue({
+      version: 1,
+      apps: {
+        app1: { type: 'env' as const, encryptedFile: 'a.age', sourceFile: '/a', lastSealedAt: '2026-01-01T00:00:00.000Z', keyCount: 1, mode: 'unseal' as const },
+        app2: { type: 'env' as const, encryptedFile: 'b.age', sourceFile: '/b', lastSealedAt: '2026-01-02T00:00:00.000Z', keyCount: 2, mode: 'unseal' as const },
+        app3: { type: 'env' as const, encryptedFile: 'c.age', sourceFile: '/c', lastSealedAt: '2026-01-03T00:00:00.000Z', keyCount: 3, mode: 'socket' as const, recipient: 'age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqfqcm' },
+        app4: { type: 'env' as const, encryptedFile: 'd.age', sourceFile: '/d', lastSealedAt: '2026-01-04T00:00:00.000Z', keyCount: 4, mode: 'socket' as const, recipient: 'age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqfqcm' },
+        app5: { type: 'env' as const, encryptedFile: 'e.age', sourceFile: '/e', lastSealedAt: '2026-01-05T00:00:00.000Z', keyCount: 5, mode: 'socket' as const, recipient: 'age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqfqcm' },
+      },
+    });
+    vi.mocked(execSafe).mockReturnValue(ok('inactive'));
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o10660 } as fs.Stats);
+  });
+
+  it('counts 2 v1 and 3 v2 apps with correct modes', () => {
+    const result = getV2Status();
+    expect(result.apps.length).toBe(5);
+    expect(result.v1Count).toBe(2);
+    expect(result.v2Count).toBe(3);
+    const v1Apps = result.apps.filter(a => a.mode === 'unseal');
+    const v2Apps = result.apps.filter(a => a.mode === 'socket');
+    expect(v1Apps.length).toBe(2);
+    expect(v2Apps.length).toBe(3);
+  });
+});
+
+describe('getV2Status - v1 app always false', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(loadManifest).mockReturnValue({
+      version: 1,
+      apps: {
+        legacy: { type: 'env' as const, encryptedFile: 'l.age', sourceFile: '/l', lastSealedAt: '2026-01-01T00:00:00.000Z', keyCount: 2, mode: 'unseal' as const },
+      },
+    });
+    // even if execSafe would return 'active' and a socket file exists, v1 should not check
+    vi.mocked(execSafe).mockReturnValue(ok('active'));
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o10660 } as fs.Stats);
+  });
+
+  it('v1 app has agentActive=false and socketOk=false regardless of filesystem', () => {
+    const result = getV2Status();
+    expect(result.apps.length).toBe(1);
+    const app = result.apps[0];
+    expect(app.mode).toBe('unseal');
+    expect(app.agentActive).toBeFalsy();
+    expect(app.socketOk).toBeFalsy();
+  });
+});
+
+describe('getV2Status - v2 agent active and socket ok', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(loadManifest).mockReturnValue({
+      version: 1,
+      apps: {
+        myapp: { ...SOCKET_MANIFEST.apps.myapp },
+      },
+    });
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('active');
+      return ok();
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o10660 } as fs.Stats);
+  });
+
+  it('happy path: agentActive=true and socketOk=true', () => {
+    const result = getV2Status();
+    expect(result.v2Count).toBe(1);
+    const app = result.apps[0];
+    expect(app.mode).toBe('socket');
+    expect(app.agentActive).toBeTruthy();
+    expect(app.socketOk).toBeTruthy();
+  });
+});
+
+describe('getV2Status - v2 agent inactive', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(loadManifest).mockReturnValue({
+      version: 1,
+      apps: {
+        myapp: { ...SOCKET_MANIFEST.apps.myapp },
+      },
+    });
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('inactive');
+      return ok();
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o10660 } as fs.Stats);
+  });
+
+  it('agentActive=false when systemctl reports inactive, socketOk checked independently', () => {
+    const result = getV2Status();
+    const app = result.apps[0];
+    expect(app.agentActive).toBeFalsy();
+    expect(app.socketOk).toBeTruthy();
+  });
+});
+
+describe('getV2Status - v2 socket wrong perms', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(loadManifest).mockReturnValue({
+      version: 1,
+      apps: {
+        myapp: { ...SOCKET_MANIFEST.apps.myapp },
+      },
+    });
+    vi.mocked(execSafe).mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'systemctl' && args.includes('is-active')) return ok('active');
+      return ok();
+    });
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.statSync).mockReturnValue({ mode: 0o10644 } as fs.Stats);
+  });
+
+  it('socketOk=false when socket exists but mode is 0o644', () => {
+    const result = getV2Status();
+    const app = result.apps[0];
+    expect(app.agentActive).toBeTruthy();
+    expect(app.socketOk).toBeFalsy();
   });
 });
