@@ -147,6 +147,16 @@ async function checkSampleFetchKeys(app: string, socketPath: string, keyCount: n
   }
 }
 
+/**
+ * Verify the deployed v2 state of an app matches what's recorded in the manifest.
+ * Each check returns ok/detail; the overall ok is true only if all checks pass.
+ *
+ * @param app The app name to check.
+ * @param socketPathOverride Test-only injection point. In production, the socket
+ *   path is derived from the app name (`/run/fleet-secrets/<app>.sock`). Tests
+ *   pass a temp-dir path to avoid mocking node:net. Do not set this in
+ *   production code.
+ */
 export async function detectV2Drift(
   app: string,
   socketPathOverride?: string,
