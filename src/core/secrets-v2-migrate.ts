@@ -204,7 +204,10 @@ export async function migrateAppToV2(opts: MigrateOpts): Promise<MigrateResult> 
   // step 5
   try {
     const composePath = join(appEntry.composePath, appEntry.composeFile ?? 'docker-compose.yml');
-    writeFileSync(composePath, migrateComposeToV2(readFileSync(composePath, 'utf-8')));
+    writeFileSync(
+      composePath,
+      migrateComposeToV2(readFileSync(composePath, 'utf-8'), app, appEntry.serviceName),
+    );
     push(5, true);
   } catch (err) {
     rb(5, err); return { app, snapshotDir: snap.dir, steps, rolledBack: true };

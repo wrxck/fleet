@@ -214,6 +214,13 @@ describe('migrateAppToV2 - happy path (11 steps)', () => {
       vi.mocked(fs.copyFileSync).mock.calls.some(c => c[1].toString().endsWith('.v1.bak'));
     expect(bakWritten).toBeTruthy();
   });
+
+  it('migrateComposeToV2 called with app and serviceName as 2nd and 3rd args', async () => {
+    await migrateAppToV2({ app: 'myapp' });
+    const call = vi.mocked(migrateComposeToV2).mock.calls[0];
+    expect(call[1]).toBe('myapp');
+    expect(call[2]).toBe(MOCK_APP_ENTRY.serviceName);
+  });
 });
 
 describe('migrateAppToV2 - --no-restart-app', () => {
