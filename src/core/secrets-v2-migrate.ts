@@ -6,13 +6,14 @@ import { generateAgentUnit } from '../templates/agent-unit.js';
 import { migrateComposeToV2 } from '../templates/compose-edit.js';
 import { credentialPathFor, encryptCredential, removeCredential } from './secrets-v2-creds.js';
 import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair.js';
-import { restoreSnapshot, snapshotApp } from './secrets-v2-snapshot.js';
+import { listSnapshots, restoreSnapshot, snapshotApp } from './secrets-v2-snapshot.js';
 import type { Snapshot, SnapshotInput } from './secrets-v2-snapshot.js';
 import { loadManifest, saveManifest, VAULT_DIR } from './secrets.js';
 import { findApp, load } from './registry.js';
 import type { AppEntry } from './registry.js';
 import { execSafe } from './exec.js';
 import { SecretsError } from './errors.js';
+import { validateApp } from './secrets-validate.js';
 
 export interface MigrateOpts {
   app: string;
@@ -283,4 +284,140 @@ export async function migrateAppToV2(opts: MigrateOpts): Promise<MigrateResult> 
   }
 
   return { app, snapshotDir: snap.dir, steps, rolledBack: false };
+}
+
+export interface RevertOpts {
+  app: string;
+  snapshotTimestamp?: string;
+}
+
+export interface RevertResult {
+  app: string;
+  snapshotUsed: string;
+  steps: MigrateStep[];
+  ok: boolean;
+}
+
+const REVERT_STEP_NAMES: Record<number, string> = {
+  1: 'disable fleet-secrets-agent@<app>.service (best-effort)',
+  2: 'remove systemd credential for app (best-effort)',
+  3: 'remove .v1.bak file if present (best-effort)',
+  4: 'restore snapshot (vault blob, manifest, compose, unit)',
+  5: 'systemctl daemon-reload',
+  6: 'restart app container (docker compose up -d --force-recreate)',
+  7: 'validate v1 unseal-based secrets',
+};
+
+export async function revertAppFromV2(opts: RevertOpts): Promise<RevertResult> {
+  const { app, snapshotTimestamp } = opts;
+
+  const registry = load();
+  const appEntry = findApp(registry, app);
+  if (!appEntry) {
+    throw new SecretsError(`app '${app}' not found in fleet registry`);
+  }
+
+  const manifest = loadManifest();
+  if (manifest.apps[app]?.mode !== 'socket') {
+    throw new SecretsError(`app '${app}' is not in v2 (socket) mode — nothing to revert`);
+  }
+
+  const snapshots = listSnapshots(join(VAULT_DIR, 'backups'), app);
+  if (snapshots.length === 0) {
+    throw new SecretsError(`no snapshots found for app '${app}' — cannot revert`);
+  }
+
+  let snap: Snapshot;
+  if (snapshotTimestamp !== undefined) {
+    const found = snapshots.find(s => s.timestamp === snapshotTimestamp);
+    if (!found) {
+      throw new SecretsError(`no snapshot with timestamp '${snapshotTimestamp}' found for app '${app}'`);
+    }
+    snap = found;
+  } else {
+    snap = snapshots[0];
+  }
+
+  const snapInput: SnapshotInput = {
+    app,
+    backupRoot: join(VAULT_DIR, 'backups'),
+    vaultDir: VAULT_DIR,
+    encryptedFile: `${app}.env.age`,
+    composeDir: appEntry.composePath,
+    composeFile: appEntry.composeFile ?? 'docker-compose.yml',
+    appUnitFile: `/etc/systemd/system/${app}.service`,
+  };
+
+  const steps: MigrateStep[] = [];
+  const push = (step: number, ok: boolean, detail?: string) =>
+    steps.push({ step, name: REVERT_STEP_NAMES[step] ?? `step ${step}`, ok, detail });
+
+  // step 1 — best-effort: disable agent unit
+  try {
+    execSafe('systemctl', ['disable', '--now', `fleet-secrets-agent@${app}.service`]);
+    push(1, true);
+  } catch {
+    push(1, true, 'agent unit disable skipped (not running or not found)');
+  }
+
+  // step 2 — best-effort: remove credential
+  try {
+    removeCredential(app);
+    push(2, true);
+  } catch {
+    push(2, true, 'credential removal skipped (not present)');
+  }
+
+  // step 3 — best-effort: remove v1 backup file
+  const bakPath = join(VAULT_DIR, `${app}.env.age.v1.bak`);
+  try {
+    if (existsSync(bakPath)) {
+      unlinkSync(bakPath);
+    }
+    push(3, true);
+  } catch {
+    push(3, true, '.v1.bak removal skipped');
+  }
+
+  // step 4 — restore snapshot (mandatory)
+  try {
+    restoreSnapshot(snapInput, snap);
+    push(4, true);
+  } catch (err) {
+    push(4, false, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+
+  // step 5 — daemon-reload (mandatory)
+  try {
+    const reload = execSafe('systemctl', ['daemon-reload']);
+    if (!reload.ok) throw new SecretsError(`systemctl daemon-reload failed: ${reload.stderr}`);
+    push(5, true);
+  } catch (err) {
+    push(5, false, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+
+  // step 6 — restart app (mandatory)
+  try {
+    execSafe('docker', ['compose', 'up', '-d', '--force-recreate'], { cwd: appEntry.composePath });
+    push(6, true);
+  } catch (err) {
+    push(6, false, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+
+  // step 7 — validate v1 secrets (mandatory)
+  try {
+    const validation = validateApp(app);
+    if (!validation.ok) {
+      throw new SecretsError(`v1 secrets validation failed — missing keys: ${validation.missing.join(', ')}`);
+    }
+    push(7, true);
+  } catch (err) {
+    push(7, false, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+
+  return { app, snapshotUsed: snap.timestamp, steps, ok: true };
 }
