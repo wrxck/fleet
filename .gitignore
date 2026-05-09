@@ -31,7 +31,9 @@ vault/.snapshots/
 # Private / instance-specific
 docs/superpowers/
 deploy-webhook.cjs
-packages/
+packages/*/node_modules/
+packages/*/dist/
+packages/*/package-lock.json
 npm-downloads/
 
 # Claude Code local settings
