@@ -15,7 +15,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias",
+    "build": "tsc && tsc-alias --resolve-full-paths",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "prepublishOnly": "npm run build"
