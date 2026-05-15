@@ -69,7 +69,7 @@
     "@matthesketh/ink-task-list": "0.1.0",
     "@matthesketh/ink-timeline": "0.1.0",
     "@matthesketh/ink-toast": "^0.1.0",
-    "@matthesketh/ink-viewport": "^0.1.0",
+    "@matthesketh/ink-viewport": "^0.1.1",
     "@modelcontextprotocol/sdk": "1.29.0",
     "better-sqlite3": "12.9.0",
     "chokidar": "5.0.0",
