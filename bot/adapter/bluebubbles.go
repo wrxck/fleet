@@ -66,7 +66,7 @@ func (b *BlueBubblesAdapter) Start(ctx context.Context, inbox chan<- InboundMess
 	mux.HandleFunc("/webhook", b.webhookHandler(inbox))
 
 	b.server = &http.Server{
-		Addr:    fmt.Sprintf(":%d", b.webhookPort),
+		Addr:    fmt.Sprintf("127.0.0.1:%d", b.webhookPort),
 		Handler: mux,
 	}
 
