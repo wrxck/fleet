@@ -33,6 +33,7 @@ import {
   sharedMongoConfig,
 } from '../core/backup/system';
 import { isPseudoApp } from '../core/backup/types';
+import { renderStatusHtml, StatusReport, StatusEntry } from '../core/backup/statuspage';
 import {
   generateAndStorePassword,
   vaultPath,
@@ -80,7 +81,7 @@ export function backupCommand(args: string[]): void {
     case 'schedule-all': return cmdScheduleAll(rest);
     case 'unschedule':   return cmdUnschedule(rest);
     case 'integrity':    return cmdIntegrity(rest);
-    case 'status':       return cmdStatus();
+    case 'status':       return cmdStatus(rest);
     case 'test':         return cmdTest(rest);
     case '--help':
     case '-h':
@@ -411,10 +412,44 @@ function cmdIntegrity(args: string[]): void {
   success(`integrity ok: ${app}`);
 }
 
-function cmdStatus(): void {
+function buildStatusReport(): StatusReport {
+  const apps = listConfiguredApps();
+  const entries: StatusEntry[] = [];
+  for (const app of apps) {
+    const cfg = loadConfig(app);
+    if (!cfg) continue;
+    const snaps = listSnapshots(app);
+    const last = snaps[snaps.length - 1];
+    const st = stats(app);
+    entries.push({
+      app,
+      schedule: cfg.schedule,
+      disabled: !!cfg.disabled,
+      snapshotCount: snaps.length,
+      lastSnapshotAt: last?.time ?? null,
+      totalSize: st?.totalSize ?? null,
+    });
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    backend: (process.env.FLEET_BACKUP_BASE_URL ?? '').startsWith('rest:') ? 'rest' : 'sftp',
+    appendOnly: isAppendOnly(),
+    apps: entries,
+  };
+}
+
+function cmdStatus(args: string[] = []): void {
   const apps = listConfiguredApps();
   if (apps.length === 0) {
     info(`no configured backups. start with: fleet backup init-system`);
+    return;
+  }
+  if (args.includes('--json')) {
+    process.stdout.write(JSON.stringify(buildStatusReport(), null, 2) + '\n');
+    return;
+  }
+  if (args.includes('--html')) {
+    process.stdout.write(renderStatusHtml(buildStatusReport()));
     return;
   }
   heading('fleet backups');
