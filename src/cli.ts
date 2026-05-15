@@ -25,6 +25,7 @@ import { freezeCommand, unfreezeCommand } from './commands/freeze.js';
 import { guardCommand } from './commands/guard.js';
 import { bootStartCommand } from './commands/boot-start.js';
 import { rollbackCommand } from './commands/rollback.js';
+import { backupCommand } from './commands/backup.js';
 import { routineRunCommand } from './commands/routine-run.js';
 import { routinesCommand } from './commands/routines.js';
 import { startMcpServer } from './mcp/server.js';
@@ -94,6 +95,7 @@ Commands:
   rollback <app>      Roll back app to previous image
   unfreeze <app>      Unfreeze and restart a frozen service
   guard <subcommand>  Cloudflare protection layer (install/status/approve/reject/...)
+  backup <subcommand> Encrypted off-host backups via restic + age (init/snapshot/list/restore/...)
 
 Global flags:
   --json              Output as JSON
@@ -123,10 +125,10 @@ export async function run(argv: string[]): Promise<void> {
     return launchTui();
   }
 
-  // Commands that require root privileges
+  // commands that require root privileges
   const ROOT_COMMANDS = new Set([
     'start', 'stop', 'restart', 'deploy', 'freeze', 'unfreeze',
-    'nginx', 'secrets', 'patch-systemd', 'init', 'watchdog',
+    'nginx', 'secrets', 'patch-systemd', 'init', 'watchdog', 'backup',
   ]);
 
   if (ROOT_COMMANDS.has(command) && process.getuid && process.getuid() !== 0) {
@@ -159,6 +161,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'rollback': return rollbackCommand(rest);
     case 'unfreeze': return unfreezeCommand(rest);
     case 'guard': return guardCommand(rest);
+    case 'backup': return backupCommand(rest);
     case 'mcp': return startMcpServer();
     case 'tui':
     case 'dashboard': {
