@@ -28,4 +28,20 @@ describe('renderToText', () => {
     });
     expect(out).toBe('root\n  child');
   });
+
+  it('renders empty lines as an empty string', () => {
+    expect(renderToText({ kind: 'lines', lines: [] })).toBe('');
+  });
+
+  it('renders a header-only table', () => {
+    expect(renderToText({ kind: 'table', columns: ['NAME'], rows: [] })).toBe('NAME');
+  });
+
+  it('renders a deep tree', () => {
+    const out = renderToText({
+      kind: 'tree',
+      root: { label: 'a', children: [{ label: 'b', children: [{ label: 'c' }] }] },
+    });
+    expect(out).toBe('a\n  b\n    c');
+  });
 });

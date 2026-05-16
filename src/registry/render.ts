@@ -15,7 +15,10 @@ export function renderToText(model: RenderModel): string {
         Math.max(...all.map(row => (row[i] ?? '').length)),
       );
       const fmt = (row: string[]): string =>
-        row.map((cell, i) => (i === row.length - 1 ? cell : cell.padEnd(widths[i] + 2))).join('');
+        row
+          .slice(0, model.columns.length)
+          .map((cell, i) => (i === model.columns.length - 1 ? cell : cell.padEnd(widths[i] + 2)))
+          .join('');
       return all.map(fmt).join('\n');
     }
     case 'tree':
