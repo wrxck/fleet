@@ -112,12 +112,14 @@ export function verifySession(cookie: string, secret: string, nowMs: number = Da
   const [body, sig] = parts;
   const expected = b64url(createHmac('sha256', secret).update(body).digest());
   if (!timingSafeEqualStr(sig, expected)) return null;
-  let payload: SessionPayload;
+  let payload: unknown;
   try {
     payload = JSON.parse(b64urlDecode(body).toString('utf-8'));
   } catch {
     return null;
   }
-  if (typeof payload.exp !== 'number' || payload.exp < nowMs) return null;
-  return payload;
+  if (payload === null || typeof payload !== 'object') return null;
+  const exp = (payload as { exp?: unknown }).exp;
+  if (typeof exp !== 'number' || exp < nowMs) return null;
+  return { exp };
 }
