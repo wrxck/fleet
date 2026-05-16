@@ -27,7 +27,7 @@ import { installScheduleUnits, disableSchedule } from '../core/backup/schedule';
 import {
   systemConfig,
   rootHomeConfig,
-  mattHomeConfig,
+  userHomeConfig,
   sharedPostgresConfig,
   sharedMysqlConfig,
   sharedMongoConfig,
@@ -51,7 +51,7 @@ Usage: fleet backup <subcommand> [args]
 
 Subcommands:
   init <app>                       generate password vault + restic repo for an app
-  init-system                      configure the three pseudo-apps (system, root-home, matt-home)
+  init-system                      configure the three pseudo-apps (system, root-home, user-home)
   register <app> [--dry-run]       auto-detect and register a fleet-known app (paths, db dump, volumes)
   register-all [--dry-run]         run register for every app in the fleet registry
   snapshot <app> [--dry-run]       one-off backup now
@@ -116,7 +116,7 @@ function cmdInitSystem(): void {
   const configs = [
     systemConfig(),
     rootHomeConfig(),
-    mattHomeConfig(),
+    userHomeConfig(),
     sharedPostgresConfig(),
     sharedMysqlConfig(),
     sharedMongoConfig(),
