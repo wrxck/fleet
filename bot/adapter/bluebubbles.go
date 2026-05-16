@@ -218,6 +218,7 @@ func (b *BlueBubblesAdapter) sendText(chatGuid, text string) error {
 		"message":  text,
 		"tempGuid": uuid.NewString(),
 		"method":   "apple-script",
+		"password": b.password,
 	}
 
 	payload, err := json.Marshal(body)
@@ -225,7 +226,7 @@ func (b *BlueBubblesAdapter) sendText(chatGuid, text string) error {
 		return fmt.Errorf("bluebubbles: marshal payload: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/message/text?password=%s", b.serverURL, b.password)
+	url := fmt.Sprintf("%s/api/v1/message/text", b.serverURL)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return fmt.Errorf("bluebubbles: create request: %w", err)
