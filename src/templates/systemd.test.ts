@@ -130,7 +130,7 @@ describe('boot-start integration in template', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
-      workingDirectory: '/home/matt/sample',
+      workingDirectory: '/home/operator/sample',
       composeFile: null,
       dependsOnDatabases: false,
     });
@@ -142,7 +142,7 @@ describe('boot-start integration in template', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
-      workingDirectory: '/home/matt/sample',
+      workingDirectory: '/home/operator/sample',
       composeFile: null,
       dependsOnDatabases: false,
     });
@@ -154,7 +154,7 @@ describe('boot-start integration in template', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
-      workingDirectory: '/home/matt/sample',
+      workingDirectory: '/home/operator/sample',
       composeFile: null,
       dependsOnDatabases: false,
     });
