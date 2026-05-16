@@ -1,11 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { loadRegistry } from './index';
+import { loadRegistry, _resetLoader } from './index';
 import { allCommands } from './registry';
 
 describe('registry assembly', () => {
-  it('loadRegistry does not throw', () => {
-    expect(() => loadRegistry()).not.toThrow();
+  beforeEach(() => _resetLoader());
+  afterEach(() => _resetLoader());
+
+  it('registers all commands in ALL without throwing', () => {
+    loadRegistry();
+    // ALL is intentionally empty at this stage; later tasks populate it.
+    expect(allCommands()).toHaveLength(0);
   });
 
   it('is idempotent — repeated calls do not throw', () => {
@@ -16,7 +21,6 @@ describe('registry assembly', () => {
 
   it('exposes the registered commands via allCommands', () => {
     loadRegistry();
-    // the command list is empty at this stage; later tasks populate it.
     expect(Array.isArray(allCommands())).toBe(true);
   });
 });

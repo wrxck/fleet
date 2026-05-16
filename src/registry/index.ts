@@ -16,3 +16,10 @@ export function loadRegistry(): void {
   }
   loaded = true;
 }
+
+/** test-only: resets the loaded flag and clears the registry, so a test can
+ *  re-run loadRegistry from a clean state. */
+export function _resetLoader(): void {
+  loaded = false;
+  _resetRegistry();
+}

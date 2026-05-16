@@ -36,7 +36,8 @@ export function allCommands(): CommandDef[] {
   return [...registry.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** test-only: clears the registry between tests. */
+/** test-only: clears the registry between tests. prefer _resetLoader() from
+ *  registry/index.ts if you also need to reset the loadRegistry guard. */
 export function _resetRegistry(): void {
   registry.clear();
 }
