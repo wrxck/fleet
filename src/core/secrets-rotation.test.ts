@@ -134,9 +134,9 @@ describe('performRotation', () => {
     vi.mocked(loadManifest).mockReturnValue({
       version: 1,
       apps: {
-        macpool: {
+        poolside: {
           type: 'env',
-          encryptedFile: 'macpool.env.age',
+          encryptedFile: 'poolside.env.age',
           sourceFile: '/tmp/x',
           lastSealedAt: '2026-04-01T00:00:00Z',
           keyCount: 2,
@@ -147,11 +147,11 @@ describe('performRotation', () => {
   });
 
   it('snapshots before sealing', () => {
-    performRotation('macpool', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
-    expect(snapshotApp).toHaveBeenCalledWith('macpool');
+    performRotation('poolside', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
+    expect(snapshotApp).toHaveBeenCalledWith('poolside');
     expect(sealApp).toHaveBeenCalled();
     expect(markRotated).toHaveBeenCalledWith(
-      'macpool',
+      'poolside',
       'STRIPE_SECRET_KEY',
       expect.objectContaining({ strategy: 'immediate' }),
     );
@@ -159,28 +159,28 @@ describe('performRotation', () => {
 
   it('rolls back on seal failure', () => {
     vi.mocked(sealApp).mockImplementationOnce(() => { throw new Error('disk full'); });
-    const r = performRotation('macpool', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
+    const r = performRotation('poolside', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
     expect(r.rolledBack).toBe(true);
-    expect(restoreSnapshot).toHaveBeenCalledWith('macpool');
+    expect(restoreSnapshot).toHaveBeenCalledWith('poolside');
     expect(r.reason).toMatch(/disk full/);
   });
 
   it('refuses to rotate at-rest keys without --data-migrated', () => {
     expect(() =>
-      performRotation('macpool', 'ENCRYPTION_KEY', 'newvalue1234567'),
+      performRotation('poolside', 'ENCRYPTION_KEY', 'newvalue1234567'),
     ).toThrow(/Re-encrypt your data first/);
   });
 
   it('accepts at-rest rotation with explicit dataMigrated:true', () => {
     vi.mocked(decryptApp).mockReturnValue('ENCRYPTION_KEY=oldvalue\n');
-    performRotation('macpool', 'ENCRYPTION_KEY', 'newvalue1234567', { dataMigrated: true });
+    performRotation('poolside', 'ENCRYPTION_KEY', 'newvalue1234567', { dataMigrated: true });
     expect(sealApp).toHaveBeenCalled();
   });
 
   it('does NOT accept --data-migrated as substring in free-text notes (post-review fix)', () => {
     vi.mocked(decryptApp).mockReturnValue('ENCRYPTION_KEY=oldvalue\n');
     expect(() =>
-      performRotation('macpool', 'ENCRYPTION_KEY', 'newvalue1234567', {
+      performRotation('poolside', 'ENCRYPTION_KEY', 'newvalue1234567', {
         notes: 'see ticket #42: --data-migrated documentation update',
       }),
     ).toThrow(/Re-encrypt your data first/);
@@ -188,12 +188,12 @@ describe('performRotation', () => {
 
   it('refuses user-issued rotations', () => {
     expect(() =>
-      performRotation('macpool', 'USER_API_TOKEN', 'whatever12345'),
+      performRotation('poolside', 'USER_API_TOKEN', 'whatever12345'),
     ).toThrow(/user-issued/);
   });
 
   it('dry-run does not snapshot or seal', () => {
-    const r = performRotation('macpool', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50), { dryRun: true });
+    const r = performRotation('poolside', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50), { dryRun: true });
     expect(r.snapshot).toBe('(dry-run)');
     expect(snapshotApp).not.toHaveBeenCalled();
     expect(sealApp).not.toHaveBeenCalled();
@@ -203,11 +203,11 @@ describe('performRotation', () => {
   });
 
   it('audit log fires on success and failure', () => {
-    performRotation('macpool', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
+    performRotation('poolside', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
     expect(auditLog).toHaveBeenCalledWith(expect.objectContaining({ op: 'rotate', ok: true }));
 
     vi.mocked(sealApp).mockImplementationOnce(() => { throw new Error('boom'); });
-    performRotation('macpool', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
+    performRotation('poolside', 'STRIPE_SECRET_KEY', 'sk_live_' + 'a'.repeat(50));
     expect(auditLog).toHaveBeenCalledWith(expect.objectContaining({ op: 'rotate-failed', ok: false }));
   });
 });

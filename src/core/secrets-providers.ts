@@ -160,7 +160,7 @@ export const PROVIDERS: ProviderDef[] = [
     name: 'Gmail App Password / SMTP Password',
     url: 'https://myaccount.google.com/apppasswords',
     instructions:
-      '1. Sign in and create a new App Password (e.g. "macpool-2026")\n' +
+      '1. Sign in and create a new App Password (e.g. "poolside-2026")\n' +
       '2. Copy the 16-character value and paste below WITHOUT spaces\n' +
       '3. Revoke the old App Password from the same page',
     // Gmail app passwords are 16 lowercase alphanumeric chars. Google
@@ -235,7 +235,7 @@ export const PROVIDERS: ProviderDef[] = [
     strategy: 'at-rest-key',
   },
 
-  // ── Bookwhen (used by macpool) ───────────────────────────────────────────
+  // ── Bookwhen (used by poolside) ───────────────────────────────────────────
   {
     id: 'bookwhen-token',
     matches: /^BOOKWHEN_API_TOKEN$/,
