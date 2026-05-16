@@ -109,7 +109,7 @@ vi.mock('./registry.js', () => ({
   // assert against load/save mocks, run the mutator inline against the mocked
   // load() and forward to mocked save().
   withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
-    const mod = await vi.importMock<typeof import('./registry.js')>('./registry.js');
+    const mod = await vi.importMock<typeof import('./registry')>('./registry.js');
     const reg = (mod.load as unknown as { (): unknown })();
     const next = await fn(reg);
     (mod.save as unknown as { (r: unknown): void })(next);

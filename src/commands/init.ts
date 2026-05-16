@@ -1,11 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 
-import { load, withRegistry } from '../core/registry.js';
-import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd.js';
-import { listContainers, getContainersByCompose } from '../core/docker.js';
-import { listSites, readConfig, extractPortFromConfig, extractDomainsFromConfig } from '../core/nginx.js';
-import { heading, success, info, warn } from '../ui/output.js';
-import type { AppEntry, Registry } from '../core/registry.js';
+import { load, withRegistry } from '../core/registry';
+import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd';
+import { listContainers, getContainersByCompose } from '../core/docker';
+import { listSites, readConfig, extractPortFromConfig, extractDomainsFromConfig } from '../core/nginx';
+import { heading, success, info, warn } from '../ui/output';
+import type { AppEntry, Registry } from '../core/registry';
 
 const SKIP_SERVICES = ['docker-databases'];
 
