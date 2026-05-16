@@ -534,7 +534,6 @@ export async function rotateKey(): Promise<{ oldPubkey: string; newPubkey: strin
       rmSync(backupPath, { force: true });
       throw new SecretsError(`rotateKey failed (rolled back): ${(err as Error).message}`);
     }
->>>>>>> 3038a0a
 
     return { oldPubkey, newPubkey, appsRotated: Object.keys(manifest.apps) };
   });
