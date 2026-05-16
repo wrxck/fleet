@@ -6,7 +6,7 @@ import { ScrollableList } from '@matthesketh/ink-scrollable-list';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch, useRedact } from '../state';
+import { useAppState, useAppDispatch, redactName } from '../state';
 import { useFleetData } from '../hooks/use-fleet-data';
 import { colors } from '../theme';
 
@@ -14,12 +14,16 @@ export function Dashboard(): React.JSX.Element {
   const state = useAppState();
   const dispatch = useAppDispatch();
   const { status, loading, error } = useFleetData();
-  const redact = useRedact();
   const availableHeight = useAvailableHeight();
 
   const items = useMemo(
-    () => status?.apps.map(app => ({ ...app, name: app.name })) ?? [],
-    [status],
+    () => (status?.apps ?? []).map(app => ({
+      ...app,
+      // bake the redacted label onto the item: ScrollableList memoises rows by
+      // item identity, so a redaction toggle must yield fresh item objects.
+      displayLabel: state.redacted ? redactName(app.name) : app.name,
+    })),
+    [status, state.redacted],
   );
 
   const handler: InputHandler = (input, key) => {
@@ -85,8 +89,7 @@ export function Dashboard(): React.JSX.Element {
         selectedIndex={Math.min(state.dashboardIndex, items.length - 1)}
         maxVisible={listHeight}
         renderItem={(item, selected) => {
-          const app = status.apps.find(a => a.name === item.name)!;
-          const displayName = redact(app.name);
+          const label = item.displayLabel;
           return (
             <Box>
               <Text bold color={selected ? colors.primary : colors.muted}>
@@ -94,17 +97,17 @@ export function Dashboard(): React.JSX.Element {
               </Text>
               <Box width={24}>
                 <Text bold={selected} color={selected ? colors.primary : colors.text}>
-                  {displayName.length > 22 ? displayName.slice(0, 19) + '...' : displayName}
+                  {label.length > 22 ? label.slice(0, 19) + '...' : label}
                 </Text>
               </Box>
               <Box width={14}>
-                <Text>{app.systemd.slice(0, 12)}</Text>
+                <Text>{item.systemd.slice(0, 12)}</Text>
               </Box>
               <Box width={14}>
-                <Text>{app.containers}</Text>
+                <Text>{item.containers}</Text>
               </Box>
               <Box width={12}>
-                <Text>{app.health.slice(0, 10)}</Text>
+                <Text>{item.health.slice(0, 10)}</Text>
               </Box>
             </Box>
           );

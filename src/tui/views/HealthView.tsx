@@ -8,7 +8,7 @@ import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
 import { useHealth } from '../hooks/use-health';
 import { StatusBadge } from '../components/StatusBadge';
-import { useAppState, useAppDispatch, useRedact } from '../state';
+import { useAppState, useAppDispatch, redactName } from '../state';
 import { colors } from '../theme';
 
 export function HealthView(): React.JSX.Element {
@@ -19,7 +19,6 @@ export function HealthView(): React.JSX.Element {
   // 15s) flip `loading` true/false too, but the data is already on screen —
   // ticking a spinner there causes the whole table to redraw at frame rate.
   const initialLoad = loading && results.length === 0;
-  const redact = useRedact();
   const availableHeight = useAvailableHeight();
 
   const counts = useMemo(() => ({
@@ -27,6 +26,16 @@ export function HealthView(): React.JSX.Element {
     degraded: results.filter(r => r.overall === 'degraded').length,
     down: results.filter(r => r.overall === 'down').length,
   }), [results]);
+
+  const items = useMemo(
+    () => results.map(r => ({
+      ...r,
+      // same reasoning as the dashboard view — ScrollableList memoises rows by
+      // item identity, so the redacted label must live on the item itself.
+      displayApp: state.redacted ? redactName(r.app) : r.app,
+    })),
+    [results, state.redacted],
+  );
 
   const handler: InputHandler = (input, key) => {
     if (results.length === 0) return false;
@@ -76,8 +85,8 @@ export function HealthView(): React.JSX.Element {
       </Text>
 
       <ScrollableList
-        items={results}
-        selectedIndex={Math.min(state.healthIndex, results.length - 1)}
+        items={items}
+        selectedIndex={Math.min(state.healthIndex, items.length - 1)}
         maxVisible={listHeight}
         renderItem={(result, selected) => {
           const runningCount = result.containers.filter(c => c.running).length;
@@ -97,7 +106,7 @@ export function HealthView(): React.JSX.Element {
               <Text bold color={selected ? colors.primary : colors.muted}>
                 {selected ? '> ' : '  '}
               </Text>
-              <Text>{redact(result.app).padEnd(24)}</Text>
+              <Text>{result.displayApp.padEnd(24)}</Text>
               <Box width={12}>
                 <StatusBadge value={result.systemd.state} type="systemd" />
               </Box>
