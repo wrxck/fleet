@@ -5,7 +5,7 @@ import { classify } from './sensitive';
 describe('backup/sensitive', () => {
   it('flags ssh + gnupg key material', () => {
     expect(classify('/root/.ssh/id_ed25519')).toBe('sensitive');
-    expect(classify('/home/matt/.gnupg/secring.gpg')).toBe('sensitive');
+    expect(classify('/home/operator/.gnupg/secring.gpg')).toBe('sensitive');
     expect(classify('/etc/ssh/ssh_host_rsa_key')).toBe('sensitive');
   });
 
@@ -17,7 +17,7 @@ describe('backup/sensitive', () => {
   it('flags cloud + credential stores', () => {
     expect(classify('/root/.aws/credentials')).toBe('sensitive');
     expect(classify('/root/.secrets/cloudflare.ini')).toBe('sensitive');
-    expect(classify('/home/matt/.docker/config.json')).toBe('sensitive');
+    expect(classify('/home/operator/.docker/config.json')).toBe('sensitive');
     expect(classify('/root/.npmrc')).toBe('sensitive');
   });
 
@@ -38,8 +38,8 @@ describe('backup/sensitive', () => {
   });
 
   it('treats ordinary app files as normal', () => {
-    expect(classify('/home/matt/art-store/server/index.ts')).toBe('normal');
-    expect(classify('/home/matt/app/package.json')).toBe('normal');
+    expect(classify('/home/operator/art-store/server/index.ts')).toBe('normal');
+    expect(classify('/home/operator/app/package.json')).toBe('normal');
     expect(classify('/etc/nginx/nginx.conf')).toBe('normal');
   });
 });
