@@ -5,9 +5,9 @@ import { ScrollableList } from '@matthesketh/ink-scrollable-list';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch, useRedact } from '../state.js';
-import { useSecrets } from '../hooks/use-secrets.js';
-import { colors } from '../theme.js';
+import { useAppState, useAppDispatch, useRedact } from '../state';
+import { useSecrets } from '../hooks/use-secrets';
+import { colors } from '../theme';
 
 export function SecretsView(): React.JSX.Element {
   const state = useAppState();

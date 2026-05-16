@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { DepsConfig } from './types.js';
+import type { DepsConfig } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(__dirname, '..', '..', '..', 'data', 'deps-config.json');

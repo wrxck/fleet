@@ -1,8 +1,8 @@
-import { execSafe } from './exec.js';
-import { assertHealthPath } from './validate.js';
-import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable, type ServiceStatus } from './systemd.js';
-import { listContainers, type ContainerInfo } from './docker.js';
-import type { AppEntry } from './registry.js';
+import { execSafe } from './exec';
+import { assertHealthPath } from './validate';
+import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable, type ServiceStatus } from './systemd';
+import { listContainers, type ContainerInfo } from './docker';
+import type { AppEntry } from './registry';
 
 export interface HealthResult {
   app: string;

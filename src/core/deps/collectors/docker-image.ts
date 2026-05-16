@@ -1,9 +1,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { AppEntry } from '../../registry.js';
-import type { Collector, Finding, DepsConfig } from '../types.js';
-import { severityFromVersionDelta } from '../severity.js';
+import type { AppEntry } from '../../registry';
+import type { Collector, Finding, DepsConfig } from '../types';
+import { severityFromVersionDelta } from '../severity';
 
 type SeverityOverrides = DepsConfig['severityOverrides'];
 

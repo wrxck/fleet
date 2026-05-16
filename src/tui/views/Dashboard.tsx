@@ -6,9 +6,9 @@ import { ScrollableList } from '@matthesketh/ink-scrollable-list';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch, useRedact } from '../state.js';
-import { useFleetData } from '../hooks/use-fleet-data.js';
-import { colors } from '../theme.js';
+import { useAppState, useAppDispatch, useRedact } from '../state';
+import { useFleetData } from '../hooks/use-fleet-data';
+import { colors } from '../theme';
 
 export function Dashboard(): React.JSX.Element {
   const state = useAppState();

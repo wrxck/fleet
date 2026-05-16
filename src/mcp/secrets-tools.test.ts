@@ -12,9 +12,9 @@ vi.mock('../core/secrets-ops.js', () => ({
   detectDrift: vi.fn(),
 }));
 
-import { isInitialized } from '../core/secrets.js';
-import { setSecret, getSecret, detectDrift } from '../core/secrets-ops.js';
-import { registerSecretsTools } from './secrets-tools.js';
+import { isInitialized } from '../core/secrets';
+import { setSecret, getSecret, detectDrift } from '../core/secrets-ops';
+import { registerSecretsTools } from './secrets-tools';
 
 beforeEach(() => vi.clearAllMocks());
 

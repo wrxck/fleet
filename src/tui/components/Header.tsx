@@ -3,9 +3,9 @@ import { Box, Text } from 'ink';
 import { Tabs } from '@matthesketh/ink-tabs';
 import { Breadcrumb } from '@matthesketh/ink-breadcrumb';
 
-import { useAppState } from '../state.js';
-import { colors } from '../theme.js';
-import type { View } from '../types.js';
+import { useAppState } from '../state';
+import { colors } from '../theme';
+import type { View } from '../types';
 
 const TAB_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },

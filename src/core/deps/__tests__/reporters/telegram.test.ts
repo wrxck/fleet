@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { formatTelegramMessage, findNewFindings } from '../../reporters/telegram.js';
-import type { Finding } from '../../types.js';
+import { formatTelegramMessage, findNewFindings } from '../../reporters/telegram';
+import type { Finding } from '../../types';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {

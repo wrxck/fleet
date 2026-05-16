@@ -1,5 +1,5 @@
 /** read-only backup status dashboard. rendered to static html by a systemd
- *  timer and served at fleet.hesketh.pro/backups (home-ip restricted in nginx). */
+ *  timer and served at the /backups route (ip-restricted in nginx). */
 
 export interface StatusEntry {
   app: string;

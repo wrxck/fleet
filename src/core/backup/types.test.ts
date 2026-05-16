@@ -10,7 +10,7 @@ describe('isPseudoApp', () => {
   });
 
   it('returns false for normal apps', () => {
-    for (const name of ['shotzandpotz', 'trustedpets', 'natures-art-ui']) {
+    for (const name of ['demo-shop', 'petcare', 'art-store-ui']) {
       expect(isPseudoApp(name)).toBe(false);
     }
   });

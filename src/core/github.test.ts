@@ -5,12 +5,12 @@ vi.mock('./exec.js', () => ({
 }));
 
 vi.mock('./errors.js', async () => {
-  const actual = await vi.importActual<typeof import('./errors.js')>('./errors.js');
+  const actual = await vi.importActual<typeof import('./errors')>('./errors.js');
   return actual;
 });
 
 vi.mock('./validate.js', async () => {
-  const actual = await vi.importActual<typeof import('./validate.js')>('./validate.js');
+  const actual = await vi.importActual<typeof import('./validate')>('./validate.js');
   return actual;
 });
 
@@ -19,9 +19,15 @@ vi.mock('node:fs', async () => {
   return { ...actual, writeFileSync: vi.fn(), unlinkSync: vi.fn() };
 });
 
-import { execSafe } from './exec.js';
+vi.mock('./operator', () => ({
+  loadOperator: () => ({
+    username: 'test', homeDir: '/home/test', domain: 'fleet.test', githubOrg: 'test-org',
+  }),
+}));
+
+import { execSafe } from './exec';
 import {
-  GITHUB_ORG,
+  githubOrg,
   isGhAuthenticated,
   requireGhAuth,
   repoExists,
@@ -30,8 +36,8 @@ import {
   createPullRequest,
   listPullRequests,
   protectBranch,
-} from './github.js';
-import { GitError } from './errors.js';
+} from './github';
+import { GitError } from './errors';
 
 const mockExec = execSafe as ReturnType<typeof vi.fn>;
 
@@ -40,9 +46,9 @@ beforeEach(() => {
   mockExec.mockReturnValue({ ok: true, stdout: '', stderr: '' });
 });
 
-describe('GITHUB_ORG', () => {
-  it('is heskethwebdesign', () => {
-    expect(GITHUB_ORG).toBe('heskethwebdesign');
+describe('githubOrg', () => {
+  it('comes from operator config', () => {
+    expect(githubOrg()).toBe('test-org');
   });
 });
 
@@ -102,7 +108,7 @@ describe('repoExists', () => {
 describe('getRepoUrl', () => {
   it('returns SSH git URL for the org', () => {
     const url = getRepoUrl('myapp');
-    expect(url).toBe('git@github.com:heskethwebdesign/myapp.git');
+    expect(url).toBe('git@github.com:test-org/myapp.git');
   });
 
   it('includes the app name in the URL', () => {
@@ -147,7 +153,7 @@ describe('createPullRequest', () => {
     const prData = {
       number: 42,
       title: 'My PR',
-      url: 'https://github.com/heskethwebdesign/myapp/pull/42',
+      url: 'https://github.com/test-org/myapp/pull/42',
       headRefName: 'feat/x',
       baseRefName: 'develop',
       state: 'open',

@@ -1,17 +1,17 @@
 import { writeFileSync, chmodSync } from 'node:fs';
 
-import { load, findApp } from '../core/registry.js';
-import { loadConfig, saveConfig, defaultConfig, configPath } from '../core/deps/config.js';
-import { loadCache, saveCache, isCacheStale, cachePath } from '../core/deps/cache.js';
-import { runScan } from '../core/deps/scanner.js';
-import { formatSummary, formatAppDetail } from '../core/deps/reporters/cli.js';
-import { formatMotd, generateMotdScript } from '../core/deps/reporters/motd.js';
+import { load, findApp } from '../core/registry';
+import { loadConfig, saveConfig, defaultConfig, configPath } from '../core/deps/config';
+import { loadCache, saveCache, isCacheStale, cachePath } from '../core/deps/cache';
+import { runScan } from '../core/deps/scanner';
+import { formatSummary, formatAppDetail } from '../core/deps/reporters/cli';
+import { formatMotd, generateMotdScript } from '../core/deps/reporters/motd';
 import {
   sendTelegramNotification, loadNotifiedFindings, saveNotifiedFindings,
-} from '../core/deps/reporters/telegram.js';
-import { createDepsPr } from '../core/deps/actors/pr-creator.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { heading, success, error, info, warn } from '../ui/output.js';
+} from '../core/deps/reporters/telegram';
+import { createDepsPr } from '../core/deps/actors/pr-creator';
+import { AppNotFoundError } from '../core/errors';
+import { heading, success, error, info, warn } from '../ui/output';
 
 export async function depsCommand(args: string[]): Promise<void> {
   const sub = args[0];

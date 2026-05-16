@@ -7,7 +7,7 @@ import {
   SecretsError,
   VaultNotInitializedError,
   GitError,
-} from './errors.js';
+} from './errors';
 
 describe('FleetError', () => {
   it('is an instance of Error', () => {

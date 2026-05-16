@@ -109,7 +109,7 @@ Expected: Each fleet-managed service gets `StartLimitBurst=5` and `StartLimitInt
 - [ ] **Step 4: Verify a patched service**
 
 ```bash
-grep -A2 'StartLimitBurst' /etc/systemd/system/abmanandvan.service
+grep -A2 'StartLimitBurst' /etc/systemd/system/movers-co.service
 ```
 
 Expected:

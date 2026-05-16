@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { requireEnv } from '../env';
 import { FleetError } from '../errors';
 
 import { AppBackupConfig, Retention, isPseudoApp } from './types';
@@ -10,8 +11,10 @@ import { AppBackupConfig, Retention, isPseudoApp } from './types';
 export function backupConfigDir(): string {
   return process.env.FLEET_BACKUP_CONFIG_DIR ?? '/etc/fleet/backups';
 }
+// the vault holds the age-encrypted restic passwords — no safe default,
+// so an unset FLEET_BACKUP_VAULT_DIR is a hard error rather than a guess.
 export function backupVaultDir(): string {
-  return process.env.FLEET_BACKUP_VAULT_DIR ?? '/etc/fleet/restic-vault';
+  return requireEnv('FLEET_BACKUP_VAULT_DIR');
 }
 
 export const DEFAULT_RETENTION: Retention = {

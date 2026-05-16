@@ -1,10 +1,10 @@
 import { existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 
-import { execSafe, execGit } from './exec.js';
-import { GitError } from './errors.js';
-import { detectProjectType, generateGitignore } from '../templates/gitignore.js';
-import { assertBranch, assertFilePath } from './validate.js';
+import { execSafe, execGit } from './exec';
+import { GitError } from './errors';
+import { detectProjectType, generateGitignore } from '../templates/gitignore';
+import { assertBranch, assertFilePath } from './validate';
 
 // Use SSH_AUTH_SOCK from environment, or check for fleet-specific socket
 const SSH_AGENT_SOCK = process.env.FLEET_SSH_SOCK || '/tmp/fleet-ssh-agent.sock';

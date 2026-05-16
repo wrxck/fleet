@@ -1,3 +1,5 @@
+import { loadOperator } from '../operator';
+
 import { DEFAULT_RETENTION } from './config';
 import { AppBackupConfig } from './types';
 
@@ -70,7 +72,7 @@ export const ROOT_HOME_PATHS = [
   '/root/.pm2/module_conf.json',
 ];
 
-/** excludes for root-home and matt-home: claude code regeneratable state
+/** excludes for root-home and user-home: claude code regeneratable state
  *  (sessions, plugin caches, telemetry) and tool caches that take GBs but
  *  contain nothing the user authored. credentials.json, settings, hooks,
  *  skills, plans, mcp.json all stay. */
@@ -104,25 +106,29 @@ export const HOME_EXCLUDES = [
   '*.log',
 ];
 
-export const MATT_HOME_PATHS = [
-  '/home/matt/.ssh',
-  '/home/matt/.gitconfig',
-  '/home/matt/.docker/config.json',
-  '/home/matt/.config/gh',
-  '/home/matt/.config/op',
-  '/home/matt/.aws',
-  '/home/matt/.gnupg',
-  '/home/matt/.terraform.d',
-  '/home/matt/.claude',
-  '/home/matt/.claude.json',
-  '/home/matt/.mcp.json',
-  '/home/matt/.bashrc',
-  '/home/matt/.bash_history',
-  '/home/matt/.profile',
-  '/home/matt/.local/bin',
-];
+/** the operator's home-dir paths worth backing up — dotfiles and agent
+ *  state, never app working directories. derived from the configured home. */
+export function userHomePaths(homeDir: string): string[] {
+  return [
+    `${homeDir}/.ssh`,
+    `${homeDir}/.gitconfig`,
+    `${homeDir}/.docker/config.json`,
+    `${homeDir}/.config/gh`,
+    `${homeDir}/.config/op`,
+    `${homeDir}/.aws`,
+    `${homeDir}/.gnupg`,
+    `${homeDir}/.terraform.d`,
+    `${homeDir}/.claude`,
+    `${homeDir}/.claude.json`,
+    `${homeDir}/.mcp.json`,
+    `${homeDir}/.bashrc`,
+    `${homeDir}/.bash_history`,
+    `${homeDir}/.profile`,
+    `${homeDir}/.local/bin`,
+  ];
+}
 
-export const MATT_HOME_EXCLUDES = [
+export const USER_HOME_EXCLUDES = [
   ...HOME_EXCLUDES,
   '*.cache',
   '.npm',
@@ -205,12 +211,12 @@ export function sharedMongoConfig(): AppBackupConfig {
   };
 }
 
-export function mattHomeConfig(): AppBackupConfig {
+export function userHomeConfig(): AppBackupConfig {
   return {
-    app: 'matt-home',
+    app: 'user-home',
     schedule: 'daily',
-    paths: MATT_HOME_PATHS,
-    exclude: MATT_HOME_EXCLUDES,
+    paths: userHomePaths(loadOperator().homeDir),
+    exclude: USER_HOME_EXCLUDES,
     retention: DEFAULT_RETENTION,
   };
 }

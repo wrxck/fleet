@@ -26,13 +26,13 @@ fleet egress observe <app> [--json]
 ### Example
 
 ```
-Egress snapshot: macpool
+Egress snapshot: poolside
   Taken: 2026-04-25T16:13:36Z
   Distinct remote endpoints: 3
   CONTAINER  REMOTE                STATUS
-  macpool    api.stripe.com:443    allowed
-  macpool    api.bookwhen.com:443  allowed
-  macpool    sentry.io:443         not in allowlist
+  poolside    api.stripe.com:443    allowed
+  poolside    api.bookwhen.com:443  allowed
+  poolside    sentry.io:443         not in allowlist
 ```
 
 ---

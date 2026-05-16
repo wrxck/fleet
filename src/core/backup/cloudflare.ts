@@ -1,9 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 
+import { requireEnv } from '../env';
 import { FleetError } from '../errors';
 import { execSafe } from '../exec';
 
-const CF_CRED_INI = process.env.FLEET_CF_CRED ?? '/root/.secrets/cloudflare.ini';
+/** path to the cloudflare credentials ini. */
+function cfCredIni(): string { return requireEnv('FLEET_CF_CRED'); }
 
 export class CloudflareError extends FleetError {}
 
@@ -14,8 +16,9 @@ interface CfCreds {
 }
 
 function loadCreds(): CfCreds {
-  if (!existsSync(CF_CRED_INI)) return {};
-  const lines = readFileSync(CF_CRED_INI, 'utf-8').split('\n');
+  const credPath = cfCredIni();
+  if (!existsSync(credPath)) return {};
+  const lines = readFileSync(credPath, 'utf-8').split('\n');
   const out: CfCreds = {};
   for (const line of lines) {
     const t = line.trim();
@@ -59,7 +62,7 @@ function cfCurl(path: string, creds: CfCreds): { ok: boolean; stdout: string; st
 export function exportAllZones(): string {
   const creds = loadCreds();
   if (!creds.apiToken && !(creds.email && creds.apiKey)) {
-    throw new CloudflareError(`no cloudflare credentials at ${CF_CRED_INI}`);
+    throw new CloudflareError(`no cloudflare credentials at ${cfCredIni()}`);
   }
 
   const zonesResp = cfCurl('/zones?per_page=200', creds);

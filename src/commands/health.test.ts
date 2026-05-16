@@ -17,9 +17,9 @@ vi.mock('../ui/output.js', () => ({
   table: vi.fn(),
 }));
 
-import { load, findApp } from '../core/registry.js';
-import { checkHealth, checkAllHealth } from '../core/health.js';
-import { healthCommand } from './health.js';
+import { load, findApp } from '../core/registry';
+import { checkHealth, checkAllHealth } from '../core/health';
+import { healthCommand } from './health';
 
 beforeEach(() => {
   vi.clearAllMocks();
