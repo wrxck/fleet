@@ -33,7 +33,8 @@ import {
   sharedMongoConfig,
 } from '../core/backup/system';
 import { isPseudoApp } from '../core/backup/types';
-import { renderStatusHtml, StatusReport, StatusEntry } from '../core/backup/statuspage';
+import { renderStatusHtml } from '../core/backup/statuspage';
+import { buildStatusReport } from '../core/backup/status';
 import {
   generateAndStorePassword,
   vaultPath,
@@ -410,32 +411,6 @@ function cmdIntegrity(args: string[]): void {
     process.exit(1);
   }
   success(`integrity ok: ${app}`);
-}
-
-function buildStatusReport(): StatusReport {
-  const apps = listConfiguredApps();
-  const entries: StatusEntry[] = [];
-  for (const app of apps) {
-    const cfg = loadConfig(app);
-    if (!cfg) continue;
-    const snaps = listSnapshots(app);
-    const last = snaps[snaps.length - 1];
-    const st = stats(app);
-    entries.push({
-      app,
-      schedule: cfg.schedule,
-      disabled: !!cfg.disabled,
-      snapshotCount: snaps.length,
-      lastSnapshotAt: last?.time ?? null,
-      totalSize: st?.totalSize ?? null,
-    });
-  }
-  return {
-    generatedAt: new Date().toISOString(),
-    backend: (process.env.FLEET_BACKUP_BASE_URL ?? '').startsWith('rest:') ? 'rest' : 'sftp',
-    appendOnly: isAppendOnly(),
-    apps: entries,
-  };
 }
 
 function cmdStatus(args: string[] = []): void {
