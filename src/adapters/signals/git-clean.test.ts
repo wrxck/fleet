@@ -3,9 +3,9 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { execSafe } from '../../core/exec.js';
-import { mkExecTmpDir } from '../../core/routines/test-utils.js';
-import { gitCleanProvider } from './git-clean.js';
+import { execSafe } from '../../core/exec';
+import { mkExecTmpDir } from '../../core/routines/test-utils';
+import { gitCleanProvider } from './git-clean';
 
 describe('gitCleanProvider', () => {
   let dir: string;

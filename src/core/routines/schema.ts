@@ -2,6 +2,17 @@ import { z } from 'zod';
 
 const ROUTINE_ID_REGEX = /^[a-z][a-z0-9-]{0,62}$/;
 const NO_SHELL_META = /^[^`$;&|><\n\r\\"]*$/;
+// Printable ASCII only — no newlines, no control chars. Routine names and
+// descriptions are interpolated into systemd unit files; a newline would let
+// a hostile name inject directives like [Service]/User=root/ExecStart=…
+// that the systemd loader then runs as root after daemon-reload. Keep this
+// strict — widen explicitly if a future feature truly needs more.
+const ROUTINE_TEXT_REGEX = /^[\x20-\x7E]+$/;
+// systemd's documented OnCalendar grammar: weekdays, dates, times — all
+// printable ASCII without quotes, semicolons, control chars or newlines.
+// Same injection concern as above. Widen if "~" (last weekday) etc. is
+// actually needed.
+const ON_CALENDAR_REGEX = /^[A-Za-z0-9*\-/:., \t]+$/;
 
 const DEFAULT_WALLCLOCK_MS = 15 * 60 * 1000;
 const DEFAULT_TOKEN_CAP = 100_000;
@@ -45,7 +56,7 @@ export const RoutineScheduleSchema = z.union([
   z.object({ kind: z.literal('manual') }),
   z.object({
     kind: z.literal('calendar'),
-    onCalendar: z.string().min(1).max(200),
+    onCalendar: z.string().min(1).max(200).regex(ON_CALENDAR_REGEX, 'systemd OnCalendar tokens only (letters, digits, *-/:., space, tab)'),
     randomizedDelaySec: z.number().int().nonnegative().max(3600).default(0),
     persistent: z.boolean().default(true),
   }),
@@ -55,8 +66,8 @@ export type RoutineSchedule = z.infer<typeof RoutineScheduleSchema>;
 
 export const RoutineSchema = z.object({
   id: z.string().regex(ROUTINE_ID_REGEX, 'lowercase alphanumeric and dashes only'),
-  name: z.string().min(1).max(100),
-  description: z.string().max(2000).default(''),
+  name: z.string().min(1).max(100).regex(ROUTINE_TEXT_REGEX, 'printable ASCII only, no newlines or control chars'),
+  description: z.string().max(2000).regex(/^[\x20-\x7E]*$/, 'printable ASCII only, no newlines or control chars').default(''),
   schedule: RoutineScheduleSchema,
   enabled: z.boolean().default(true),
   targets: z.array(z.string().min(1)).default([]),

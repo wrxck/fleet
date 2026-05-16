@@ -51,3 +51,37 @@ func TestOptionsResponseEmptyOptions(t *testing.T) {
 		t.Errorf("expected nil Options, got %v", msg.Options)
 	}
 }
+
+// TestTelegramIsAuthorizedSender locks in the per-sender authorisation gate
+// added so the Telegram adapter implements SenderAuthorizer the same way the
+// BlueBubbles adapter does. Without this, the router falls back to chat-level
+// auth only — which means anyone in an allowed group chat can drive the bot.
+func TestTelegramIsAuthorizedSender(t *testing.T) {
+	// Compile-time assertion: TelegramAdapter implements SenderAuthorizer.
+	var _ SenderAuthorizer = (*TelegramAdapter)(nil)
+
+	// With an explicit sender allowlist, only those IDs are authorised.
+	tg := NewTelegram("token", []int64{100}, []int64{42, 99}, nil)
+	if !tg.IsAuthorizedSender("42") {
+		t.Error("expected sender 42 to be authorised")
+	}
+	if !tg.IsAuthorizedSender("99") {
+		t.Error("expected sender 99 to be authorised")
+	}
+	if tg.IsAuthorizedSender("7") {
+		t.Error("expected sender 7 to be rejected (not in allowlist)")
+	}
+	if tg.IsAuthorizedSender("not-a-number") {
+		t.Error("expected non-numeric sender ID to be rejected")
+	}
+	if tg.IsAuthorizedSender("") {
+		t.Error("expected empty sender ID to be rejected")
+	}
+
+	// With no allowlist configured, fall back to chat-level allow
+	// (single-user installs continue to work).
+	tgOpen := NewTelegram("token", []int64{100}, nil, nil)
+	if !tgOpen.IsAuthorizedSender("anything") {
+		t.Error("expected open install (empty allowlist) to allow any sender")
+	}
+}

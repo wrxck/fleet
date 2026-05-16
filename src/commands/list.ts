@@ -1,5 +1,5 @@
-import { load } from '../core/registry.js';
-import { c, heading, table } from '../ui/output.js';
+import { load } from '../core/registry';
+import { c, heading, table } from '../ui/output';
 
 export function listCommand(args: string[]): void {
   const json = args.includes('--json');

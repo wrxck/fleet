@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateNginxConfig } from './nginx.js';
+import { generateNginxConfig } from './nginx';
 
 function makeOpts(overrides: Partial<Parameters<typeof generateNginxConfig>[0]> = {}) {
   return {

@@ -1,4 +1,4 @@
-import type { DepsCache, Severity } from '../types.js';
+import type { DepsCache, Severity } from '../types';
 
 export function formatMotd(cache: DepsCache, appCount: number): string {
   const lines: string[] = [];

@@ -54,8 +54,8 @@ describe('backup/config', () => {
   });
 
   it('validateAppName accepts real names and rejects bad ones', () => {
-    expect(() => validateAppName('shotzandpotz')).not.toThrow();
-    expect(() => validateAppName('natures-art-ui')).not.toThrow();
+    expect(() => validateAppName('demo-shop')).not.toThrow();
+    expect(() => validateAppName('art-store-ui')).not.toThrow();
     expect(() => validateAppName('system')).not.toThrow();
     expect(() => validateAppName('')).toThrow();
     expect(() => validateAppName('UPPER')).toThrow();

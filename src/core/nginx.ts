@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 
-import { execSafe } from './exec.js';
-import { assertDomain } from './validate.js';
+import { execSafe } from './exec';
+import { assertDomain } from './validate';
 
 const SITES_AVAILABLE = '/etc/nginx/sites-available';
 const SITES_ENABLED = '/etc/nginx/sites-enabled';

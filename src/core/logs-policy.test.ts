@@ -7,22 +7,22 @@ import {
   buildComposeOverride,
   DEFAULT_POLICY,
   readContainerLogs,
-} from './logs-policy.js';
-import type { AppEntry } from './registry.js';
-import { execSafe } from './exec.js';
+} from './logs-policy';
+import type { AppEntry } from './registry';
+import { execSafe } from './exec';
 
 function app(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
-    name: 'macpool',
-    displayName: 'macpool',
-    composePath: '/tmp/macpool',
+    name: 'poolside',
+    displayName: 'poolside',
+    composePath: '/tmp/poolside',
     composeFile: null,
-    serviceName: 'macpool',
+    serviceName: 'poolside',
     domains: [],
     port: null,
     usesSharedDb: false,
     type: 'nextjs',
-    containers: ['macpool'],
+    containers: ['poolside'],
     dependsOnDatabases: false,
     registeredAt: '',
     ...overrides,
@@ -60,10 +60,10 @@ describe('buildComposeOverride', () => {
 describe('readContainerLogs', () => {
   it('passes lines + since to docker', () => {
     vi.mocked(execSafe).mockReturnValueOnce({ ok: true, stdout: 'line1\nline2', stderr: '' });
-    const out = readContainerLogs('macpool', { lines: 30, sinceMinutes: 5 });
+    const out = readContainerLogs('poolside', { lines: 30, sinceMinutes: 5 });
     expect(execSafe).toHaveBeenCalledWith(
       'docker',
-      expect.arrayContaining(['logs', '--tail', '30', '--since', '5m', 'macpool']),
+      expect.arrayContaining(['logs', '--tail', '30', '--since', '5m', 'poolside']),
     );
     expect(out.text).toBe('line1\nline2');
   });

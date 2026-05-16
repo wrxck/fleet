@@ -9,8 +9,8 @@
 
 import { existsSync, mkdirSync, copyFileSync, readdirSync, statSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadManifest, VAULT_DIR } from './secrets.js';
-import { SecretsError } from './errors.js';
+import { loadManifest, VAULT_DIR } from './secrets';
+import { SecretsError } from './errors';
 
 // Computed lazily via snapshotDir() so test mocks of VAULT_DIR work cleanly.
 function snapshotDir(): string {

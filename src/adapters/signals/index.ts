@@ -1,8 +1,8 @@
-import type { SignalProvider } from '../types.js';
+import type { SignalProvider } from '../types';
 
-import { ciStatusProvider } from './ci-status.js';
-import { createContainerUpProvider } from './container-up.js';
-import { gitCleanProvider } from './git-clean.js';
+import { ciStatusProvider } from './ci-status';
+import { createContainerUpProvider } from './container-up';
+import { gitCleanProvider } from './git-clean';
 
 export { ciStatusProvider, createContainerUpProvider, gitCleanProvider };
 

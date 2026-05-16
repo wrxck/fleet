@@ -3,10 +3,10 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import type { RoutineTask, RunEvent } from '../../core/routines/schema.js';
-import { mkExecTmpDir, rmExecTmpDir } from '../../core/routines/test-utils.js';
-import type { RunContext } from '../types.js';
-import { createClaudeCliRunner } from './claude-cli.js';
+import type { RoutineTask, RunEvent } from '../../core/routines/schema';
+import { mkExecTmpDir, rmExecTmpDir } from '../../core/routines/test-utils';
+import type { RunContext } from '../types';
+import { createClaudeCliRunner } from './claude-cli';
 
 const makeCtx = (dir: string): RunContext => ({
   repo: null,

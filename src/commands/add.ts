@@ -1,14 +1,15 @@
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
-import { load, save, addApp } from '../core/registry.js';
-import { getContainersByCompose } from '../core/docker.js';
-import { installServiceFile, readServiceFile, enableService } from '../core/systemd.js';
-import { generateServiceFile } from '../templates/systemd.js';
-import { FleetError } from '../core/errors.js';
-import { success, info, error, warn } from '../ui/output.js';
-import { confirm } from '../ui/confirm.js';
-import type { AppEntry } from '../core/registry.js';
+import { addApp, withRegistry } from '../core/registry';
+import { getContainersByCompose } from '../core/docker';
+import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
+import { generateServiceFile } from '../templates/systemd';
+import { FleetError } from '../core/errors';
+import { assertComposeFile } from '../core/validate';
+import { success, info, error, warn } from '../ui/output';
+import { confirm } from '../ui/confirm';
+import type { AppEntry } from '../core/registry';
 
 export async function addCommand(args: string[]): Promise<void> {
   const dryRun = args.includes('--dry-run');
@@ -59,6 +60,10 @@ export async function addCommand(args: string[]): Promise<void> {
   if (!hasService) {
     info('No systemd service file found');
     if (!dryRun && (yes || await confirm('Create systemd service file?'))) {
+      // Defence-in-depth: keep this even though findComposePath currently only
+      // returns null. If it ever evolves to read a filename from user input,
+      // the systemd ExecStart interpolation must not see an unvalidated value.
+      if (composePath.file) assertComposeFile(composePath.file);
       const content = generateServiceFile({
         serviceName: name,
         description: `${name} Docker Service`,
@@ -80,8 +85,7 @@ export async function addCommand(args: string[]): Promise<void> {
     return;
   }
 
-  const reg = load();
-  save(addApp(reg, app));
+  await withRegistry(reg => addApp(reg, app));
   success(`Registered ${name}`);
 }
 

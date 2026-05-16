@@ -3,10 +3,10 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 
-import type { SignalKind, Signal } from '../../../core/routines/schema.js';
-import { AlertsPanel } from '../components/AlertsPanel.js';
-import { SignalsGrid, type SignalsGridRow } from '../components/SignalsGrid.js';
-import { formatRelative } from '../format.js';
+import type { SignalKind, Signal } from '../../../core/routines/schema';
+import { AlertsPanel } from '../components/AlertsPanel';
+import { SignalsGrid, type SignalsGridRow } from '../components/SignalsGrid';
+import { formatRelative } from '../format';
 
 const SLICE_ONE_KINDS: SignalKind[] = ['git-clean', 'container-up', 'ci-status'];
 
