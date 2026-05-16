@@ -1,0 +1,19 @@
+[Unit]
+Description=Deploy Webhook (fleet deploy trigger)
+After=network.target
+
+[Service]
+Type=simple
+# Change this to your user
+User=your-user
+# Set your webhook token
+Environment=DEPLOY_WEBHOOK_TOKEN=your-token-here
+# Change this to your fleet directory
+ExecStart=/usr/bin/node /path/to/fleet/deploy-webhook.cjs
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Install]
+WantedBy=multi-user.target

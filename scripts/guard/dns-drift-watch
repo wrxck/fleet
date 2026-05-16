@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""
+dns-drift-watch — verifies that public dns resolution for each cloudflare-
+proxied hostname still resolves through cloudflare ip space. detects:
+- attacker repointing a record to a non-cf ip
+- accidental flipping of the proxied flag (orange to grey)
+- nameserver hijack at registrar level
+
+works against the latest snapshot in /var/lib/cf-snapshots. only checks A
+records that were proxied=true at snapshot time. queries 1.1.1.1, 8.8.8.8,
+and 9.9.9.9 for redundancy.
+
+on drift, creates a fleet-guard hold (kind=dns_drift) so you can approve
+or revert via telegram/imessage.
+"""
+
+import json
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+SNAP_DIR = Path("/var/lib/cf-snapshots")
+GUARD = "/usr/local/sbin/fleet-guard"
+NOTIFY = "/usr/local/sbin/notify"
+RESOLVERS = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
+
+# cloudflare's known v4 ranges. updated by /usr/local/sbin/refresh-cf-firewall.sh
+CF_V4_PATH = Path("/etc/iptables/rules.v4")
+
+
+def cf_ranges():
+    """parse cf v4 ranges from the iptables guard chain. fallback to bundled."""
+    if CF_V4_PATH.exists():
+        ranges = []
+        for line in CF_V4_PATH.read_text().splitlines():
+            if "CF-DOCKER-GUARD" in line and "-s " in line and "RETURN" in line:
+                parts = line.split()
+                for i, p in enumerate(parts):
+                    if p == "-s" and i + 1 < len(parts):
+                        ranges.append(parts[i + 1])
+        if ranges:
+            return ranges
+    # fallback: hardcoded list (cf publishes <20 ranges)
+    return [
+        "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+        "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+        "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+        "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+        "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+    ]
+
+
+def in_range(ip, ranges):
+    import ipaddress
+    addr = ipaddress.ip_address(ip)
+    for r in ranges:
+        try:
+            if addr in ipaddress.ip_network(r):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def resolve(host, resolver):
+    try:
+        out = subprocess.run(
+            ["dig", "+short", "+tries=1", "+time=2", "A", host, f"@{resolver}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        ips = [line.strip() for line in out.stdout.splitlines() if line.strip()]
+        # filter out cnames (lines that don't look like ipv4)
+        return [ip for ip in ips if ip.count(".") == 3 and all(p.isdigit() for p in ip.split("."))]
+    except Exception:
+        return []
+
+
+def check_zone(zone_path):
+    snap = json.loads(zone_path.read_text())
+    zone_name = snap["zone"]["name"]
+    drifts = []
+    proxied_a_records = [
+        r for r in snap.get("records", [])
+        if r.get("type") == "A" and r.get("proxied") is True
+    ]
+    cf = cf_ranges()
+    for r in proxied_a_records:
+        host = r.get("name")
+        if not host:
+            continue
+        all_ips = set()
+        for resolver in RESOLVERS:
+            all_ips.update(resolve(host, resolver))
+        if not all_ips:
+            # unresolvable — could be temporary, skip
+            continue
+        non_cf = [ip for ip in all_ips if not in_range(ip, cf)]
+        if non_cf:
+            drifts.append({
+                "host": host,
+                "expected": "cloudflare-proxied",
+                "got": sorted(all_ips),
+                "non_cf": non_cf,
+                "snapshot_content": r.get("content"),
+            })
+    return zone_name, drifts
+
+
+def main():
+    if not SNAP_DIR.exists():
+        sys.exit("no snapshot directory at /var/lib/cf-snapshots")
+
+    all_drifts = []
+    for path in sorted(SNAP_DIR.glob("*.json")):
+        zone, drifts = check_zone(path)
+        for d in drifts:
+            d["zone"] = zone
+            all_drifts.append(d)
+
+    if not all_drifts:
+        return 0
+
+    # one hold per drift
+    for d in all_drifts:
+        summary = f"DNS drift: {d['host']} resolves to non-CF IPs {d['non_cf']}"
+        try:
+            subprocess.run(
+                [GUARD, "hold", "dns_drift", summary, "--payload", json.dumps(d)],
+                check=False, timeout=15,
+            )
+        except Exception as e:
+            subprocess.run([NOTIFY, "dns-drift-watch hold failed", f"{e}\n{summary}"], check=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""
+fleet-guard-execute — executes one approved fleet-guard record.
+
+reads a single json record on stdin (the approved hold). dispatches on
+record["kind"]. on success, prints a short summary; on failure, prints
+the error to stderr and exits non-zero.
+
+supported kinds:
+  noop                    — for testing the queue
+  cf_pause_zone           — pauses a cloudflare zone (dev mode style)
+  cf_unpause_zone         — unpauses a cloudflare zone
+  cf_revert_dns_record    — restores a dns record to its snapshot value
+  cf_block_ip             — adds a custom waf rule blocking an ip
+
+creds: /etc/fleet/guard.cf.json (root:fleet-guard 640)
+snapshots: /var/lib/cf-snapshots (git-tracked, populated by cf-snapshot)
+"""
+
+import json
+import sys
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+CFG_PATH = Path("/etc/fleet/guard.cf.json")
+SNAP_DIR = Path("/var/lib/cf-snapshots")
+
+
+def load_cf():
+    cfg = json.loads(CFG_PATH.read_text())
+    if not cfg.get("apiKey") or not cfg.get("email"):
+        sys.exit("missing cloudflare creds in /etc/fleet/guard.cf.json")
+    return cfg["apiKey"], cfg["email"], cfg.get("accountId")
+
+
+def cf_request(method, path, api_key, email, body=None):
+    url = f"https://api.cloudflare.com/client/v4{path}"
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method, headers={
+        "X-Auth-Email": email,
+        "X-Auth-Key": api_key,
+        "Content-Type": "application/json",
+    })
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def find_zone_id(zone_name, api_key, email):
+    qs = urllib.parse.urlencode({"name": zone_name})
+    res = cf_request("GET", f"/zones?{qs}", api_key, email)
+    results = res.get("result") or []
+    if not results:
+        raise RuntimeError(f"no zone match for {zone_name}")
+    return results[0]["id"]
+
+
+def kind_noop(payload):
+    print(f"noop ok: {payload.get('note', '')}")
+    return 0
+
+
+def kind_cf_pause_zone(payload, api_key, email, account_id):
+    zone = payload["zone"]
+    zid = find_zone_id(zone, api_key, email)
+    res = cf_request("POST", f"/zones/{zid}/pause", api_key, email, body={})
+    if not res.get("success"):
+        print(json.dumps(res), file=sys.stderr)
+        return 1
+    print(f"paused {zone}")
+    return 0
+
+
+def kind_cf_unpause_zone(payload, api_key, email, account_id):
+    zone = payload["zone"]
+    zid = find_zone_id(zone, api_key, email)
+    res = cf_request("POST", f"/zones/{zid}/unpause", api_key, email, body={})
+    if not res.get("success"):
+        print(json.dumps(res), file=sys.stderr)
+        return 1
+    print(f"unpaused {zone}")
+    return 0
+
+
+def kind_cf_revert_dns_record(payload, api_key, email, account_id):
+    """payload: {zone, name, type} — restores from latest snapshot."""
+    zone = payload["zone"]
+    name = payload["name"]
+    rtype = payload["type"]
+    snap_path = SNAP_DIR / f"{zone}.json"
+    if not snap_path.exists():
+        raise RuntimeError(f"no snapshot for {zone}")
+    snap = json.loads(snap_path.read_text())
+    matches = [r for r in snap.get("records", [])
+               if r.get("type") == rtype and r.get("name") == name]
+    if not matches:
+        raise RuntimeError(f"no snapshot record for {name} {rtype}")
+    target = matches[0]
+
+    zid = find_zone_id(zone, api_key, email)
+    # find live record id, if any
+    qs = urllib.parse.urlencode({"name": name, "type": rtype})
+    live = cf_request("GET", f"/zones/{zid}/dns_records?{qs}", api_key, email)
+    live_records = live.get("result") or []
+
+    body = {
+        "type": target["type"],
+        "name": target["name"],
+        "content": target.get("content"),
+        "proxied": target.get("proxied", False),
+        "ttl": target.get("ttl", 1),
+    }
+    if target.get("priority") is not None:
+        body["priority"] = target["priority"]
+
+    if live_records:
+        rec_id = live_records[0]["id"]
+        res = cf_request("PUT", f"/zones/{zid}/dns_records/{rec_id}", api_key, email, body)
+        action = "updated"
+    else:
+        res = cf_request("POST", f"/zones/{zid}/dns_records", api_key, email, body)
+        action = "recreated"
+
+    if not res.get("success"):
+        print(json.dumps(res), file=sys.stderr)
+        return 1
+    print(f"{action} {rtype} {name} on {zone}")
+    return 0
+
+
+def kind_cf_block_ip(payload, api_key, email, account_id):
+    """payload: {zone, ip, note?} — adds a block via cf rulesets."""
+    zone = payload["zone"]
+    ip = payload["ip"]
+    note = payload.get("note") or "fleet-guard auto-block"
+    zid = find_zone_id(zone, api_key, email)
+
+    rule = {
+        "action": "block",
+        "expression": f'(ip.src eq {ip})',
+        "description": f"fleet-guard: {note}",
+        "enabled": True,
+    }
+    body = {
+        "rules": [rule],
+    }
+    # rules go into the http_request_firewall_custom phase entrypoint
+    res = cf_request(
+        "PUT",
+        f"/zones/{zid}/rulesets/phases/http_request_firewall_custom/entrypoint",
+        api_key, email, body,
+    )
+    if not res.get("success"):
+        print(json.dumps(res), file=sys.stderr)
+        return 1
+    print(f"blocked {ip} on {zone}")
+    return 0
+
+
+HANDLERS = {
+    "noop": kind_noop,
+    "cf_pause_zone": kind_cf_pause_zone,
+    "cf_unpause_zone": kind_cf_unpause_zone,
+    "cf_revert_dns_record": kind_cf_revert_dns_record,
+    "cf_block_ip": kind_cf_block_ip,
+}
+
+
+def main():
+    raw = sys.stdin.read()
+    if not raw.strip():
+        sys.exit("no record on stdin")
+    record = json.loads(raw)
+    kind = record.get("kind")
+    payload = record.get("payload") or {}
+    handler = HANDLERS.get(kind)
+    if not handler:
+        print(f"unknown kind: {kind}", file=sys.stderr)
+        return 1
+
+    if kind == "noop":
+        return handler(payload)
+
+    api_key, email, account_id = load_cf()
+    try:
+        return handler(payload, api_key, email, account_id)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:500]
+        print(f"cf api {e.code}: {body}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"executor error: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

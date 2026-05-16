@@ -1,0 +1,12 @@
+src/
+bot/
+vault/
+data/registry.json
+*.test.ts
+*.test.js
+.github/
+.claude/
+.gitignore
+tsconfig.json
+deploy-webhook.*
+*.service
