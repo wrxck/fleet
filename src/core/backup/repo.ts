@@ -174,6 +174,55 @@ export interface RestoreOptions {
   verify?: boolean;
 }
 
+export interface TreeEntry {
+  name: string;
+  type: 'dir' | 'file';
+  path: string;
+  size: number;
+  mtime: string;
+}
+
+/** parses `restic ls --json` output into the direct children of dirPath.
+ *  restic ls recurses, so deeper descendants are filtered out here. */
+export function parseLsOutput(stdout: string, dirPath: string): TreeEntry[] {
+  const base = dirPath === '/' ? '' : dirPath.replace(/\/+$/, '');
+  const entries: TreeEntry[] = [];
+  for (const line of stdout.split('\n')) {
+    if (!line) continue;
+    let node: Record<string, unknown>;
+    try {
+      node = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (node.struct_type !== 'node') continue;
+    const path = typeof node.path === 'string' ? node.path : '';
+    if (!path || !path.startsWith(base + '/')) continue;
+    const rest = path.slice(base.length + 1);
+    if (rest.length === 0 || rest.includes('/')) continue;
+    entries.push({
+      name: typeof node.name === 'string' ? node.name : rest,
+      type: node.type === 'dir' ? 'dir' : 'file',
+      path,
+      size: typeof node.size === 'number' ? node.size : 0,
+      mtime: typeof node.mtime === 'string' ? node.mtime : '',
+    });
+  }
+  entries.sort((a, b) =>
+    a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1,
+  );
+  return entries;
+}
+
+/** lists the immediate children of dirPath within a snapshot. */
+export function lsTree(app: string, snapshotId: string, dirPath: string): TreeEntry[] {
+  const r = runRestic(app, ['ls', snapshotId, '--json', dirPath], 60_000);
+  if (!r.ok) {
+    throw new ResticError(`restic ls failed for ${dirPath}: ${r.stderr || r.stdout}`);
+  }
+  return parseLsOutput(r.stdout, dirPath);
+}
+
 export function restore(app: string, opts: RestoreOptions, timeoutMs = 60 * 60_000): void {
   const args = ['restore', opts.snapshotId, '--target', opts.target];
   if (opts.dryRun) args.push('--dry-run');

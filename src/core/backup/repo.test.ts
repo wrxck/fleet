@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { isAppendOnly } from './repo';
+import { isAppendOnly, parseLsOutput } from './repo';
 
 describe('isAppendOnly', () => {
   const original = process.env.FLEET_BACKUP_BASE_URL;
@@ -32,5 +32,53 @@ describe('isAppendOnly', () => {
   it('returns false for s3: backends (no append-only enforcement by default)', () => {
     process.env.FLEET_BACKUP_BASE_URL = 's3:s3.amazonaws.com/bucket';
     expect(isAppendOnly()).toBe(false);
+  });
+});
+
+describe('backup/repo parseLsOutput', () => {
+  const lines = [
+    JSON.stringify({ struct_type: 'snapshot', id: 'abc', short_id: 'abc' }),
+    JSON.stringify({ struct_type: 'node', name: 'app', type: 'dir', path: '/home/app', size: 0, mtime: '2026-05-01T00:00:00Z' }),
+    JSON.stringify({ struct_type: 'node', name: 'index.ts', type: 'file', path: '/home/app/index.ts', size: 120, mtime: '2026-05-01T00:00:00Z' }),
+    JSON.stringify({ struct_type: 'node', name: 'readme', type: 'file', path: '/home/readme', size: 5, mtime: '2026-05-01T00:00:00Z' }),
+  ].join('\n');
+
+  it('returns only direct children of the requested dir', () => {
+    const entries = parseLsOutput(lines, '/home');
+    expect(entries.map(e => e.name).sort()).toEqual(['app', 'readme']);
+  });
+
+  it('excludes deeper descendants', () => {
+    const entries = parseLsOutput(lines, '/home');
+    expect(entries.find(e => e.name === 'index.ts')).toBeUndefined();
+  });
+
+  it('sorts directories before files, then alphabetically', () => {
+    const entries = parseLsOutput(lines, '/home');
+    expect(entries[0]).toMatchObject({ name: 'app', type: 'dir' });
+    expect(entries[1]).toMatchObject({ name: 'readme', type: 'file' });
+  });
+
+  it('lists children of nested dirs', () => {
+    const entries = parseLsOutput(lines, '/home/app');
+    expect(entries.map(e => e.name)).toEqual(['index.ts']);
+  });
+
+  it('handles the snapshot root', () => {
+    const rootLines = [
+      JSON.stringify({ struct_type: 'node', name: 'etc', type: 'dir', path: '/etc', size: 0, mtime: '' }),
+      JSON.stringify({ struct_type: 'node', name: 'passwd', type: 'file', path: '/etc/passwd', size: 1, mtime: '' }),
+    ].join('\n');
+    const entries = parseLsOutput(rootLines, '/');
+    expect(entries.map(e => e.name)).toEqual(['etc']);
+  });
+
+  it('ignores non-node and malformed lines', () => {
+    const messy = [
+      'not json',
+      JSON.stringify({ struct_type: 'snapshot' }),
+      JSON.stringify({ struct_type: 'node', name: 'x', type: 'file', path: '/home/x', size: 0, mtime: '' }),
+    ].join('\n');
+    expect(parseLsOutput(messy, '/home').map(e => e.name)).toEqual(['x']);
   });
 });
