@@ -10,6 +10,6 @@ describe('backup/schedule', () => {
 
   it('handles pseudo-app names with hyphens', () => {
     expect(timerUnitName('root-home')).toBe('fleet-backup@root-home.timer');
-    expect(serviceUnitName('matt-home')).toBe('fleet-backup@matt-home.service');
+    expect(serviceUnitName('user-home')).toBe('fleet-backup@user-home.service');
   });
 });
