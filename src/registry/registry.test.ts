@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
 
 import { register, getCommand, allCommands, _resetRegistry } from './registry';
@@ -15,6 +15,7 @@ const fake: CommandDef = {
 
 describe('command registry', () => {
   beforeEach(() => _resetRegistry());
+  afterEach(() => _resetRegistry());
 
   it('registers and retrieves a command', () => {
     register(fake);

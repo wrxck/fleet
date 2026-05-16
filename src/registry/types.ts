@@ -27,13 +27,15 @@ export interface CommandContext {
   env: NodeJS.ProcessEnv;
 }
 
-/** a command defined once; all three surfaces are derived from this. */
-export interface CommandDef<A = Record<string, unknown>, D = unknown> {
+/** a command defined once; all three surfaces are derived from this. the
+ *  registry stores the erased form — `run` receives the already-parsed args
+ *  as a plain record. use `defineCommand` for inference at definition sites. */
+export interface CommandDef<D = unknown> {
   name: string;
   summary: string;
   args: z.ZodObject<z.ZodRawShape>;
   destructive?: boolean;
   cliOnly?: boolean;
   tui?: 'palette' | { view: string };
-  run(args: A, ctx: CommandContext): Promise<CommandResult<D>>;
+  run(args: Record<string, unknown>, ctx: CommandContext): Promise<CommandResult<D>>;
 }
