@@ -43,4 +43,33 @@ describe('parseArgs', () => {
       throw new Error('expected non-help result');
     }
   });
+
+  it('rejects an unknown flag', () => {
+    const r = parseArgs(z.object({ app: z.string() }), ['web', '--bogus', 'x']);
+    if (!r.help) {
+      expect(r.ok).toBeFalsy();
+      if (!r.ok) expect(r.error).toMatch(/unknown flag/);
+    } else {
+      throw new Error('expected non-help result');
+    }
+  });
+
+  it('rejects a trailing flag with no value', () => {
+    const r = parseArgs(z.object({ app: z.string(), from: z.string().optional() }), ['web', '--from']);
+    if (!r.help) {
+      expect(r.ok).toBeFalsy();
+      if (!r.ok) expect(r.error).toMatch(/--from requires a value/);
+    } else {
+      throw new Error('expected non-help result');
+    }
+  });
+
+  it('supports the --key=value form', () => {
+    const r = parseArgs(z.object({ app: z.string(), from: z.string().optional() }), ['web', '--from=develop']);
+    if (!r.help && r.ok) {
+      expect(r.values).toEqual({ app: 'web', from: 'develop' });
+    } else {
+      throw new Error('expected ok parse');
+    }
+  });
 });

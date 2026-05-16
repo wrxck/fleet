@@ -29,15 +29,32 @@ export function parseArgs(schema: z.ZodObject<z.ZodRawShape>, argv: string[]): P
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token.startsWith('--')) {
-      const key = token.slice(2);
-      if (booleanFields.has(key)) {
-        values[key] = true;
-      } else {
-        values[key] = argv[++i];
+      const body = token.slice(2);
+      const eq = body.indexOf('=');
+      if (eq !== -1) {
+        // --key=value form
+        values[body.slice(0, eq)] = body.slice(eq + 1);
+        continue;
       }
+      if (booleanFields.has(body)) {
+        values[body] = true;
+        continue;
+      }
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith('--')) {
+        return { help: false, ok: false, error: `flag --${body} requires a value` };
+      }
+      values[body] = next;
+      i++;
     } else {
       positionals.push(token);
     }
+  }
+
+  // reject flags that aren't in the schema — a mistyped flag must not be dropped silently
+  const unknownFlags = Object.keys(values).filter(k => !(k in shape));
+  if (unknownFlags.length > 0) {
+    return { help: false, ok: false, error: `unknown flag(s): ${unknownFlags.join(', ')}` };
   }
 
   // assign leftover positionals to non-boolean fields in declaration order
