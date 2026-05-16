@@ -10,18 +10,24 @@ export function makeCliContext(): CommandContext {
       process.stderr.write(`[${event.level}] ${event.message}\n`);
     },
     confirm(prompt) {
+      const rl = createInterface({ input: process.stdin, output: process.stderr });
       return new Promise<boolean>(resolve => {
-        const rl = createInterface({ input: process.stdin, output: process.stderr });
+        // stdin EOF / SIGINT closes the interface — treat that as a "no".
+        rl.on('close', () => resolve(false));
         rl.question(`${prompt} [y/N] `, answer => {
-          rl.close();
+          // resolve before close: the first resolve wins, so the close
+          // handler firing afterwards is a harmless no-op.
           resolve(/^y(es)?$/i.test(answer.trim()));
+          rl.close();
         });
       });
     },
   };
 }
 
-/** mcp context: confirm is pre-resolved from the tool's `confirm` argument. */
+/** mcp context: confirm is pre-resolved from the tool's `confirm` argument.
+ *  per-event logs are silently dropped — the command result's `summary` is
+ *  the sole output channel on the mcp surface. */
 export function makeMcpContext(confirmGranted: boolean): CommandContext {
   return {
     env: process.env,
