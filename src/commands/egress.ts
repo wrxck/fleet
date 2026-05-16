@@ -1,7 +1,7 @@
-import { load, findApp, withRegistry } from '../core/registry.js';
-import { snapshotEgress, addEgressAllow } from '../core/egress.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { c, error, heading, info, success, table, warn } from '../ui/output.js';
+import { load, findApp, withRegistry } from '../core/registry';
+import { snapshotEgress, addEgressAllow } from '../core/egress';
+import { AppNotFoundError } from '../core/errors';
+import { c, error, heading, info, success, table, warn } from '../ui/output';
 
 export async function egressCommand(args: string[]): Promise<void> {
   const sub = args[0];

@@ -1,10 +1,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { AppEntry } from '../../registry.js';
-import type { Collector, Finding, DepsConfig } from '../types.js';
-import { severityFromVersionDelta } from '../severity.js';
-import { fetchWithTimeout } from './fetch-with-timeout.js';
+import type { AppEntry } from '../../registry';
+import type { Collector, Finding, DepsConfig } from '../types';
+import { severityFromVersionDelta } from '../severity';
+import { fetchWithTimeout } from './fetch-with-timeout';
 
 type SeverityOverrides = DepsConfig['severityOverrides'];
 

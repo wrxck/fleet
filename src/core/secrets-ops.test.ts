@@ -57,9 +57,9 @@ import { existsSync, readFileSync, readdirSync, chmodSync, writeFileSync, copyFi
 import {
   loadManifest, decryptApp, sealApp, parseSecretsBundle,
   ageEncrypt, backupVaultFile, restoreVaultFile, removeBackup,
-} from './secrets.js';
-import { execSafe } from './exec.js';
-import { validateBeforeSeal, detectDrift, safeSealApp, unsealAll, rotateKey } from './secrets-ops.js';
+} from './secrets';
+import { execSafe } from './exec';
+import { validateBeforeSeal, detectDrift, safeSealApp, unsealAll, rotateKey } from './secrets-ops';
 
 const mockLoadManifest = vi.mocked(loadManifest);
 const mockDecryptApp = vi.mocked(decryptApp);
@@ -297,7 +297,7 @@ describe('unsealAll runtime perms', () => {
         },
       },
     });
-    const { ageDecryptFile } = await import('./secrets.js');
+    const { ageDecryptFile } = await import('./secrets');
     vi.mocked(ageDecryptFile).mockReturnValue('---SECRET:mongo_root_password.txt---\nhunter2');
     mockParseSecretsBundle.mockReturnValue({ 'mongo_root_password.txt': 'hunter2' });
     mockExistsSync.mockReturnValue(true);
@@ -327,7 +327,7 @@ describe('unsealAll runtime perms', () => {
         },
       },
     });
-    const { ageDecryptFile } = await import('./secrets.js');
+    const { ageDecryptFile } = await import('./secrets');
     vi.mocked(ageDecryptFile).mockReturnValue('FOO=bar');
     mockExistsSync.mockReturnValue(true);
 
@@ -348,7 +348,7 @@ describe('rotateKey rollback', () => {
   });
 
   it('on partial-failure restores KEY_PATH from .old and restores per-app vault files from .bak-rotate-*', async () => {
-    const { ageDecryptFile, ageEncrypt, backupVaultFile } = await import('./secrets.js');
+    const { ageDecryptFile, ageEncrypt, backupVaultFile } = await import('./secrets');
 
     // Two apps; rotation will fail on the SECOND one's encryption.
     mockLoadManifest.mockReturnValue({
@@ -408,7 +408,7 @@ describe('rotateKey rollback', () => {
   });
 
   it('happy path removes per-app rotation backups and the KEY_PATH.old sidecar', async () => {
-    const { ageDecryptFile, ageEncrypt, backupVaultFile } = await import('./secrets.js');
+    const { ageDecryptFile, ageEncrypt, backupVaultFile } = await import('./secrets');
 
     mockLoadManifest.mockReturnValue({
       version: 1,
@@ -435,7 +435,7 @@ describe('rotateKey rollback', () => {
   });
 
   it('keygen failure aborts before any vault mutation and cleans up KEY_PATH.old', async () => {
-    const { ageDecryptFile } = await import('./secrets.js');
+    const { ageDecryptFile } = await import('./secrets');
 
     mockLoadManifest.mockReturnValue({
       version: 1,

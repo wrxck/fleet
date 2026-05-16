@@ -2,14 +2,14 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, chmodSync, mkdirS
 import { join, basename } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 
-import { validateAll } from './secrets-validate.js';
-import { execSafe } from './exec.js';
-import { assertAppName, assertFilePath, assertSecretKey } from './validate.js';
-import { SecretsError } from './errors.js';
-import { auditLog } from './secrets-audit.js';
-import { checkEntropy } from './secrets-rotation.js';
+import { validateAll } from './secrets-validate';
+import { execSafe } from './exec';
+import { assertAppName, assertFilePath, assertSecretKey } from './validate';
+import { SecretsError } from './errors';
+import { auditLog } from './secrets-audit';
+import { checkEntropy } from './secrets-rotation';
 import { chownSync } from 'node:fs';
-import { load as loadRegistry } from './registry.js';
+import { load as loadRegistry } from './registry';
 
 /**
  * Best-effort UID/GID tightening of a runtime secrets file. If the registry
@@ -35,7 +35,7 @@ import {
   getPublicKey, isInitialized, isSealed,
   backupVaultFile, restoreVaultFile, removeBackup,
   lockManifest,
-} from './secrets.js';
+} from './secrets';
 
 // --- helpers ---
 

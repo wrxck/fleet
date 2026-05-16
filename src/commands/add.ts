@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
-import { addApp, withRegistry } from '../core/registry.js';
-import { getContainersByCompose } from '../core/docker.js';
-import { installServiceFile, readServiceFile, enableService } from '../core/systemd.js';
-import { generateServiceFile } from '../templates/systemd.js';
-import { FleetError } from '../core/errors.js';
-import { assertComposeFile } from '../core/validate.js';
-import { success, info, error, warn } from '../ui/output.js';
-import { confirm } from '../ui/confirm.js';
-import type { AppEntry } from '../core/registry.js';
+import { addApp, withRegistry } from '../core/registry';
+import { getContainersByCompose } from '../core/docker';
+import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
+import { generateServiceFile } from '../templates/systemd';
+import { FleetError } from '../core/errors';
+import { assertComposeFile } from '../core/validate';
+import { success, info, error, warn } from '../ui/output';
+import { confirm } from '../ui/confirm';
+import type { AppEntry } from '../core/registry';
 
 export async function addCommand(args: string[]): Promise<void> {
   const dryRun = args.includes('--dry-run');

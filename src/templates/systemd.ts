@@ -1,4 +1,4 @@
-import { assertComposeFile } from '../core/validate.js';
+import { assertComposeFile } from '../core/validate';
 
 interface SystemdOpts {
   serviceName: string;

@@ -12,11 +12,11 @@ vi.mock('../../../git.js', () => ({
   getGitStatus: vi.fn(),
 }));
 
-import { generateVersionBump, buildPrBody, createDepsPr } from '../../actors/pr-creator.js';
-import type { Finding } from '../../types.js';
-import type { AppEntry } from '../../../registry.js';
-import { execSafe } from '../../../exec.js';
-import { getGitStatus } from '../../../git.js';
+import { generateVersionBump, buildPrBody, createDepsPr } from '../../actors/pr-creator';
+import type { Finding } from '../../types';
+import type { AppEntry } from '../../../registry';
+import { execSafe } from '../../../exec';
+import { getGitStatus } from '../../../git';
 
 const mockExecSafe = vi.mocked(execSafe);
 const mockGetGitStatus = vi.mocked(getGitStatus);

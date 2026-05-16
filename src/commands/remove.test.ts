@@ -6,7 +6,7 @@ vi.mock('../core/registry.js', () => ({
   findApp: vi.fn(),
   removeApp: vi.fn(),
   withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
-    const mod = await vi.importMock<typeof import('../core/registry.js')>('../core/registry.js');
+    const mod = await vi.importMock<typeof import('../core/registry')>('../core/registry.js');
     const reg = (mod.load as unknown as { (): unknown })();
     const next = await fn(reg);
     (mod.save as unknown as { (r: unknown): void })(next);

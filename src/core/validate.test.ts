@@ -8,7 +8,7 @@ import {
   assertFilePath,
   assertSecretKey,
   assertComposeFile,
-} from './validate.js';
+} from './validate';
 
 describe('assertAppName', () => {
   it('accepts valid app names', () => {

@@ -1,8 +1,8 @@
-import { load, findApp, removeApp, withRegistry } from '../core/registry.js';
-import { stopService, disableService } from '../core/systemd.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { success, error, info, warn } from '../ui/output.js';
-import { confirm } from '../ui/confirm.js';
+import { load, findApp, removeApp, withRegistry } from '../core/registry';
+import { stopService, disableService } from '../core/systemd';
+import { AppNotFoundError } from '../core/errors';
+import { success, error, info, warn } from '../ui/output';
+import { confirm } from '../ui/confirm';
 
 export async function removeCommand(args: string[]): Promise<void> {
   const yes = args.includes('-y') || args.includes('--yes');
