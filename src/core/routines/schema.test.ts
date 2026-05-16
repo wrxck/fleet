@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { RoutineSchema, RoutineTaskSchema, isExpired, type Signal } from './schema.js';
+import { RoutineSchema, RoutineTaskSchema, isExpired, type Signal } from './schema';
 
 describe('RoutineTaskSchema', () => {
   it('accepts a valid claude-cli task with defaults', () => {
@@ -40,7 +40,7 @@ describe('RoutineTaskSchema', () => {
   });
 
   it('accepts an mcp-call task', () => {
-    const parsed = RoutineTaskSchema.parse({ kind: 'mcp-call', tool: 'fleet_status', args: { service: 'abmanandvan' } });
+    const parsed = RoutineTaskSchema.parse({ kind: 'mcp-call', tool: 'fleet_status', args: { service: 'movers-co' } });
     expect(parsed.kind).toBe('mcp-call');
   });
 

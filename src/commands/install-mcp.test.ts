@@ -13,8 +13,8 @@ vi.mock('../ui/output.js', () => ({
 }));
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { success, info } from '../ui/output.js';
-import { installMcpCommand } from './install-mcp.js';
+import { success, info } from '../ui/output';
+import { installMcpCommand } from './install-mcp';
 
 beforeEach(() => {
   vi.clearAllMocks();

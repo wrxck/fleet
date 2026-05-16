@@ -2,9 +2,9 @@ import React, { useMemo } from 'react';
 
 import { Box, Text } from 'ink';
 
-import type { RoutineEngine, RecentRun } from '../../../core/routines/engine.js';
-import type { Routine } from '../../../core/routines/schema.js';
-import { formatDuration, formatRelative, formatUsd, truncate } from '../format.js';
+import type { RoutineEngine, RecentRun } from '../../../core/routines/engine';
+import type { Routine } from '../../../core/routines/schema';
+import { formatDuration, formatRelative, formatUsd, truncate } from '../format';
 
 interface RoutineRow {
   routine: Routine;

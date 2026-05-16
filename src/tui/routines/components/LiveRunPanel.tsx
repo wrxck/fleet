@@ -4,9 +4,9 @@ import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 
-import type { RoutineEngine } from '../../../core/routines/engine.js';
-import type { RunEvent, RunStatus } from '../../../core/routines/schema.js';
-import { formatDuration, formatUsd, truncate } from '../format.js';
+import type { RoutineEngine } from '../../../core/routines/engine';
+import type { RunEvent, RunStatus } from '../../../core/routines/schema';
+import { formatDuration, formatUsd, truncate } from '../format';
 
 export interface LiveRunPanelProps {
   engine: RoutineEngine;

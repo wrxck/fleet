@@ -10,9 +10,9 @@ vi.mock('../ui/output.js', () => ({
   table: vi.fn(),
 }));
 
-import { load } from '../core/registry.js';
-import { heading, table } from '../ui/output.js';
-import { listCommand } from './list.js';
+import { load } from '../core/registry';
+import { heading, table } from '../ui/output';
+import { listCommand } from './list';
 
 beforeEach(() => {
   vi.clearAllMocks();

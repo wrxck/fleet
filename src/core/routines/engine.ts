@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
 
-import type { NotifierAdapter, RunnerAdapter, SchedulerAdapter, RunContext } from '../../adapters/types.js';
-import type { Routine, RunEvent, RunStatus } from './schema.js';
-import { RoutineStore } from './store.js';
+import type { NotifierAdapter, RunnerAdapter, SchedulerAdapter, RunContext } from '../../adapters/types';
+import type { Routine, RunEvent, RunStatus } from './schema';
+import { RoutineStore } from './store';
 
 export type RunTrigger = 'manual' | 'scheduled' | 'api';
 

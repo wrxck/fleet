@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { load } from '../core/registry.js';
+import { load } from '../core/registry';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fleetBin = join(__dirname, '..', '..', 'dist', 'index.js');

@@ -25,8 +25,8 @@ vi.mock('../templates/gitignore.js', () => ({
   generateGitignore: vi.fn().mockReturnValue('node_modules/\ndist/\n'),
 }));
 
-import { execSafe } from './exec.js';
-import { assertBranch, assertFilePath } from './validate.js';
+import { execSafe } from './exec';
+import { assertBranch, assertFilePath } from './validate';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   isGitRepo,
@@ -43,8 +43,8 @@ import {
   hasGitignore,
   readGitignore,
   ensureGitignore,
-} from './git.js';
-import { GitError } from './errors.js';
+} from './git';
+import { GitError } from './errors';
 
 const mockedExec = vi.mocked(execSafe);
 const mockedAssertBranch = vi.mocked(assertBranch);

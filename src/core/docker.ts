@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { execSafe } from './exec.js';
+import { execSafe } from './exec';
 
 const SECRETS_BASE = '/run/fleet-secrets';
 

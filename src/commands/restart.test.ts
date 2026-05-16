@@ -14,10 +14,10 @@ vi.mock('../ui/output.js', () => ({
   error: vi.fn(),
 }));
 
-import { load, findApp } from '../core/registry.js';
-import { restartService } from '../core/systemd.js';
-import { success, error } from '../ui/output.js';
-import { restartCommand } from './restart.js';
+import { load, findApp } from '../core/registry';
+import { restartService } from '../core/systemd';
+import { success, error } from '../ui/output';
+import { restartCommand } from './restart';
 
 beforeEach(() => {
   vi.clearAllMocks();

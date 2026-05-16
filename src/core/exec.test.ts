@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { execSafe, execGit } from './exec.js';
+import { execSafe, execGit } from './exec';
 
 // execSafe uses spawnSync with array args — no shell injection possible.
 // Tests exercise real process spawning with safe, known-good binaries.

@@ -4,10 +4,10 @@ vi.mock('../../../exec.js', () => ({
   execSafe: vi.fn(),
 }));
 
-import { execSafe } from '../../../exec.js';
-import type { AppEntry } from '../../../registry.js';
-import { defaultConfig } from '../../config.js';
-import { DockerRunningCollector } from '../../collectors/docker-running.js';
+import { execSafe } from '../../../exec';
+import type { AppEntry } from '../../../registry';
+import { defaultConfig } from '../../config';
+import { DockerRunningCollector } from '../../collectors/docker-running';
 
 const mockExec = vi.mocked(execSafe);
 

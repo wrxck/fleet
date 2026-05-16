@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { defaultConfig, mergeConfig, loadConfig, saveConfig } from '../config.js';
-import type { DepsConfig } from '../types.js';
+import { defaultConfig, mergeConfig, loadConfig, saveConfig } from '../config';
+import type { DepsConfig } from '../types';
 
 let tmpDir: string;
 

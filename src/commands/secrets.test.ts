@@ -59,17 +59,17 @@ vi.mock('../ui/output.js', () => ({
   warn: vi.fn(),
 }));
 
-import { secretsCommand } from './secrets.js';
-import { load, findApp } from '../core/registry.js';
+import { secretsCommand } from './secrets';
+import { load, findApp } from '../core/registry';
 import {
   initVault, loadManifest, listSecrets, restoreVaultFile,
-} from '../core/secrets.js';
+} from '../core/secrets';
 import {
   setSecret, getSecret, exportApp, unsealAll, sealFromRuntime,
   getStatus, detectDrift,
-} from '../core/secrets-ops.js';
-import { validateApp, validateAll } from '../core/secrets-validate.js';
-import { error } from '../ui/output.js';
+} from '../core/secrets-ops';
+import { validateApp, validateAll } from '../core/secrets-validate';
+import { error } from '../ui/output';
 
 const mockLoad = vi.mocked(load);
 const mockFindApp = vi.mocked(findApp);

@@ -29,11 +29,11 @@ vi.mock('../ui/confirm.js', () => ({
   confirm: vi.fn(),
 }));
 
-import { load, save, findApp, removeApp } from '../core/registry.js';
-import { stopService, disableService } from '../core/systemd.js';
-import { success, info } from '../ui/output.js';
-import { confirm } from '../ui/confirm.js';
-import { removeCommand } from './remove.js';
+import { load, save, findApp, removeApp } from '../core/registry';
+import { stopService, disableService } from '../core/systemd';
+import { success, info } from '../ui/output';
+import { confirm } from '../ui/confirm';
+import { removeCommand } from './remove';
 
 beforeEach(() => {
   vi.clearAllMocks();

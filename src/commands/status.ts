@@ -1,7 +1,7 @@
-import { load } from '../core/registry.js';
-import { getMultipleServiceStatuses, systemdAvailable } from '../core/systemd.js';
-import { listContainers } from '../core/docker.js';
-import { c, icon, heading, table, info } from '../ui/output.js';
+import { load } from '../core/registry';
+import { getMultipleServiceStatuses, systemdAvailable } from '../core/systemd';
+import { listContainers } from '../core/docker';
+import { c, icon, heading, table, info } from '../ui/output';
 
 export interface StatusData {
   apps: Array<{

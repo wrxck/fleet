@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { defaultConfig } from '../config.js';
-import { loadCache, saveCache, isCacheStale } from '../cache.js';
-import type { DepsCache } from '../types.js';
+import { defaultConfig } from '../config';
+import { loadCache, saveCache, isCacheStale } from '../cache';
+import type { DepsCache } from '../types';
 
 let tmpDir: string;
 

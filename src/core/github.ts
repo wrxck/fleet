@@ -2,11 +2,14 @@ import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { execSafe } from './exec.js';
-import { GitError } from './errors.js';
-import { assertAppName } from './validate.js';
+import { execSafe } from './exec';
+import { GitError } from './errors';
+import { loadOperator } from './operator';
+import { assertAppName } from './validate';
 
-export const GITHUB_ORG = 'heskethwebdesign';
+/** the GitHub org this fleet instance publishes to — from operator config,
+ *  with no default: guessing another operator's org is never correct. */
+export function githubOrg(): string { return loadOperator().githubOrg; }
 
 export interface PullRequest {
   number: number;
@@ -29,19 +32,19 @@ export function requireGhAuth(): void {
 
 export function repoExists(name: string): boolean {
   assertAppName(name);
-  return execSafe('gh', ['repo', 'view', `${GITHUB_ORG}/${name}`, '--json', 'name'], { timeout: 15_000 }).ok;
+  return execSafe('gh', ['repo', 'view', `${githubOrg()}/${name}`, '--json', 'name'], { timeout: 15_000 }).ok;
 }
 
 export function createRepo(name: string): void {
   requireGhAuth();
   assertAppName(name);
   if (repoExists(name)) return;
-  const r = execSafe('gh', ['repo', 'create', `${GITHUB_ORG}/${name}`, '--private'], { timeout: 30_000 });
+  const r = execSafe('gh', ['repo', 'create', `${githubOrg()}/${name}`, '--private'], { timeout: 30_000 });
   if (!r.ok) throw new GitError(`failed to create repo: ${r.stderr}`);
 }
 
 export function getRepoUrl(name: string): string {
-  return `git@github.com:${GITHUB_ORG}/${name}.git`;
+  return `git@github.com:${githubOrg()}/${name}.git`;
 }
 
 export function createPullRequest(
@@ -51,7 +54,7 @@ export function createPullRequest(
   requireGhAuth();
   const r = execSafe('gh', [
     'pr', 'create',
-    '--repo', `${GITHUB_ORG}/${repo}`,
+    '--repo', `${githubOrg()}/${repo}`,
     '--title', opts.title,
     '--body', opts.body ?? '',
     '--head', opts.head,
@@ -81,7 +84,7 @@ export function listPullRequests(repo: string, state: 'open' | 'closed' | 'all' 
   requireGhAuth();
   const r = execSafe('gh', [
     'pr', 'list',
-    '--repo', `${GITHUB_ORG}/${repo}`,
+    '--repo', `${githubOrg()}/${repo}`,
     '--state', state,
     '--json', 'number,title,url,headRefName,baseRefName,state',
   ], { timeout: 15_000 });
@@ -119,7 +122,7 @@ export function protectBranch(repo: string, branch: string): boolean {
   try {
     const r = execSafe('gh', [
       'api', '-X', 'PUT',
-      `repos/${GITHUB_ORG}/${repo}/branches/${branch}/protection`,
+      `repos/${githubOrg()}/${repo}/branches/${branch}/protection`,
       '--input', tmpFile,
     ], { timeout: 15_000 });
     return r.ok;

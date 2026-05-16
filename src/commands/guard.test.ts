@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { guardCommand } from './guard.js';
+import { guardCommand } from './guard';
 
 // the guard command intentionally does very little in-process — every
 // non-install verb is a passthrough to /usr/local/sbin/fleet-guard, which

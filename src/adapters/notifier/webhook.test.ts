@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { createWebhookNotifier } from './webhook.js';
+import { createWebhookNotifier } from './webhook';
 
 describe('webhook notifier', () => {
   it('POSTs a JSON payload with subject and body', async () => {
