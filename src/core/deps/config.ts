@@ -25,6 +25,12 @@ export function defaultConfig(): DepsConfig {
       minorVersionBehind: 'medium',
       patchVersionBehind: 'low',
     },
+    // Skip OSV lookups for the user's own npm scope by default — OSV is a
+    // third-party service (Google) and sending internal package names there
+    // leaks the proprietary dependency manifest. Backwards compat: if an
+    // existing deps-config.json is missing this field, mergeConfig fills it
+    // in from these defaults.
+    osvSkipPatterns: ['^@matthesketh/'],
   };
 }
 
