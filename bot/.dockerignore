@@ -1,5 +1,0 @@
-fleet-bot
-*.service
-Makefile
-.dockerignore
-.git
