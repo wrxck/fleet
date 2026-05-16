@@ -383,7 +383,7 @@ describe('rotateKey rollback', () => {
       .mockImplementationOnce(() => 'CIPHER1') // app1
       .mockImplementationOnce(() => { throw new Error('age encrypt failed for app2'); });
 
-    expect(() => rotateKey()).toThrow(/rotateKey failed \(rolled back\)/);
+    await expect(rotateKey()).rejects.toThrow(/rotateKey failed \(rolled back\)/);
 
     // Rollback assertion 1: KEY_PATH was copied back from KEY_PATH.old.
     const copyCalls = vi.mocked(copyFileSync).mock.calls.map(c => c.map(String));
@@ -425,7 +425,7 @@ describe('rotateKey rollback', () => {
     });
     vi.mocked(ageEncrypt).mockReturnValue('CIPHER1');
 
-    const result = rotateKey();
+    const result = await rotateKey();
     expect(result.appsRotated).toEqual(['app1']);
 
     // Cleanup: KEY_PATH.old and the per-app .bak-rotate-* are removed.
@@ -451,7 +451,7 @@ describe('rotateKey rollback', () => {
       stdout: '', stderr: 'keygen failed', exitCode: 1, ok: false,
     });
 
-    expect(() => rotateKey()).toThrow(/Failed to generate new key/);
+    await expect(rotateKey()).rejects.toThrow(/Failed to generate new key/);
 
     // Vault was never touched — backupVaultFile must NOT have been called for
     // any app (we abort before snapshotting + before re-encrypting).
