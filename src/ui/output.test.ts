@@ -6,7 +6,7 @@ vi.mock('node:fs', async () => {
 });
 
 import { writeSync } from 'node:fs';
-import { c, icon, heading, success, warn, error, info, dim, table } from './output.js';
+import { c, icon, heading, success, warn, error, info, dim, table } from './output';
 
 const mockWrite = writeSync as ReturnType<typeof vi.fn>;
 

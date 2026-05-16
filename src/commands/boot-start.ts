@@ -1,6 +1,6 @@
-import { load, findApp } from '../core/registry.js';
-import { refresh } from '../core/boot-refresh.js';
-import { composeUp } from '../core/docker.js';
+import { load, findApp } from '../core/registry';
+import { refresh } from '../core/boot-refresh';
+import { composeUp } from '../core/docker';
 
 function log(msg: string): void {
   process.stdout.write(`[boot-start] ${msg}\n`);

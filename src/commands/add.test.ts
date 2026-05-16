@@ -46,12 +46,12 @@ vi.mock('../ui/confirm.js', () => ({
 }));
 
 import { existsSync } from 'node:fs';
-import { addCommand } from './add.js';
-import { load, save, addApp } from '../core/registry.js';
-import { getContainersByCompose } from '../core/docker.js';
-import { installServiceFile, readServiceFile, enableService } from '../core/systemd.js';
-import { generateServiceFile } from '../templates/systemd.js';
-import { confirm } from '../ui/confirm.js';
+import { addCommand } from './add';
+import { load, save, addApp } from '../core/registry';
+import { getContainersByCompose } from '../core/docker';
+import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
+import { generateServiceFile } from '../templates/systemd';
+import { confirm } from '../ui/confirm';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockLoad = vi.mocked(load);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateServiceFile } from './systemd.js';
+import { generateServiceFile } from './systemd';
 
 function makeOpts(overrides: Partial<Parameters<typeof generateServiceFile>[0]> = {}) {
   return {
@@ -152,7 +152,7 @@ describe('boot-start integration in template', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
-      workingDirectory: '/home/matt/sample',
+      workingDirectory: '/home/operator/sample',
       composeFile: null,
       dependsOnDatabases: false,
     });
@@ -164,7 +164,7 @@ describe('boot-start integration in template', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
-      workingDirectory: '/home/matt/sample',
+      workingDirectory: '/home/operator/sample',
       composeFile: null,
       dependsOnDatabases: false,
     });
@@ -176,7 +176,7 @@ describe('boot-start integration in template', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
-      workingDirectory: '/home/matt/sample',
+      workingDirectory: '/home/operator/sample',
       composeFile: null,
       dependsOnDatabases: false,
     });

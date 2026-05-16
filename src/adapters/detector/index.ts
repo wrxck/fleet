@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { StackDetector } from '../types.js';
+import type { StackDetector } from '../types';
 
 export const nodeDetector: StackDetector = {
   id: 'node',

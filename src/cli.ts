@@ -2,34 +2,34 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { statusCommand } from './commands/status.js';
-import { listCommand } from './commands/list.js';
-import { startCommand } from './commands/start.js';
-import { stopCommand } from './commands/stop.js';
-import { restartCommand } from './commands/restart.js';
-import { logsCommand } from './commands/logs.js';
-import { egressCommand } from './commands/egress.js';
-import { healthCommand } from './commands/health.js';
-import { addCommand } from './commands/add.js';
-import { removeCommand } from './commands/remove.js';
-import { deployCommand } from './commands/deploy.js';
-import { nginxCommand } from './commands/nginx.js';
-import { secretsCommand } from './commands/secrets.js';
-import { gitCommand } from './commands/git.js';
-import { initCommand } from './commands/init.js';
-import { depsCommand } from './commands/deps.js';
-import { watchdogCommand } from './commands/watchdog.js';
-import { installMcpCommand } from './commands/install-mcp.js';
-import { patchSystemdCommand } from './commands/patch-systemd.js';
-import { freezeCommand, unfreezeCommand } from './commands/freeze.js';
-import { guardCommand } from './commands/guard.js';
-import { bootStartCommand } from './commands/boot-start.js';
-import { rollbackCommand } from './commands/rollback.js';
-import { backupCommand } from './commands/backup.js';
-import { routineRunCommand } from './commands/routine-run.js';
-import { routinesCommand } from './commands/routines.js';
-import { startMcpServer } from './mcp/server.js';
-import { error } from './ui/output.js';
+import { statusCommand } from './commands/status';
+import { listCommand } from './commands/list';
+import { startCommand } from './commands/start';
+import { stopCommand } from './commands/stop';
+import { restartCommand } from './commands/restart';
+import { logsCommand } from './commands/logs';
+import { egressCommand } from './commands/egress';
+import { healthCommand } from './commands/health';
+import { addCommand } from './commands/add';
+import { removeCommand } from './commands/remove';
+import { deployCommand } from './commands/deploy';
+import { nginxCommand } from './commands/nginx';
+import { secretsCommand } from './commands/secrets';
+import { gitCommand } from './commands/git';
+import { initCommand } from './commands/init';
+import { depsCommand } from './commands/deps';
+import { watchdogCommand } from './commands/watchdog';
+import { installMcpCommand } from './commands/install-mcp';
+import { patchSystemdCommand } from './commands/patch-systemd';
+import { freezeCommand, unfreezeCommand } from './commands/freeze';
+import { guardCommand } from './commands/guard';
+import { bootStartCommand } from './commands/boot-start';
+import { rollbackCommand } from './commands/rollback';
+import { backupCommand } from './commands/backup';
+import { routineRunCommand } from './commands/routine-run';
+import { routinesCommand } from './commands/routines';
+import { startMcpServer } from './mcp/server';
+import { error } from './ui/output';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
@@ -121,7 +121,7 @@ export async function run(argv: string[]): Promise<void> {
   }
 
   if (!command) {
-    const { launchTui } = await import('./tui/app.js');
+    const { launchTui } = await import('./tui/app');
     return launchTui();
   }
 
@@ -165,7 +165,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'mcp': return startMcpServer();
     case 'tui':
     case 'dashboard': {
-      const { launchTui } = await import('./tui/app.js');
+      const { launchTui } = await import('./tui/app');
       return launchTui();
     }
     case 'routines': return routinesCommand(rest);

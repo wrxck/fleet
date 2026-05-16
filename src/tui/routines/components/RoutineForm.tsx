@@ -4,7 +4,7 @@ import { Box, Text } from 'ink';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import TextInput from 'ink-text-input';
 
-import { RoutineSchema, type Routine } from '../../../core/routines/schema.js';
+import { RoutineSchema, type Routine } from '../../../core/routines/schema';
 
 export interface RoutineFormProps {
   initial?: Routine;

@@ -21,10 +21,10 @@ vi.mock('../ui/output.js', () => ({
   info: vi.fn(),
 }));
 
-import { load } from '../core/registry.js';
-import { systemdAvailable, getMultipleServiceStatuses } from '../core/systemd.js';
-import { listContainers } from '../core/docker.js';
-import { getStatusData, statusCommand } from './status.js';
+import { load } from '../core/registry';
+import { systemdAvailable, getMultipleServiceStatuses } from '../core/systemd';
+import { listContainers } from '../core/docker';
+import { getStatusData, statusCommand } from './status';
 
 beforeEach(() => {
   vi.clearAllMocks();

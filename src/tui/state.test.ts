@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { reducer, initialState, nextTopView } from './state.js';
-import type { TuiState, Action, View } from './types.js';
+import { reducer, initialState, nextTopView } from './state';
+import type { TuiState, Action, View } from './types';
 
 describe('nextTopView', () => {
   it('cycles dashboard → health → secrets → logs-multi → dashboard', () => {

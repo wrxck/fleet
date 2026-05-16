@@ -8,7 +8,7 @@ import type {
   IgnoreRule,
   DepsConfig,
   DepsCache,
-} from '../types.js';
+} from '../types';
 
 describe('Finding', () => {
   it('accepts required fields only', () => {

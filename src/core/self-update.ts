@@ -2,8 +2,8 @@
  * Self-update check and apply for fleet itself.
  *
  * fleet is installed via `npm link`-style symlink from /usr/local/bin/fleet to
- * /home/matt/fleet/dist/index.js. Updates are produced by:
- *   1. git pull --ff-only origin develop  in /home/matt/fleet
+ * the repo's dist/index.js. Updates are produced by:
+ *   1. git pull --ff-only origin develop  in the fleet checkout
  *   2. npm run build  (rewrites dist/)
  *
  * checkForUpdate() does a non-blocking `git fetch` + compares HEAD with the
@@ -13,7 +13,7 @@
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSafe } from './exec.js';
+import { execSafe } from './exec';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // dist/core/self-update.js → repo root is two ../

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStableState } from '@matthesketh/ink-stable-state';
-import { runFleetJson } from '../exec-bridge.js';
-import { useInterval } from './use-interval.js';
-import type { HealthResult } from '../../core/health.js';
+import { runFleetJson } from '../exec-bridge';
+import { useInterval } from './use-interval';
+import type { HealthResult } from '../../core/health';
 
 interface HealthData {
   results: HealthResult[];

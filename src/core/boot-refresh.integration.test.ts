@@ -3,8 +3,8 @@ import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
-import { refresh } from './boot-refresh.js';
-import type { AppEntry } from './registry.js';
+import { refresh } from './boot-refresh';
+import type { AppEntry } from './registry';
 
 const SHOULD_RUN = process.env.FLEET_INTEGRATION === '1';
 const d = SHOULD_RUN ? describe : describe.skip;

@@ -1,9 +1,11 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+import { _resetOperatorCache } from '../operator';
 
 import { startServer } from './browser-server';
 
@@ -11,7 +13,22 @@ import { startServer } from './browser-server';
 const STAGING = mkdtempSync(join(tmpdir(), 'fleet-explorer-test-'));
 
 let server: Server | undefined;
-afterEach(() => server?.close());
+let opDir: string;
+
+beforeEach(() => {
+  opDir = mkdtempSync(join(tmpdir(), 'fleet-explorer-op-'));
+  writeFileSync(join(opDir, 'operator.json'), JSON.stringify({
+    username: 'op', homeDir: '/home/op', domain: 'fleet.test', githubOrg: 'op-org',
+  }));
+  process.env.FLEET_OPERATOR_PATH = join(opDir, 'operator.json');
+  _resetOperatorCache();
+});
+afterEach(() => {
+  server?.close();
+  rmSync(opDir, { recursive: true, force: true });
+  delete process.env.FLEET_OPERATOR_PATH;
+  _resetOperatorCache();
+});
 
 async function get(port: number, path: string, headers: Record<string, string> = {}) {
   const res = await fetch(`http://127.0.0.1:${port}${path}`, { headers, redirect: 'manual' });

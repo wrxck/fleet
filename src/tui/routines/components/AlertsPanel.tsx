@@ -2,8 +2,8 @@ import React from 'react';
 
 import { Box, Text } from 'ink';
 
-import type { Signal } from '../../../core/routines/schema.js';
-import { signalStateColor, truncate } from '../format.js';
+import type { Signal } from '../../../core/routines/schema';
+import { signalStateColor, truncate } from '../format';
 
 export interface AlertsPanelProps {
   signals: Map<string, Signal[]>;

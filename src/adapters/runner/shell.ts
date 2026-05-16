@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 
-import type { RoutineTask, RunEvent } from '../../core/routines/schema.js';
-import type { RunContext, RunnerAdapter } from '../types.js';
+import type { RoutineTask, RunEvent } from '../../core/routines/schema';
+import type { RunContext, RunnerAdapter } from '../types';
 
 export function createShellRunner(): RunnerAdapter {
   return {

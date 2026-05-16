@@ -3,6 +3,8 @@ import {
 } from 'node:fs';
 import { createServer, IncomingMessage, ServerResponse, Server } from 'node:http';
 
+import { loadOperator } from '../operator';
+
 import { handle, ApiContext, ApiRequest, ApiResponse } from './browser-api';
 import { listConfiguredApps } from './config';
 import { listSnapshots, lsTree, dumpFileSpawn, restore } from './repo';
@@ -101,6 +103,7 @@ function buildContext(opts: ServeOptions): ApiContext {
     totpSecret: opts.totpSecret,
     sessionSecret: opts.sessionSecret,
     sessionTtlMs: opts.sessionTtlMs ?? 12 * 3600_000,
+    domain: loadOperator().domain,
     listApps: () => listConfiguredApps(),
     statusReport: () => buildStatusReport(),
     snapshots: app => listSnapshots(app),

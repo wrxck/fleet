@@ -1,6 +1,6 @@
-import { execSafe } from '../../core/exec.js';
-import type { Signal } from '../../core/routines/schema.js';
-import type { SignalProvider } from '../types.js';
+import { execSafe } from '../../core/exec';
+import type { Signal } from '../../core/routines/schema';
+import type { SignalProvider } from '../types';
 
 const COMPOSE_LABEL = 'com.docker.compose.project';
 

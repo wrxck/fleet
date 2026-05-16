@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { mkExecTmpDir } from '../../core/routines/test-utils.js';
+import { mkExecTmpDir } from '../../core/routines/test-utils';
 import {
   BUILT_IN_DETECTORS,
   detectStacks,
@@ -12,7 +12,7 @@ import {
   nodeDetector,
   pythonDetector,
   rustDetector,
-} from './index.js';
+} from './index';
 
 describe('stack detectors', () => {
   let dir: string;

@@ -3,8 +3,8 @@
  * /etc/update-motd.d/99-fleet-secrets to print on shell login.
  */
 
-import { enumerateAllSecrets, type EnrichedSecret } from './secrets-metadata.js';
-import type { Sensitivity } from './secrets-providers.js';
+import { enumerateAllSecrets, type EnrichedSecret } from './secrets-metadata';
+import type { Sensitivity } from './secrets-providers';
 
 export interface SecretsMotdSummary {
   totalSecrets: number;

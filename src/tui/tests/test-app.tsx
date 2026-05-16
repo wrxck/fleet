@@ -4,8 +4,8 @@ import { Text, Box } from 'ink';
 import { InputDispatcher, useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { reducer, initialState, nextTopView } from '../state.js';
-import type { View, TuiState, Action } from '../types.js';
+import { reducer, initialState, nextTopView } from '../state';
+import type { View, TuiState, Action } from '../types';
 
 function MockDashboard({
   state,

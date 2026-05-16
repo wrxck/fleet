@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { isInitialized, isSealed, loadManifest, listSecrets, decryptApp, sealApp } from '../../core/secrets.js';
-import { setSecret, getSecret, unsealAll, sealFromRuntime, importEnvFile } from '../../core/secrets-ops.js';
+import { isInitialized, isSealed, loadManifest, listSecrets, decryptApp, sealApp } from '../../core/secrets';
+import { setSecret, getSecret, unsealAll, sealFromRuntime, importEnvFile } from '../../core/secrets-ops';
 
 interface SecretItem {
   key: string;

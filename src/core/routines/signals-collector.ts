@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 
-import type { SignalProvider } from '../../adapters/types.js';
-import type { Signal, SignalKind } from './schema.js';
+import type { SignalProvider } from '../../adapters/types';
+import type { Signal, SignalKind } from './schema';
 
 export interface SignalTarget {
   repoName: string;

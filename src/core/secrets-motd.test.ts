@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./secrets-metadata.js', () => ({ enumerateAllSecrets: vi.fn() }));
 
-import { summariseSecrets, formatSecretsMotd } from './secrets-motd.js';
-import { enumerateAllSecrets } from './secrets-metadata.js';
+import { summariseSecrets, formatSecretsMotd } from './secrets-motd';
+import { enumerateAllSecrets } from './secrets-metadata';
 
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 
@@ -64,16 +64,16 @@ describe('formatSecretsMotd', () => {
       totalSecrets: 100,
       staleCount: 4,
       bySensitivity: { critical: 2, high: 1, medium: 1, low: 0 },
-      appsWithStale: ['macpool', 'shiftfaced'],
+      appsWithStale: ['poolside', 'brewco'],
       topStale: [
-        { app: 'macpool', name: 'STRIPE_SECRET_KEY', ageDays: 200, sensitivity: 'critical' },
-        { app: 'macpool', name: 'STRIPE_WEBHOOK_SECRET', ageDays: 100, sensitivity: 'high' },
+        { app: 'poolside', name: 'STRIPE_SECRET_KEY', ageDays: 200, sensitivity: 'critical' },
+        { app: 'poolside', name: 'STRIPE_WEBHOOK_SECRET', ageDays: 100, sensitivity: 'high' },
       ],
     });
     const clean = stripAnsi(out);
     expect(clean).toMatch(/4 secrets need rotation \(2 critical, 1 high, 1 medium\)/);
-    expect(clean).toMatch(/!! macpool: STRIPE_SECRET_KEY \(200d old\)/);
-    expect(clean).toMatch(/ ! macpool: STRIPE_WEBHOOK_SECRET \(100d old\)/);
+    expect(clean).toMatch(/!! poolside: STRIPE_SECRET_KEY \(200d old\)/);
+    expect(clean).toMatch(/ ! poolside: STRIPE_WEBHOOK_SECRET \(100d old\)/);
     expect(clean).toMatch(/Run: fleet secrets ages --stale-only/);
   });
 });

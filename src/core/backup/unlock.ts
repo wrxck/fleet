@@ -1,14 +1,18 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { requireEnv } from '../env';
 import { FleetError } from '../errors';
 import { execSafe } from '../exec';
 
 import { backupVaultDir } from './config';
 
-export const AGE_PUB_PATH = process.env.FLEET_BACKUP_AGE_PUB ?? '/etc/fleet/backup.age.pub';
-export const AGE_KEY_CRED = process.env.FLEET_BACKUP_AGE_KEY_CRED ?? '/etc/credstore.encrypted/fleet-age-key';
-export const UNLOCK_SCRIPT = process.env.FLEET_BACKUP_UNLOCK_SCRIPT ?? '/usr/local/sbin/fleet-unlock-age.sh';
+/** absolute path to the age recipient public key. */
+export function agePubPath(): string { return requireEnv('FLEET_BACKUP_AGE_PUB'); }
+/** systemd credstore entry holding the age identity. */
+export function ageKeyCred(): string { return requireEnv('FLEET_BACKUP_AGE_KEY_CRED'); }
+/** absolute path to the age unlock helper script. */
+export function unlockScript(): string { return requireEnv('FLEET_BACKUP_UNLOCK_SCRIPT'); }
 
 export class UnlockError extends FleetError {}
 
@@ -24,13 +28,14 @@ export function passwordCommandFor(app: string): string {
 
 /** returns the age public key (the recipient we encrypt restic passwords to). */
 export function readPubKey(): string {
-  if (!existsSync(AGE_PUB_PATH)) {
-    throw new UnlockError(`age public key not found at ${AGE_PUB_PATH}. run fleet backup init.`);
+  const pubPath = agePubPath();
+  if (!existsSync(pubPath)) {
+    throw new UnlockError(`age public key not found at ${pubPath}. run fleet backup init.`);
   }
-  const r = execSafe('cat', [AGE_PUB_PATH], { timeout: 2_000 });
-  if (!r.ok) throw new UnlockError(`failed reading ${AGE_PUB_PATH}: ${r.stderr}`);
+  const r = execSafe('cat', [pubPath], { timeout: 2_000 });
+  if (!r.ok) throw new UnlockError(`failed reading ${pubPath}: ${r.stderr}`);
   const pub = r.stdout.trim();
-  if (!pub.startsWith('age1')) throw new UnlockError(`malformed age pubkey at ${AGE_PUB_PATH}`);
+  if (!pub.startsWith('age1')) throw new UnlockError(`malformed age pubkey at ${pubPath}`);
   return pub;
 }
 
@@ -52,10 +57,11 @@ export function fetchPassword(app: string): string {
   if (!existsSync(vaultPath(app))) {
     throw new UnlockError(`no vault entry for app ${app}. run: fleet backup init ${app}`);
   }
-  if (!existsSync(AGE_KEY_CRED)) {
-    throw new UnlockError(`age key credential not found at ${AGE_KEY_CRED}. setup incomplete.`);
+  const keyCred = ageKeyCred();
+  if (!existsSync(keyCred)) {
+    throw new UnlockError(`age key credential not found at ${keyCred}. setup incomplete.`);
   }
-  const r = execSafe('sh', ['-c', `${shellEscape(UNLOCK_SCRIPT)} | age -d -i /dev/stdin ${shellEscape(vaultPath(app))}`], { timeout: 5_000 });
+  const r = execSafe('sh', ['-c', `${shellEscape(unlockScript())} | age -d -i /dev/stdin ${shellEscape(vaultPath(app))}`], { timeout: 5_000 });
   if (!r.ok) throw new UnlockError(`password decrypt failed: ${r.stderr}`);
   const pass = r.stdout;
   if (!pass) throw new UnlockError(`decrypted password empty`);

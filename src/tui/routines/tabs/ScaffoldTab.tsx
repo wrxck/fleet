@@ -93,7 +93,7 @@ function buildPlan(draft: Draft): { ok: boolean; errors: string[]; commands: str
 export function ScaffoldTab(): React.JSX.Element {
   const [draft, setDraft] = useState<Draft>({
     name: '',
-    composePath: '/home/matt/',
+    composePath: '/home/operator/',
     port: '3000',
     domain: '',
     usesSharedDb: true,

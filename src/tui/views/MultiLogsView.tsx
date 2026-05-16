@@ -5,17 +5,17 @@ import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { colors } from '../theme.js';
-import { useRedact } from '../state.js';
-import { load } from '../../core/registry.js';
+import { colors } from '../theme';
+import { useRedact } from '../state';
+import { load } from '../../core/registry';
 import {
   startMultiTail,
   resolveSources,
   type LogLine,
   type LogSource,
   type MultiTailHandle,
-} from '../../core/logs-multi.js';
-import type { LogPolicy } from '../../core/logs-policy.js';
+} from '../../core/logs-multi';
+import type { LogPolicy } from '../../core/logs-policy';
 
 const MAX_LINES = 500;
 const LEVEL_RANKS = ['debug', 'info', 'warn', 'error', 'all'] as const;

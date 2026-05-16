@@ -8,8 +8,8 @@ vi.mock('./validate.js', () => ({
   assertServiceName: vi.fn(),
 }));
 
-import { execSafe } from './exec.js';
-import { getServiceStatus, getMultipleServiceStatuses } from './systemd.js';
+import { execSafe } from './exec';
+import { getServiceStatus, getMultipleServiceStatuses } from './systemd';
 
 const mockedExec = vi.mocked(execSafe);
 

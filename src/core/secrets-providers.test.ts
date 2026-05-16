@@ -5,7 +5,7 @@ import {
   getProviderById,
   ageInDays,
   isStale,
-} from './secrets-providers.js';
+} from './secrets-providers';
 
 describe('secrets-providers', () => {
   describe('classifySecret', () => {

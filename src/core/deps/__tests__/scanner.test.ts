@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import { defaultConfig } from '../config.js';
-import { runScan } from '../scanner.js';
-import type { AppEntry } from '../../registry.js';
-import type { Collector, Finding } from '../types.js';
+import { defaultConfig } from '../config';
+import { runScan } from '../scanner';
+import type { AppEntry } from '../../registry';
+import type { Collector, Finding } from '../types';
 
 function makeApp(name: string): AppEntry {
   return {

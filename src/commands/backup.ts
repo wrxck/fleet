@@ -27,7 +27,7 @@ import { installScheduleUnits, disableSchedule } from '../core/backup/schedule';
 import {
   systemConfig,
   rootHomeConfig,
-  mattHomeConfig,
+  userHomeConfig,
   sharedPostgresConfig,
   sharedMysqlConfig,
   sharedMongoConfig,
@@ -43,6 +43,7 @@ import {
 } from '../core/backup/unlock';
 import { FleetError } from '../core/errors';
 import { execSafe } from '../core/exec';
+import { loadOperator } from '../core/operator';
 import { c, heading, table, info, success, error, warn } from '../ui/output';
 
 const HELP = `fleet backup - encrypted off-host backups via restic + age
@@ -51,7 +52,7 @@ Usage: fleet backup <subcommand> [args]
 
 Subcommands:
   init <app>                       generate password vault + restic repo for an app
-  init-system                      configure the three pseudo-apps (system, root-home, matt-home)
+  init-system                      configure the three pseudo-apps (system, root-home, user-home)
   register <app> [--dry-run]       auto-detect and register a fleet-known app (paths, db dump, volumes)
   register-all [--dry-run]         run register for every app in the fleet registry
   snapshot <app> [--dry-run]       one-off backup now
@@ -116,7 +117,7 @@ function cmdInitSystem(): void {
   const configs = [
     systemConfig(),
     rootHomeConfig(),
-    mattHomeConfig(),
+    userHomeConfig(),
     sharedPostgresConfig(),
     sharedMysqlConfig(),
     sharedMongoConfig(),
@@ -508,7 +509,7 @@ function readCredential(name: string): string {
 function cmdServe(args: string[]): void {
   if (args.includes('--setup-totp')) {
     const secret = generateSecret();
-    const uri = totpUri(secret, 'matt', 'fleet-backups');
+    const uri = totpUri(secret, loadOperator().username, 'fleet-backups');
     process.stdout.write(
       `1. seal this secret into the credstore (root):\n` +
       `   printf '%s' '${secret}' | systemd-creds encrypt --name=mx-totp - /etc/credstore.encrypted/mx-totp\n\n` +

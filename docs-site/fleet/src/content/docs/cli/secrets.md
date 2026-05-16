@@ -462,13 +462,13 @@ fleet secrets ages [<app>] [--json] [--stale-only] [--motd]
 $ fleet secrets ages --stale-only
 Secret ages (4 secrets)
   APP      SECRET                AGE       ROTATE EVERY  PROVIDER             SENS      STATUS
-  macpool  STRIPE_SECRET_KEY     200 days  90d           Stripe Secret Key    critical  STALE
+  poolside  STRIPE_SECRET_KEY     200 days  90d           Stripe Secret Key    critical  STALE
   ...
 
 $ fleet secrets ages --motd
 -- Fleet Secrets ----------------------------------------
   4 secrets need rotation (1 critical, 3 high) across 2 apps
-  !! macpool: STRIPE_SECRET_KEY (200d old)
+  !! poolside: STRIPE_SECRET_KEY (200d old)
   ...
 ```
 

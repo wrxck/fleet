@@ -3,12 +3,12 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { createShellRunner } from '../../adapters/runner/shell.js';
-import { closeDb, openDb } from './db.js';
-import { RoutineEngine } from './engine.js';
-import type { Routine, RunEvent } from './schema.js';
-import { RoutineStore } from './store.js';
-import { mkExecTmpDir } from './test-utils.js';
+import { createShellRunner } from '../../adapters/runner/shell';
+import { closeDb, openDb } from './db';
+import { RoutineEngine } from './engine';
+import type { Routine, RunEvent } from './schema';
+import { RoutineStore } from './store';
+import { mkExecTmpDir } from './test-utils';
 
 const mkRoutine = (overrides: Partial<Routine> = {}): Routine => ({
   id: 'r-echo',

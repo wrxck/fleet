@@ -22,7 +22,7 @@ fleet logs <app> [-f] [-n <lines>] [-c <container>] \
 
 ```bash
 fleet logs --all [-f]                              # every container, prefixed
-fleet logs --apps macpool,shiftfaced [-f]          # subset by app
+fleet logs --apps poolside,brewco [-f]          # subset by app
 fleet logs --containers '*-postgres' [-f]          # glob match container names
 fleet logs --all -f --grep error --level warn      # live filtered tail
 fleet logs --all --tail 20                         # one-shot dump, 20 per source
@@ -92,7 +92,7 @@ fleet logs status [<app>] [--json]
 ```
 Log status (3 containers)
   APP      CONTAINER  DRIVER     SIZE    POLICY        CONFIGURED
-  macpool  macpool    json-file  12.4M   100M/7d/info  *
+  poolside  poolside    json-file  12.4M   100M/7d/info  *
   ...
 * = override file present, ! = using docker defaults (unbounded by default)
 ```

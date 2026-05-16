@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Readable, PassThrough } from 'node:stream';
-import { promptHiddenBuffer, withSecretBuffer, promptHidden } from './prompt.js';
+import { promptHiddenBuffer, withSecretBuffer, promptHidden } from './prompt';
 
 // All of these tests exercise the non-TTY path (process.stdin.isTTY === false
 // in vitest), which uses the readline fallback with terminal:false. The TTY

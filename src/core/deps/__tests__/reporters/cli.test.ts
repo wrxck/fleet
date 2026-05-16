@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
-import { defaultConfig } from '../../config.js';
-import { formatSummary, formatAppDetail, severityIcon } from '../../reporters/cli.js';
-import type { Finding, DepsCache } from '../../types.js';
+import { defaultConfig } from '../../config';
+import { formatSummary, formatAppDetail, severityIcon } from '../../reporters/cli';
+import type { Finding, DepsCache } from '../../types';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {

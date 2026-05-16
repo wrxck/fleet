@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { isInitialized } from '../core/secrets.js';
-import { restoreVaultFile } from '../core/secrets.js';
+import { isInitialized } from '../core/secrets';
+import { restoreVaultFile } from '../core/secrets';
 import {
   setSecret, getSecret, sealFromRuntime, detectDrift,
-} from '../core/secrets-ops.js';
+} from '../core/secrets-ops';
 
 function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };

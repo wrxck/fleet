@@ -14,11 +14,11 @@ vi.mock('./secrets.js', async () => {
 });
 
 import { join } from 'node:path';
-import { snapshotApp, listSnapshots, restoreSnapshot, pruneSnapshots, getSnapshotDir } from './secrets-snapshots.js';
-import { loadManifest } from './secrets.js';
+import { snapshotApp, listSnapshots, restoreSnapshot, pruneSnapshots, getSnapshotDir } from './secrets-snapshots';
+import { loadManifest } from './secrets';
 
-const APP = 'macpool';
-const ENC_FILE = 'macpool.env.age';
+const APP = 'poolside';
+const ENC_FILE = 'poolside.env.age';
 
 function setupVault(content = 'OLD CIPHERTEXT') {
   if (!existsSync(FAKE_VAULT)) mkdirSync(FAKE_VAULT, { recursive: true });
@@ -38,7 +38,7 @@ describe('secrets-snapshots', () => {
   it('snapshotApp creates a timestamped copy under .snapshots/', () => {
     const path = snapshotApp(APP);
     expect(existsSync(path)).toBe(true);
-    expect(path).toMatch(new RegExp(`^${getSnapshotDir()}/macpool-`));
+    expect(path).toMatch(new RegExp(`^${getSnapshotDir()}/poolside-`));
     expect(readFileSync(path, 'utf-8')).toBe('OLD CIPHERTEXT');
   });
 

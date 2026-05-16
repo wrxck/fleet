@@ -1,4 +1,4 @@
-import type { Severity, DepsConfig } from './types.js';
+import type { Severity, DepsConfig } from './types';
 
 type SeverityOverrides = DepsConfig['severityOverrides'];
 

@@ -25,6 +25,8 @@ export interface ApiContext {
   totpSecret: string;
   sessionSecret: string;
   sessionTtlMs: number;
+  /** the deployment domain — the same-origin check accepts only this host. */
+  domain: string;
   listApps(): string[];
   statusReport(): StatusReport;
   snapshots(app: string): SnapshotInfo[];
@@ -72,10 +74,10 @@ function hasSession(req: ApiRequest, ctx: ApiContext): boolean {
 }
 
 /** /api/* must carry the csrf header and, if an origin is present, a same-origin one. */
-function csrfOk(req: ApiRequest): boolean {
+function csrfOk(req: ApiRequest, domain: string): boolean {
   if (req.headers['x-fleet-backup'] !== '1') return false;
   const origin = req.headers['origin'];
-  if (origin && !origin.endsWith('fleet.hesketh.pro')) return false;
+  if (origin && !origin.endsWith(domain)) return false;
   return true;
 }
 
@@ -88,7 +90,7 @@ export function handle(req: ApiRequest, ctx: ApiContext): ApiResponse {
   // /api/* — the CSRF + same-origin check runs before auth so a cross-site
   // probe is rejected (403) without ever reaching the session layer.
   if (req.path.startsWith('/api/')) {
-    if (!csrfOk(req)) return json(403, { error: 'csrf check failed' });
+    if (!csrfOk(req, ctx.domain)) return json(403, { error: 'csrf check failed' });
 
     if (req.path === '/api/login' && req.method === 'POST') {
       const code = (req.body as { code?: string } | undefined)?.code ?? '';

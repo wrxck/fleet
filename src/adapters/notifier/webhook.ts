@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 
-import type { NotifierAdapter } from '../types.js';
+import type { NotifierAdapter } from '../types';
 
 export interface WebhookOptions {
   url: string;

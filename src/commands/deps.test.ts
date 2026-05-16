@@ -51,14 +51,14 @@ vi.mock('../ui/output.js', () => ({
   warn: vi.fn(),
 }));
 
-import { depsCommand } from './deps.js';
-import { load, findApp } from '../core/registry.js';
-import { loadConfig, saveConfig, configPath } from '../core/deps/config.js';
-import { loadCache, saveCache, isCacheStale, cachePath } from '../core/deps/cache.js';
-import { runScan } from '../core/deps/scanner.js';
-import { formatSummary, formatAppDetail } from '../core/deps/reporters/cli.js';
-import { formatMotd } from '../core/deps/reporters/motd.js';
-import { createDepsPr } from '../core/deps/actors/pr-creator.js';
+import { depsCommand } from './deps';
+import { load, findApp } from '../core/registry';
+import { loadConfig, saveConfig, configPath } from '../core/deps/config';
+import { loadCache, saveCache, isCacheStale, cachePath } from '../core/deps/cache';
+import { runScan } from '../core/deps/scanner';
+import { formatSummary, formatAppDetail } from '../core/deps/reporters/cli';
+import { formatMotd } from '../core/deps/reporters/motd';
+import { createDepsPr } from '../core/deps/actors/pr-creator';
 
 const mockLoad = vi.mocked(load);
 const mockFindApp = vi.mocked(findApp);

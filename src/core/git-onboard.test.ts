@@ -16,7 +16,8 @@ vi.mock('./git.js', () => ({
 }));
 
 vi.mock('./github.js', () => ({
-  getRepoUrl: vi.fn().mockImplementation((name: string) => `git@github.com:heskethwebdesign/${name}.git`),
+  githubOrg: vi.fn().mockReturnValue('test-org'),
+  getRepoUrl: vi.fn().mockImplementation((name: string) => `git@github.com:test-org/${name}.git`),
   createRepo: vi.fn(),
   protectBranch: vi.fn().mockReturnValue(true),
 }));
@@ -25,16 +26,11 @@ vi.mock('./registry.js', () => ({
   load: vi.fn().mockReturnValue({ apps: [] }),
   findApp: vi.fn().mockReturnValue(null),
   save: vi.fn(),
-  // executeOnboard now uses withRegistry; stub it to invoke the mutator
-  // against an empty registry without touching disk.
-  withRegistry: vi.fn(async (fn: (r: { apps: unknown[] }) => unknown | Promise<unknown>) => {
-    await fn({ apps: [] });
-  }),
 }));
 
-import { detectScenario, describeOnboardPlan, executeOnboard } from './git-onboard.js';
-import type { OnboardScenario } from './git-onboard.js';
-import type { GitStatus } from './git.js';
+import { detectScenario, describeOnboardPlan, executeOnboard } from './git-onboard';
+import type { OnboardScenario } from './git-onboard';
+import type { GitStatus } from './git';
 
 function makeStatus(overrides: Partial<GitStatus> = {}): GitStatus {
   return {
@@ -52,20 +48,16 @@ describe('detectScenario', () => {
     expect(detectScenario(makeStatus({ initialised: false }))).toBe('fresh');
   });
 
-  it('returns resume when remote URL has heskethwebdesign/', () => {
-    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:heskethwebdesign/myapp.git' }))).toBe('resume');
+  it('returns resume when the remote is on the configured org', () => {
+    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:test-org/myapp.git' }))).toBe('resume');
   });
 
-  it('returns migrate when remote URL has wrxck/', () => {
-    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:wrxck/myapp.git' }))).toBe('migrate');
+  it('returns migrate when the remote is on a different org', () => {
+    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:other-org/myapp.git' }))).toBe('migrate');
   });
 
   it('returns no-remote when initialised but no remote', () => {
     expect(detectScenario(makeStatus({ remoteUrl: null }))).toBe('no-remote');
-  });
-
-  it('returns fresh when remote is unrecognised', () => {
-    expect(detectScenario(makeStatus({ remoteUrl: 'git@github.com:other/myapp.git' }))).toBe('fresh');
   });
 });
 
@@ -120,8 +112,8 @@ describe('executeOnboard', () => {
     vi.clearAllMocks();
   });
 
-  it('returns result with scenario, steps, repoUrl, branches', async () => {
-    const result = await executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
+  it('returns result with scenario, steps, repoUrl, branches', () => {
+    const result = executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
     expect(result.scenario).toBe('fresh');
     expect(Array.isArray(result.steps)).toBe(true);
     expect(result.repoUrl).toContain('myapp');
@@ -130,31 +122,31 @@ describe('executeOnboard', () => {
   });
 
   it('fresh scenario initialises git and commits', async () => {
-    const { gitInit, gitAdd, gitCommit } = await import('./git.js');
-    await executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
+    const { gitInit, gitAdd, gitCommit } = await import('./git');
+    executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
     expect(gitInit).toHaveBeenCalledWith('/app');
     expect(gitAdd).toHaveBeenCalled();
     expect(gitCommit).toHaveBeenCalledWith('/app', 'Initial commit');
   });
 
   it('migrate scenario sets remote URL', async () => {
-    const { gitSetRemoteUrl, gitPushAll } = await import('./git.js');
-    await executeOnboard('migrate', '/app', 'myapp', 'myapp', makeStatus());
+    const { gitSetRemoteUrl, gitPushAll } = await import('./git');
+    executeOnboard('migrate', '/app', 'myapp', 'myapp', makeStatus());
     expect(gitSetRemoteUrl).toHaveBeenCalled();
     expect(gitPushAll).toHaveBeenCalled();
   });
 
   it('no-remote scenario commits outstanding changes when dirty', async () => {
-    const { gitAdd, gitCommit } = await import('./git.js');
-    await executeOnboard('no-remote', '/app', 'myapp', 'myapp', makeStatus({ clean: false }));
+    const { gitAdd, gitCommit } = await import('./git');
+    executeOnboard('no-remote', '/app', 'myapp', 'myapp', makeStatus({ clean: false }));
     expect(gitAdd).toHaveBeenCalled();
     expect(gitCommit).toHaveBeenCalledWith('/app', 'Pre-onboard commit');
   });
 
   it('resume scenario pushes existing commits', async () => {
-    const { gitPushAll, hasCommits } = await import('./git.js');
+    const { gitPushAll, hasCommits } = await import('./git');
     (hasCommits as ReturnType<typeof vi.fn>).mockReturnValue(true);
-    await executeOnboard('resume', '/app', 'myapp', 'myapp', makeStatus());
+    executeOnboard('resume', '/app', 'myapp', 'myapp', makeStatus());
     expect(gitPushAll).toHaveBeenCalled();
   });
 });

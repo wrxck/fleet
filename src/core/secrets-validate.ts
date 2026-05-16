@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { loadManifest } from './secrets.js';
-import { load } from './registry.js';
+import { loadManifest } from './secrets';
+import { load } from './registry';
 
 export interface ValidationResult {
   app: string;

@@ -2,8 +2,8 @@ import React from 'react';
 import { StatusBar } from '@matthesketh/ink-status-bar';
 import type { KeyHint as KeyHintItem } from '@matthesketh/ink-status-bar';
 
-import { useAppState } from '../state.js';
-import type { View } from '../types.js';
+import { useAppState } from '../state';
+import type { View } from '../types';
 
 const viewHints: Record<View, KeyHintItem[]> = {
   dashboard: [
