@@ -8,6 +8,12 @@ vi.mock('node:fs', async () => {
 vi.mock('../core/registry.js', () => ({
   load: vi.fn(),
   save: vi.fn(),
+  withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
+    const mod = await vi.importMock<typeof import('../core/registry.js')>('../core/registry.js');
+    const reg = (mod.load as unknown as { (): unknown })();
+    const next = await fn(reg);
+    (mod.save as unknown as { (r: unknown): void })(next);
+  }),
 }));
 
 vi.mock('../core/systemd.js', () => ({
@@ -48,7 +54,7 @@ beforeEach(() => {
 });
 
 describe('initCommand', () => {
-  it('discovers and registers services', () => {
+  it('discovers and registers services', async () => {
     vi.mocked(load).mockReturnValue({ apps: [] } as any);
     vi.mocked(discoverServices).mockReturnValue(['myapp']);
     vi.mocked(listContainers).mockReturnValue([]);
@@ -59,30 +65,30 @@ describe('initCommand', () => {
     });
     vi.mocked(getContainersByCompose).mockReturnValue(['myapp-web']);
 
-    initCommand([]);
+    await initCommand([]);
 
     expect(save).toHaveBeenCalled();
     expect(success).toHaveBeenCalled();
   });
 
-  it('skips docker-databases service', () => {
+  it('skips docker-databases service', async () => {
     vi.mocked(load).mockReturnValue({ apps: [] } as any);
     vi.mocked(discoverServices).mockReturnValue(['docker-databases']);
     vi.mocked(listContainers).mockReturnValue([]);
     vi.mocked(listSites).mockReturnValue([]);
 
-    initCommand([]);
+    await initCommand([]);
 
     expect(info).toHaveBeenCalledWith(expect.stringContaining('Registered 0'));
   });
 
-  it('outputs JSON when --json flag passed', () => {
+  it('outputs JSON when --json flag passed', async () => {
     vi.mocked(load).mockReturnValue({ apps: [] } as any);
     vi.mocked(discoverServices).mockReturnValue([]);
     vi.mocked(listContainers).mockReturnValue([]);
     vi.mocked(listSites).mockReturnValue([]);
 
-    initCommand(['--json']);
+    await initCommand(['--json']);
 
     expect(process.stdout.write).toHaveBeenCalled();
   });

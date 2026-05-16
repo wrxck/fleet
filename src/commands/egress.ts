@@ -1,9 +1,9 @@
-import { load, save, findApp } from '../core/registry.js';
+import { load, findApp, withRegistry } from '../core/registry.js';
 import { snapshotEgress, addEgressAllow } from '../core/egress.js';
 import { AppNotFoundError } from '../core/errors.js';
 import { c, error, heading, info, success, table, warn } from '../ui/output.js';
 
-export function egressCommand(args: string[]): void {
+export async function egressCommand(args: string[]): Promise<void> {
   const sub = args[0];
   switch (sub) {
     case 'observe': return egressObserve(args.slice(1));
@@ -92,18 +92,20 @@ function egressShow(args: string[]): void {
   info('Note: v1 is observe/shadow only — no packets are actually dropped.');
 }
 
-function egressAllow(args: string[]): void {
+async function egressAllow(args: string[]): Promise<void> {
   const positional = args.filter(a => !a.startsWith('-'));
   const [appName, host] = positional;
   if (!appName || !host) {
     error('Usage: fleet egress allow <app> <host[:port] | *.host | cidr>');
     process.exit(1);
   }
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (!app) throw new AppNotFoundError(appName);
-
-  const updated = addEgressAllow(app, host);
-  save(reg);
-  success(`${appName} allow → ${host}  (now ${updated.length} entries)`);
+  let entryCount = 0;
+  await withRegistry(reg => {
+    const app = findApp(reg, appName);
+    if (!app) throw new AppNotFoundError(appName);
+    const updated = addEgressAllow(app, host);
+    entryCount = updated.length;
+    return reg;
+  });
+  success(`${appName} allow → ${host}  (now ${entryCount} entries)`);
 }

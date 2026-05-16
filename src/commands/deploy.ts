@@ -56,7 +56,7 @@ export async function deployCommand(args: string[]): Promise<void> {
     const root = getProjectRoot(app.composePath);
     const head = execGit(['rev-parse', 'HEAD'], { cwd: root, timeout: 10_000 });
     if (head.ok && head.stdout.trim()) {
-      recordBuiltCommit(app.name, head.stdout.trim());
+      await recordBuiltCommit(app.name, head.stdout.trim());
     }
   } catch {
     // Non-fatal: deploy already succeeded

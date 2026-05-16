@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { load, save } from './registry.js';
+import { load, save, withRegistry, addApp } from './registry.js';
 import type { AppEntry, Registry } from './registry.js';
 
 function makeEmptyRegistry(): Registry {
@@ -118,5 +118,32 @@ describe('registry safety', () => {
     save(next);
     const bakContent = await fs.readFile(tmpRegistryBak, 'utf-8');
     expect(JSON.parse(bakContent).apps[0].name).toBe('original-bak');
+  });
+
+  // Concurrency smoke test: previously a CLI invocation and a cron unseal /
+  // bot mutation could each load() the registry, mutate locally, and save() —
+  // the second save would overwrite the first one's app. With withRegistry,
+  // the load/mutate/save runs under an inter-process file lock so the two
+  // mutations serialise instead of stomping each other.
+  //
+  // Skipped on CI where lockfile mtime precision can be flaky; runs locally.
+  (process.env.CI ? it.skip : it)('serialises concurrent withRegistry mutations', async () => {
+    // Seed an empty registry on disk so both withRegistry calls see the same
+    // baseline before they race.
+    save(makeEmptyRegistry());
+
+    const appA = makeTestApp({ name: 'concurrent-a', displayName: 'A', composePath: '/tmp/a', serviceName: 'concurrent-a' });
+    const appB = makeTestApp({ name: 'concurrent-b', displayName: 'B', composePath: '/tmp/b', serviceName: 'concurrent-b' });
+
+    // Race two adds. Both calls go through withRegistry → lock → load → addApp
+    // → save → unlock. Whichever lands second observes the first one's write.
+    await Promise.all([
+      withRegistry(reg => addApp(reg, appA)),
+      withRegistry(reg => addApp(reg, appB)),
+    ]);
+
+    const final = load();
+    const names = final.apps.map(a => a.name).sort();
+    expect(names).toEqual(['concurrent-a', 'concurrent-b']);
   });
 });

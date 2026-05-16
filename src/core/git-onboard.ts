@@ -4,7 +4,7 @@ import {
   branchExists, hasCommits,
 } from './git.js';
 import * as github from './github.js';
-import { load, findApp, save } from './registry.js';
+import { findApp, withRegistry } from './registry.js';
 
 export type OnboardScenario = 'fresh' | 'migrate' | 'no-remote' | 'resume';
 
@@ -81,13 +81,13 @@ function ensureDevelop(cwd: string, steps: string[]): void {
   }
 }
 
-export function executeOnboard(
+export async function executeOnboard(
   scenario: OnboardScenario,
   cwd: string,
   repoName: string,
   appName: string,
   status: GitStatus,
-): OnboardResult {
+): Promise<OnboardResult> {
   const repoUrl = github.getRepoUrl(repoName);
   const steps: string[] = [];
 
@@ -175,15 +175,18 @@ export function executeOnboard(
     steps.push('branch protection skipped (requires github pro for private repos)');
   }
 
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (app) {
-    app.gitRepo = `heskethwebdesign/${repoName}`;
-    app.gitRemoteUrl = repoUrl;
-    app.gitOnboardedAt = new Date().toISOString();
-    save(reg);
-    steps.push('updated fleet registry');
-  }
+  let registryUpdated = false;
+  await withRegistry(reg => {
+    const app = findApp(reg, appName);
+    if (app) {
+      app.gitRepo = `heskethwebdesign/${repoName}`;
+      app.gitRemoteUrl = repoUrl;
+      app.gitOnboardedAt = new Date().toISOString();
+      registryUpdated = true;
+    }
+    return reg;
+  });
+  if (registryUpdated) steps.push('updated fleet registry');
 
   return { scenario, steps, repoUrl, branches: ['main', 'develop'] };
 }

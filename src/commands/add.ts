@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
-import { load, save, addApp } from '../core/registry.js';
+import { addApp, withRegistry } from '../core/registry.js';
 import { getContainersByCompose } from '../core/docker.js';
 import { installServiceFile, readServiceFile, enableService } from '../core/systemd.js';
 import { generateServiceFile } from '../templates/systemd.js';
@@ -80,8 +80,7 @@ export async function addCommand(args: string[]): Promise<void> {
     return;
   }
 
-  const reg = load();
-  save(addApp(reg, app));
+  await withRegistry(reg => addApp(reg, app));
   success(`Registered ${name}`);
 }
 

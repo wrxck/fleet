@@ -115,7 +115,7 @@ async function gitOnboardCmd(args: string[]): Promise<void> {
     return;
   }
 
-  const result = executeOnboard(scenario, r, app.name, app.name, status);
+  const result = await executeOnboard(scenario, r, app.name, app.name, status);
   heading(`Onboarded: ${app.name}`);
   result.steps.forEach(s => success(s));
   info(`repo: ${result.repoUrl}`);
@@ -145,7 +145,7 @@ async function gitOnboardAllCmd(args: string[]): Promise<void> {
     if (!yes && !await confirm(`Onboard ${app.name} (${scenario})?`)) { warn(`skipped ${app.name}`); continue; }
 
     try {
-      const result = executeOnboard(scenario, r, app.name, app.name, status);
+      const result = await executeOnboard(scenario, r, app.name, app.name, status);
       success(`${app.name}: onboarded (${result.scenario})`);
     } catch (err) {
       error(`${app.name}: ${err instanceof Error ? err.message : String(err)}`);

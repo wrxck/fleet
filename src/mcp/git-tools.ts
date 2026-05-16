@@ -64,7 +64,7 @@ export function registerGitTools(server: McpServer): void {
         return text(`Scenario: ${scenario}\nRoot: ${root}\n\nPlan:\n${plan.map((s, i) => `${i + 1}. ${s}`).join('\n')}`);
       }
 
-      const result = executeOnboard(scenario, root, app.name, app.name, status);
+      const result = await executeOnboard(scenario, root, app.name, app.name, status);
       return text(`Onboarded ${app.name} (${result.scenario})\n\nSteps:\n${result.steps.map(s => `- ${s}`).join('\n')}\n\nRepo: ${result.repoUrl}`);
     },
   );
