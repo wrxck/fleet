@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { handle, ApiContext, ApiRequest } from './browser-api';
-import { totpCode } from './totp';
+import { totpCode, signSession } from './totp';
 
 const NOW = 1_700_000_000_000;
 
@@ -69,5 +69,74 @@ describe('browser-api auth', () => {
   it('rejects /api requests with a cross-site Origin', () => {
     const res = handle(req({ headers: { 'x-fleet-backup': '1', origin: 'https://evil.example' } }), ctx());
     expect(res.status).toBe(403);
+  });
+});
+
+function authReq(over: Partial<ApiRequest> = {}): ApiRequest {
+  const cookie = signSession({ exp: NOW + 3600_000 }, 'test-session-secret');
+  return req({ cookies: { fleet_backup_session: cookie }, ...over });
+}
+
+describe('browser-api read endpoints', () => {
+  it('GET /api/apps returns the status report', () => {
+    const res = handle(authReq({ path: '/api/apps' }), ctx());
+    expect(res.status).toBe(200);
+    if (res.kind !== 'json') throw new Error('expected json');
+    expect(res.body).toHaveProperty('apps');
+  });
+
+  it('GET /api/snapshots requires a known app', () => {
+    expect(handle(authReq({ path: '/api/snapshots', query: { app: 'nope' } }), ctx()).status).toBe(404);
+    expect(handle(authReq({ path: '/api/snapshots', query: { app: 'demo' } }), ctx()).status).toBe(200);
+  });
+
+  it('GET /api/ls rejects a path with ..', () => {
+    const res = handle(authReq({ path: '/api/ls', query: { app: 'demo', snap: 'abc12345', path: '/a/../b' } }), ctx());
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/ls rejects a bad snapshot id', () => {
+    const res = handle(authReq({ path: '/api/ls', query: { app: 'demo', snap: 'XXX', path: '/' } }), ctx());
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /api/ls returns entries with a sensitive flag', () => {
+    const c = ctx({ lsTree: () => [{ name: 'id_rsa', type: 'file', path: '/root/.ssh/id_rsa', size: 1, mtime: '' }] });
+    const res = handle(authReq({ path: '/api/ls', query: { app: 'demo', snap: 'abc12345', path: '/root/.ssh' } }), c);
+    expect(res.status).toBe(200);
+    if (res.kind !== 'json') throw new Error('expected json');
+    expect((res.body as { entries: { sensitive: boolean }[] }).entries[0].sensitive).toBe(true);
+  });
+
+  it('GET /api/file refuses a sensitive path with 403', () => {
+    const c = ctx({ fileMeta: () => ({ size: 10, sensitive: true }) });
+    const res = handle(authReq({ path: '/api/file', query: { app: 'demo', snap: 'abc12345', path: '/root/.ssh/id_rsa' } }), c);
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /api/file returns a stream descriptor for a normal file', () => {
+    const res = handle(authReq({ path: '/api/file', query: { app: 'demo', snap: 'abc12345', path: '/home/app/index.ts' } }), ctx());
+    expect(res.kind).toBe('stream');
+    expect(res.status).toBe(200);
+  });
+
+  it('GET /api/file with dl=1 forces an attachment disposition', () => {
+    const res = handle(authReq({ path: '/api/file', query: { app: 'demo', snap: 'abc12345', path: '/home/app/index.ts', dl: '1' } }), ctx());
+    if (res.kind !== 'stream') throw new Error('expected stream');
+    expect(res.disposition).toBe('attachment');
+  });
+
+  it('GET /api/staging lists staging dirs', () => {
+    const c = ctx({ listStaging: () => [{ path: '/var/restore/demo-x', bytes: 100, age: '1h' }] });
+    const res = handle(authReq({ path: '/api/staging' }), c);
+    expect(res.status).toBe(200);
+    if (res.kind !== 'json') throw new Error('expected json');
+    expect((res.body as { staging: unknown[] }).staging).toHaveLength(1);
+  });
+
+  it('maps an unreachable backend to 503', () => {
+    const c = ctx({ lsTree: () => { throw new Error('Fatal: unable to open repository: connection refused'); } });
+    const res = handle(authReq({ path: '/api/ls', query: { app: 'demo', snap: 'abc12345', path: '/' } }), c);
+    expect(res.status).toBe(503);
   });
 });

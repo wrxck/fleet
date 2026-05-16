@@ -4,6 +4,7 @@ import { TreeEntry } from './repo';
 import { verifyTotp, signSession, verifySession } from './totp';
 import { renderLoginPage, renderExplorerPage } from './browser-ui';
 import { renderStatusHtml } from './statuspage';
+import { classify } from './sensitive';
 
 export interface RestoreResult {
   target: string;
@@ -117,9 +118,88 @@ export function handle(req: ApiRequest, ctx: ApiContext): ApiResponse {
   return json(404, { error: 'not found' });
 }
 
-// handleApi is implemented in task 8.
+const SNAP_RE = /^[0-9a-f]{8,64}$/;
+const INLINE_TYPES = ['text/', 'image/', 'application/pdf', 'application/json'];
+
+function validPath(p: string): boolean {
+  if (!p || !p.startsWith('/')) return false;
+  // reject any traversal segment in the raw path — checking a normalised
+  // path is useless here because normalisation collapses `..` away first.
+  return !p.split('/').includes('..');
+}
+
+/** maps a restic error to 503 when the backend is unreachable, else 500. */
+function resticErrorStatus(message: string): number {
+  return /unreach|connection refused|dial |timeout|no route to host/i.test(message)
+    ? 503
+    : 500;
+}
+
+function contentTypeFor(path: string): string {
+  const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase();
+  const map: Record<string, string> = {
+    txt: 'text/plain', md: 'text/plain', log: 'text/plain', json: 'application/json',
+    js: 'text/plain', ts: 'text/plain', css: 'text/plain', html: 'text/plain',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+    svg: 'image/svg+xml', pdf: 'application/pdf',
+  };
+  return map[ext] ?? 'application/octet-stream';
+}
+
 function handleApi(req: ApiRequest, ctx: ApiContext): ApiResponse {
-  void req;
-  void ctx;
+  const { path: route, query } = req;
+
+  if (route === '/api/apps' && req.method === 'GET') {
+    return json(200, ctx.statusReport());
+  }
+
+  if (route === '/api/snapshots' && req.method === 'GET') {
+    const app = query.app ?? '';
+    if (!ctx.listApps().includes(app)) return json(404, { error: 'unknown app' });
+    return json(200, { snapshots: ctx.snapshots(app) });
+  }
+
+  if (route === '/api/ls' && req.method === 'GET') {
+    const { app = '', snap = '', path = '/' } = query;
+    if (!ctx.listApps().includes(app)) return json(404, { error: 'unknown app' });
+    if (!SNAP_RE.test(snap)) return json(400, { error: 'bad snapshot id' });
+    if (!validPath(path)) return json(400, { error: 'bad path' });
+    try {
+      // sensitivity is derived from the path itself — no per-entry restic call.
+      const entries = ctx.lsTree(app, snap, path).map(e => ({
+        ...e,
+        sensitive: classify(e.path) === 'sensitive',
+      }));
+      return json(200, { path, entries });
+    } catch (e) {
+      const msg = (e as Error).message;
+      return json(resticErrorStatus(msg), { error: msg });
+    }
+  }
+
+  if (route === '/api/staging' && req.method === 'GET') {
+    return json(200, { staging: ctx.listStaging() });
+  }
+
+  if (route === '/api/file' && req.method === 'GET') {
+    const { app = '', snap = '', path = '', dl } = query;
+    if (!ctx.listApps().includes(app)) return json(404, { error: 'unknown app' });
+    if (!SNAP_RE.test(snap)) return json(400, { error: 'bad snapshot id' });
+    if (!validPath(path)) return json(400, { error: 'bad path' });
+    const meta = ctx.fileMeta(app, snap, path);
+    if (!meta) return json(404, { error: 'file not found' });
+    if (meta.sensitive) return json(403, { error: 'sensitive path — view/download blocked' });
+    const filename = path.slice(path.lastIndexOf('/') + 1);
+    const ct = contentTypeFor(path);
+    const inlineable = INLINE_TYPES.some(t => ct.startsWith(t)) && meta.size <= 5 * 1024 * 1024;
+    return {
+      kind: 'stream',
+      status: 200,
+      app, snap, path, filename,
+      contentType: ct,
+      disposition: dl === '1' || !inlineable ? 'attachment' : 'inline',
+    };
+  }
+
   return json(404, { error: 'not found' });
 }
