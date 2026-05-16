@@ -29,6 +29,10 @@ import { checkHealth } from '../core/health';
 import { listSnapshots, restoreSnapshot, snapshotApp } from '../core/secrets-snapshots';
 import { auditLog } from '../core/secrets-audit';
 import { summariseSecrets, formatSecretsMotd, generateSecretsMotdScript } from '../core/secrets-motd';
+import { migrateAppToV2, revertAppFromV2 } from '../core/secrets-v2-migrate';
+import { cleanupV2Backups } from '../core/secrets-v2-cleanup';
+import { getV2Status } from '../core/secrets-v2-ops';
+import { installV2 } from '../core/secrets-v2-install';
 
 function getDbSecretsDir(): string {
   const reg = load();
@@ -59,8 +63,13 @@ export async function secretsCommand(args: string[]): Promise<void> {
     case 'snapshots': return secretsSnapshots(rest);
     case 'motd-init': return secretsMotdInit();
     case 'seal-runtime': return secretsSeal(rest);
+    case 'migrate-v2': return secretsMigrateV2(rest);
+    case 'revert-v2': return secretsRevertV2(rest);
+    case 'cleanup-v2': return secretsCleanupV2(rest);
+    case 'status-v2': return secretsStatusV2(rest);
+    case 'install-v2': return secretsInstallV2(rest);
     default:
-      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|rollback|snapshots|validate|status|drift|restore>');
+      error('Usage: fleet secrets <init|list|set|get|import|export|seal|unseal|rotate|rotate-key|ages|rollback|snapshots|validate|status|drift|restore|migrate-v2|revert-v2|cleanup-v2|status-v2|install-v2>');
       process.exit(1);
   }
 }
@@ -784,4 +793,136 @@ function secretsRestore(args: string[]): void {
   }
   success(`Restored vault backup for ${app}`);
   info('Run "fleet secrets unseal" to apply to runtime');
+}
+
+async function secretsMigrateV2(args: string[]): Promise<void> {
+  const app = args[0];
+  if (!app || app.startsWith('-')) {
+    error('Usage: fleet secrets migrate-v2 <app> [--no-restart-app] [--dry-run]');
+    process.exit(1);
+  }
+  const noRestartApp = args.includes('--no-restart-app');
+  const dryRun = args.includes('--dry-run');
+
+  heading(`Migrating ${app} to v2 (mode=socket)`);
+  if (dryRun) info('DRY RUN — no actual changes will be applied');
+
+  try {
+    const result = await migrateAppToV2({ app, noRestartApp, dryRun });
+    if (result.rolledBack) {
+      error(`Migration failed; rolled back from snapshot ${result.snapshotDir}`);
+      for (const step of result.steps) {
+        if (!step.ok) info(`  step ${step.step} (${step.name}): ${step.detail}`);
+      }
+      process.exit(1);
+    }
+    success(`Migrated ${app} to v2`);
+    if (result.snapshotDir) info(`Snapshot: ${result.snapshotDir}`);
+    for (const step of result.steps) {
+      info(`  step ${step.step} (${step.name}): ${step.ok ? 'OK' : 'FAILED'}`);
+    }
+  } catch (err) {
+    error(`Migration failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+async function secretsRevertV2(args: string[]): Promise<void> {
+  const app = args[0];
+  if (!app || app.startsWith('-')) {
+    error('Usage: fleet secrets revert-v2 <app> [--snapshot <timestamp>]');
+    process.exit(1);
+  }
+  const snapIdx = args.indexOf('--snapshot');
+  const snapshotTimestamp = snapIdx >= 0 ? args[snapIdx + 1] : undefined;
+
+  heading(`Reverting ${app} from v2`);
+
+  try {
+    const result = await revertAppFromV2({ app, snapshotTimestamp });
+    if (result.ok) {
+      success(`Reverted ${app} to v1; restored from ${result.snapshotUsed}`);
+    } else {
+      error(`Revert reported issues — see steps below`);
+    }
+    for (const step of result.steps) {
+      const status = step.ok ? 'OK' : 'FAILED';
+      info(`  step ${step.step} (${step.name}): ${status}${step.detail ? ' — ' + step.detail : ''}`);
+    }
+  } catch (err) {
+    error(`Revert failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+async function secretsCleanupV2(args: string[]): Promise<void> {
+  const app = args[0];
+  if (!app || app.startsWith('-')) {
+    error('Usage: fleet secrets cleanup-v2 <app> [--retention-days N] [--dry-run]');
+    process.exit(1);
+  }
+  const retIdx = args.indexOf('--retention-days');
+  const retentionDays = retIdx >= 0 ? parseInt(args[retIdx + 1], 10) : 30;
+  const dryRun = args.includes('--dry-run');
+
+  if (Number.isNaN(retentionDays) || retentionDays < 0) {
+    error(`--retention-days must be a non-negative integer`);
+    process.exit(1);
+  }
+
+  heading(`Cleaning up v2 backups for ${app} (retention=${retentionDays}d)`);
+  if (dryRun) info('DRY RUN — no actual deletions');
+
+  try {
+    const result = await cleanupV2Backups({ app, retentionDays, dryRun });
+    if (result.removedBak) info(`v1 backup blob ${dryRun ? 'would be removed' : 'removed'}`);
+    info(`Snapshots removed: ${result.removedSnapshots.length}`);
+    info(`Snapshots kept:    ${result.keptSnapshots.length}`);
+    for (const ts of result.removedSnapshots) info(`  - ${ts}`);
+    success('Cleanup complete');
+  } catch (err) {
+    error(`Cleanup failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+async function secretsInstallV2(args: string[]): Promise<void> {
+  const dryRun = args.includes('--dry-run');
+  heading(`Installing fleet-secrets-agent v2 host components`);
+  if (dryRun) info('DRY RUN');
+  try {
+    const result = await installV2({ dryRun });
+    if (result.agentBinaryInstalled) success('Agent binary installed at /usr/local/bin/fleet-agent');
+    else info('Agent binary already current');
+    if (result.unitFileInstalled) success('Templated unit installed at /etc/systemd/system/fleet-secrets-agent@.service');
+    else info('Unit file already current');
+    if (result.daemonReloaded) success('systemctl daemon-reload completed');
+    if (!result.templateParseable && !dryRun) warn('Templated unit did not parse cleanly — investigate');
+    else if (!dryRun) success('Templated unit verified');
+  } catch (err) {
+    error(`Install failed: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+
+function secretsStatusV2(_args: string[]): void {
+  const report = getV2Status();
+  heading('Fleet secrets v2 status');
+  info(`v1 (unseal): ${report.v1Count} apps`);
+  info(`v2 (socket): ${report.v2Count} apps`);
+  info('');
+  if (report.apps.length === 0) {
+    info('No apps in manifest');
+    return;
+  }
+  const headers = ['App', 'Mode', 'Agent', 'Socket', 'Keys', 'Last sealed'];
+  const rows = report.apps.map(a => [
+    a.name,
+    a.mode,
+    a.mode === 'socket' ? (a.agentActive ? 'active' : 'inactive') : '—',
+    a.mode === 'socket' ? (a.socketOk ? 'ok' : 'BAD') : '—',
+    String(a.keyCount),
+    a.lastSealedAt.slice(0, 10),
+  ]);
+  table(headers, rows);
 }
