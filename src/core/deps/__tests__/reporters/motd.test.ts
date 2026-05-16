@@ -30,7 +30,7 @@ describe('formatMotd', () => {
   it('shows critical findings prominently', () => {
     const cache = makeCache([
       makeFinding({ appName: 'hga', severity: 'critical', title: 'CVE-2024-XXXXX' }),
-      makeFinding({ appName: 'zmb', severity: 'low' }),
+      makeFinding({ appName: 'mediahub', severity: 'low' }),
     ]);
     const output = formatMotd(cache, 10);
     expect(output).toContain('1 critical');

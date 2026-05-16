@@ -21,14 +21,14 @@ describe('secrets-audit', () => {
   });
 
   it('creates the audit log with mode 0600', () => {
-    auditLog({ op: 'rotate', app: 'macpool', secret: 'STRIPE_SECRET_KEY', ok: true });
+    auditLog({ op: 'rotate', app: 'poolside', secret: 'STRIPE_SECRET_KEY', ok: true });
     expect(existsSync(getAuditPath())).toBe(true);
     expect(statSync(getAuditPath()).mode & 0o777).toBe(0o600);
   });
 
   it('appends one JSON line per call', () => {
-    auditLog({ op: 'rotate', app: 'macpool', ok: true });
-    auditLog({ op: 'rollback', app: 'macpool', ok: true });
+    auditLog({ op: 'rotate', app: 'poolside', ok: true });
+    auditLog({ op: 'rollback', app: 'poolside', ok: true });
     const lines = readFileSync(getAuditPath(), 'utf-8').trim().split('\n');
     expect(lines).toHaveLength(2);
     expect(JSON.parse(lines[0]).op).toBe('rotate');
