@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { isGitRepo, getGitStatus } from './git.js';
 import { execGit } from './exec.js';
 import type { AppEntry } from './registry.js';
-import { load, save } from './registry.js';
+import { withRegistry } from './registry.js';
 import { composeBuild } from './docker.js';
 
 export type PreflightResult =
@@ -69,12 +69,13 @@ export function buildIfStale(app: AppEntry, currentHead: string): BuildResult {
   return { ok: true, built: true };
 }
 
-export function recordBuiltCommit(appName: string, commit: string): void {
-  const reg = load();
-  const i = reg.apps.findIndex(a => a.name === appName);
-  if (i < 0) return;
-  reg.apps[i] = { ...reg.apps[i], lastBuiltCommit: commit };
-  save(reg);
+export async function recordBuiltCommit(appName: string, commit: string): Promise<void> {
+  await withRegistry(reg => {
+    const i = reg.apps.findIndex(a => a.name === appName);
+    if (i < 0) return reg;
+    reg.apps[i] = { ...reg.apps[i], lastBuiltCommit: commit };
+    return reg;
+  });
 }
 
 export const KILL_SWITCH = '/etc/fleet/no-auto-refresh';
@@ -103,7 +104,7 @@ async function doRefresh(app: AppEntry): Promise<RefreshResult> {
   if (!ff.ok) return { kind: 'failed-safe', step: 'merge', detail: ff.detail };
   const build = buildIfStale(app, ff.newHead);
   if (!build.ok) return { kind: 'failed-safe', step: 'build', detail: build.reason };
-  if (build.built) recordBuiltCommit(app.name, ff.newHead);
+  if (build.built) await recordBuiltCommit(app.name, ff.newHead);
   if (!ff.changed && !build.built) return { kind: 'no-change', head: ff.newHead };
   return { kind: 'refreshed', head: ff.newHead, built: build.built };
 }

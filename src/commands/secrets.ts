@@ -151,7 +151,7 @@ async function secretsSet(args: string[]): Promise<void> {
     error('Empty value — aborting');
     process.exit(1);
   }
-  setSecret(app, key, value, { allowWeak });
+  await setSecret(app, key, value, { allowWeak });
   success(`Set ${key} for ${app}`);
 }
 
@@ -169,7 +169,7 @@ function secretsGet(args: string[]): void {
   process.stdout.write(val + '\n');
 }
 
-function secretsImport(args: string[]): void {
+async function secretsImport(args: string[]): Promise<void> {
   const app = args.find(a => !a.startsWith('-'));
   const pathArg = args[1] && !args[1].startsWith('-') ? args[1] : null;
 
@@ -180,7 +180,7 @@ function secretsImport(args: string[]): void {
 
   if (app === 'docker-databases') {
     const dir = pathArg || getDbSecretsDir();
-    const count = importDbSecrets(app, dir);
+    const count = await importDbSecrets(app, dir);
     success(`Imported ${count} secret files from ${dir}`);
     return;
   }
@@ -197,7 +197,7 @@ function secretsImport(args: string[]): void {
     throw new SecretsError(`App not in registry and no path given: ${app}`);
   }
 
-  const count = importEnvFile(app, envPath);
+  const count = await importEnvFile(app, envPath);
   success(`Imported ${count} keys from ${envPath}`);
 }
 
@@ -217,9 +217,9 @@ function secretsUnseal(): void {
   success(`Unsealed ${count} apps to /run/fleet-secrets/`);
 }
 
-function secretsSeal(args: string[]): void {
+async function secretsSeal(args: string[]): Promise<void> {
   const app = args.find(a => !a.startsWith('-')) || undefined;
-  const sealed = sealFromRuntime(app);
+  const sealed = await sealFromRuntime(app);
   for (const a of sealed) {
     success(`Sealed ${a}`);
   }
@@ -232,7 +232,7 @@ async function secretsRotateKey(args: string[]): Promise<void> {
     return;
   }
 
-  const result = rotateKey();
+  const result = await rotateKey();
   success(`Key rotated`);
   info(`Old: ${result.oldPubkey}`);
   info(`New: ${result.newPubkey}`);
@@ -341,7 +341,7 @@ async function rotateOneInteractive(
     return { acted: false, succeeded: false };
   }
 
-  const result = performRotation(app, secret.name, newValue, {
+  const result = await performRotation(app, secret.name, newValue, {
     dryRun: opts.dryRun,
     dataMigrated: opts.dataMigrated,
   });
