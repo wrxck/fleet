@@ -1,12 +1,12 @@
-import { load, findApp } from '../core/registry.js';
-import { AppNotFoundError } from '../core/errors.js';
+import { load, findApp } from '../core/registry';
+import { AppNotFoundError } from '../core/errors';
 import {
   getGitStatus, getProjectRoot, gitAdd, gitCommit, gitCheckout, gitPush,
-} from '../core/git.js';
-import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard.js';
-import * as github from '../core/github.js';
-import { confirm } from '../ui/confirm.js';
-import { c, heading, table, success, error, info, warn } from '../ui/output.js';
+} from '../core/git';
+import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard';
+import * as github from '../core/github';
+import { confirm } from '../ui/confirm';
+import { c, heading, table, success, error, info, warn } from '../ui/output';
 
 function requireApp(name: string) {
   const reg = load();

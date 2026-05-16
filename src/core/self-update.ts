@@ -13,7 +13,7 @@
 
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execSafe } from './exec.js';
+import { execSafe } from './exec';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // dist/core/self-update.js → repo root is two ../

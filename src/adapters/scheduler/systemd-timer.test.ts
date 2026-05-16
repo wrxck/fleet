@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { type Routine } from '../../core/routines/schema.js';
-import { renderUnits, createSystemdTimerAdapter } from './systemd-timer.js';
+import { type Routine } from '../../core/routines/schema';
+import { renderUnits, createSystemdTimerAdapter } from './systemd-timer';
 
 const mkCalendarRoutine = (overrides: Partial<Routine> = {}): Routine => ({
   id: 'nightly-audit',

@@ -1,4 +1,4 @@
-import type { NotifierAdapter } from '../types.js';
+import type { NotifierAdapter } from '../types';
 
 export function createStdoutNotifier(): NotifierAdapter {
   return {

@@ -19,8 +19,8 @@ vi.mock('node:fs', () => {
 });
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, writeSync, fsyncSync, closeSync } from 'node:fs';
-import { load, save, findApp, addApp, removeApp } from './registry.js';
-import type { AppEntry, Registry } from './registry.js';
+import { load, save, findApp, addApp, removeApp } from './registry';
+import type { AppEntry, Registry } from './registry';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);

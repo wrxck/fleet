@@ -15,9 +15,9 @@ vi.mock('./registry.js', () => ({
   load: vi.fn(),
 }));
 
-import { loadManifest } from './secrets.js';
-import { load } from './registry.js';
-import { validateApp } from './secrets-validate.js';
+import { loadManifest } from './secrets';
+import { load } from './registry';
+import { validateApp } from './secrets-validate';
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedExistsSync = vi.mocked(existsSync);

@@ -8,8 +8,8 @@ import {
   startMultiTail,
   type LogLine,
   type LogSource,
-} from './logs-multi.js';
-import type { AppEntry } from './registry.js';
+} from './logs-multi';
+import type { AppEntry } from './registry';
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {

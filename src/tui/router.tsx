@@ -5,21 +5,21 @@ import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 import { Viewport } from '@matthesketh/ink-viewport';
 import { ToastProvider } from '@matthesketh/ink-toast';
 import { ToastContainer } from '@matthesketh/ink-toast';
-import { checkForUpdate, applyUpdate, type UpdateInfo } from '../core/self-update.js';
+import { checkForUpdate, applyUpdate, type UpdateInfo } from '../core/self-update';
 import { KeyBindingHelp } from '@matthesketh/ink-keybinding-help';
 
-import { reducer, initialState, AppStateContext, AppDispatchContext, nextTopView } from './state.js';
-import { Header } from './components/Header.js';
-import { KeyHint } from './components/KeyHint.js';
-import { Confirm } from './components/Confirm.js';
-import { Dashboard } from './views/Dashboard.js';
-import { AppDetail } from './views/AppDetail.js';
-import { SecretsView } from './views/SecretsView.js';
-import { SecretEdit } from './views/SecretEdit.js';
-import { HealthView } from './views/HealthView.js';
-import { LogsView } from './views/LogsView.js';
-import { isSealed, isInitialized } from '../core/secrets.js';
-import type { View } from './types.js';
+import { reducer, initialState, AppStateContext, AppDispatchContext, nextTopView } from './state';
+import { Header } from './components/Header';
+import { KeyHint } from './components/KeyHint';
+import { Confirm } from './components/Confirm';
+import { Dashboard } from './views/Dashboard';
+import { AppDetail } from './views/AppDetail';
+import { SecretsView } from './views/SecretsView';
+import { SecretEdit } from './views/SecretEdit';
+import { HealthView } from './views/HealthView';
+import { LogsView } from './views/LogsView';
+import { isSealed, isInitialized } from '../core/secrets';
+import type { View } from './types';
 
 const HELP_GROUPS = [
   {

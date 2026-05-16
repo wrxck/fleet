@@ -3,11 +3,11 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import type { SignalProvider } from '../../adapters/types.js';
-import { closeDb, openDb } from './db.js';
-import type { Signal } from './schema.js';
-import { SignalCollector } from './signals-collector.js';
-import { mkExecTmpDir } from './test-utils.js';
+import type { SignalProvider } from '../../adapters/types';
+import { closeDb, openDb } from './db';
+import type { Signal } from './schema';
+import { SignalCollector } from './signals-collector';
+import { mkExecTmpDir } from './test-utils';
 
 function mkProvider(kind: Signal['kind'], ttlMs: number, fetcher: () => Promise<Signal>): SignalProvider {
   return { kind, ttlMs, strategy: 'pull', collect: fetcher };

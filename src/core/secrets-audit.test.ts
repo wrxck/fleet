@@ -13,7 +13,7 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => FAKE_HOME };
 });
 
-import { auditLog, getAuditPath } from './secrets-audit.js';
+import { auditLog, getAuditPath } from './secrets-audit';
 
 describe('secrets-audit', () => {
   beforeEach(() => {

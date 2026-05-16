@@ -1,7 +1,7 @@
-import { load, findApp } from '../core/registry.js';
-import { restartService } from '../core/systemd.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { success, error } from '../ui/output.js';
+import { load, findApp } from '../core/registry';
+import { restartService } from '../core/systemd';
+import { AppNotFoundError } from '../core/errors';
+import { success, error } from '../ui/output';
 
 export function restartCommand(args: string[]): void {
   const appName = args[0];

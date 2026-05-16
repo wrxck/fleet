@@ -5,9 +5,9 @@ import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch, useRedact } from '../state.js';
-import { runFleetCommand, streamFleetCommand, type StreamHandle } from '../exec-bridge.js';
-import { colors } from '../theme.js';
+import { useAppState, useAppDispatch, useRedact } from '../state';
+import { runFleetCommand, streamFleetCommand, type StreamHandle } from '../exec-bridge';
+import { colors } from '../theme';
 
 const MAX_LINES = 200;
 

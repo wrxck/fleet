@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
-import { RoutineSchema, type Routine } from './schema.js';
+import { RoutineSchema, type Routine } from './schema';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_STORE_PATH = join(__dirname, '..', '..', '..', 'data', 'routines.json');

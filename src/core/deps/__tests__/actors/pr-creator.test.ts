@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { generateVersionBump, buildPrBody } from '../../actors/pr-creator.js';
-import type { Finding } from '../../types.js';
+import { generateVersionBump, buildPrBody } from '../../actors/pr-creator';
+import type { Finding } from '../../types';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {

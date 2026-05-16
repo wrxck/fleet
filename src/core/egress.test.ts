@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./exec.js', () => ({ execSafe: vi.fn() }));
 
-import { snapshotEgress, addEgressAllow } from './egress.js';
-import { execSafe } from './exec.js';
-import type { AppEntry } from './registry.js';
+import { snapshotEgress, addEgressAllow } from './egress';
+import { execSafe } from './exec';
+import type { AppEntry } from './registry';
 
 function app(overrides: Partial<AppEntry> = {}): AppEntry {
   return {

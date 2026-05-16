@@ -31,11 +31,11 @@ vi.mock('../ui/output.js', () => ({
 }));
 
 import { writeFileSync, copyFileSync, existsSync, renameSync } from 'node:fs';
-import { load } from '../core/registry.js';
-import { readServiceFile } from '../core/systemd.js';
-import { execSafe } from '../core/exec.js';
-import { success, warn, info } from '../ui/output.js';
-import { patchSystemdCommand } from './patch-systemd.js';
+import { load } from '../core/registry';
+import { readServiceFile } from '../core/systemd';
+import { execSafe } from '../core/exec';
+import { success, warn, info } from '../ui/output';
+import { patchSystemdCommand } from './patch-systemd';
 
 beforeEach(() => vi.clearAllMocks());
 

@@ -4,8 +4,8 @@ vi.mock('./exec.js', () => ({
   execSafe: vi.fn(),
 }));
 
-import { execSafe } from './exec.js';
-import { listContainers, inspectContainer, getContainerLogs, getContainersByCompose, composeBuild } from './docker.js';
+import { execSafe } from './exec';
+import { listContainers, inspectContainer, getContainerLogs, getContainersByCompose, composeBuild } from './docker';
 
 const mockedExec = vi.mocked(execSafe);
 

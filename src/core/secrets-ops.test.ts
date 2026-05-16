@@ -52,8 +52,8 @@ import { existsSync, readFileSync, readdirSync, chmodSync, writeFileSync } from 
 import {
   loadManifest, decryptApp, sealApp, parseSecretsBundle,
   backupVaultFile, restoreVaultFile, removeBackup,
-} from './secrets.js';
-import { validateBeforeSeal, detectDrift, safeSealApp, unsealAll } from './secrets-ops.js';
+} from './secrets';
+import { validateBeforeSeal, detectDrift, safeSealApp, unsealAll } from './secrets-ops';
 
 const mockLoadManifest = vi.mocked(loadManifest);
 const mockDecryptApp = vi.mocked(decryptApp);
@@ -289,7 +289,7 @@ describe('unsealAll runtime perms', () => {
         },
       },
     });
-    const { ageDecryptFile } = await import('./secrets.js');
+    const { ageDecryptFile } = await import('./secrets');
     vi.mocked(ageDecryptFile).mockReturnValue('---SECRET:mongo_root_password.txt---\nhunter2');
     mockParseSecretsBundle.mockReturnValue({ 'mongo_root_password.txt': 'hunter2' });
     mockExistsSync.mockReturnValue(true);
@@ -319,7 +319,7 @@ describe('unsealAll runtime perms', () => {
         },
       },
     });
-    const { ageDecryptFile } = await import('./secrets.js');
+    const { ageDecryptFile } = await import('./secrets');
     vi.mocked(ageDecryptFile).mockReturnValue('FOO=bar');
     mockExistsSync.mockReturnValue(true);
 

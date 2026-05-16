@@ -4,9 +4,9 @@ vi.mock('../../../exec.js', () => ({
   execSafe: vi.fn(),
 }));
 
-import { execSafe } from '../../../exec.js';
-import type { AppEntry } from '../../../registry.js';
-import { GitHubPrCollector } from '../../collectors/github-pr.js';
+import { execSafe } from '../../../exec';
+import type { AppEntry } from '../../../registry';
+import { GitHubPrCollector } from '../../collectors/github-pr';
 
 const mockExec = vi.mocked(execSafe);
 
