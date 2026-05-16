@@ -59,6 +59,19 @@ vi.mock('../ui/output.js', () => ({
   warn: vi.fn(),
 }));
 
+vi.mock('../core/secrets-v2-migrate.js', () => ({
+  migrateAppToV2: vi.fn(),
+  revertAppFromV2: vi.fn(),
+}));
+
+vi.mock('../core/secrets-v2-cleanup.js', () => ({
+  cleanupV2Backups: vi.fn(),
+}));
+
+vi.mock('../core/secrets-v2-ops.js', () => ({
+  getV2Status: vi.fn(),
+}));
+
 import { secretsCommand } from './secrets';
 import { load, findApp } from '../core/registry';
 import {
@@ -300,9 +313,9 @@ describe('secretsCommand — drift output', () => {
 });
 
 describe('security — path traversal and injection', () => {
-  // The previous two tests verified that the CLI passed traversal/injection
+  // the previous two tests verified that the CLI passed traversal/injection
   // inputs through to setSecret (relying on downstream validate to reject).
-  // The new contract is stronger: any argv-as-value form is rejected at the
+  // the new contract is stronger: any argv-as-value form is rejected at the
   // CLI layer, so the inputs never reach setSecret in the first place.
   it('rejects path-traversal app name + value-as-argv before setSecret', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
@@ -322,5 +335,28 @@ describe('security — path traversal and injection', () => {
     mockSealFromRuntime.mockReturnValue([]);
     await secretsCommand(['seal-runtime', 'myapp']);
     expect(mockSealFromRuntime).toHaveBeenCalledWith('myapp');
+  });
+});
+
+describe('secretsCommand — v2 subcommands usage errors', () => {
+  it('migrate-v2 exits with usage error when no app provided', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(secretsCommand(['migrate-v2'])).rejects.toThrow('exit');
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('Usage: fleet secrets migrate-v2'));
+    exitSpy.mockRestore();
+  });
+
+  it('revert-v2 exits with usage error when no app provided', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(secretsCommand(['revert-v2'])).rejects.toThrow('exit');
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('Usage: fleet secrets revert-v2'));
+    exitSpy.mockRestore();
+  });
+
+  it('cleanup-v2 exits with non-negative-integer error for invalid --retention-days', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+    await expect(secretsCommand(['cleanup-v2', 'app', '--retention-days', 'invalid'])).rejects.toThrow('exit');
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('non-negative integer'));
+    exitSpy.mockRestore();
   });
 });
