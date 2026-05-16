@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { generateSecret, totpCode, verifyTotp, totpUri } from './totp';
+import { signSession, verifySession } from './totp';
 
 const RFC_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 
@@ -46,5 +47,40 @@ describe('backup/totp', () => {
     expect(uri).toContain('otpauth://totp/');
     expect(uri).toContain(`secret=${RFC_SECRET}`);
     expect(uri).toContain('issuer=fleet-backups');
+  });
+});
+
+describe('backup/totp session cookies', () => {
+  const SECRET = 'session-signing-secret';
+
+  it('round-trips a valid session', () => {
+    const now = 1_700_000_000_000;
+    const cookie = signSession({ exp: now + 3600_000 }, SECRET);
+    expect(verifySession(cookie, SECRET, now)).toEqual({ exp: now + 3600_000 });
+  });
+
+  it('rejects a tampered payload', () => {
+    const now = 1_700_000_000_000;
+    const cookie = signSession({ exp: now + 3600_000 }, SECRET);
+    const [body, sig] = cookie.split('.');
+    const forged = `${body}x.${sig}`;
+    expect(verifySession(forged, SECRET, now)).toBeNull();
+  });
+
+  it('rejects a wrong signing secret', () => {
+    const now = 1_700_000_000_000;
+    const cookie = signSession({ exp: now + 3600_000 }, SECRET);
+    expect(verifySession(cookie, 'other-secret', now)).toBeNull();
+  });
+
+  it('rejects an expired session', () => {
+    const now = 1_700_000_000_000;
+    const cookie = signSession({ exp: now - 1 }, SECRET);
+    expect(verifySession(cookie, SECRET, now)).toBeNull();
+  });
+
+  it('rejects a malformed cookie', () => {
+    expect(verifySession('garbage', SECRET, 0)).toBeNull();
+    expect(verifySession('a.b.c', SECRET, 0)).toBeNull();
   });
 });
