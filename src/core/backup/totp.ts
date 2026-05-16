@@ -84,3 +84,40 @@ export function totpUri(secretB32: string, label: string, issuer: string): strin
   const i = encodeURIComponent(issuer);
   return `otpauth://totp/${i}:${l}?secret=${secretB32}&issuer=${i}&period=30&digits=6&algorithm=SHA1`;
 }
+
+export interface SessionPayload {
+  /** epoch-ms expiry. */
+  exp: number;
+}
+
+function b64url(buf: Buffer): string {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64urlDecode(s: string): Buffer {
+  return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+}
+
+/** signs a session payload as `<body>.<hmac>` (hmac-sha256). */
+export function signSession(payload: SessionPayload, secret: string): string {
+  const body = b64url(Buffer.from(JSON.stringify(payload)));
+  const sig = b64url(createHmac('sha256', secret).update(body).digest());
+  return `${body}.${sig}`;
+}
+
+/** verifies a session cookie; returns the payload or null if invalid/expired. */
+export function verifySession(cookie: string, secret: string, nowMs: number = Date.now()): SessionPayload | null {
+  const parts = cookie.split('.');
+  if (parts.length !== 2) return null;
+  const [body, sig] = parts;
+  const expected = b64url(createHmac('sha256', secret).update(body).digest());
+  if (!timingSafeEqualStr(sig, expected)) return null;
+  let payload: SessionPayload;
+  try {
+    payload = JSON.parse(b64urlDecode(body).toString('utf-8'));
+  } catch {
+    return null;
+  }
+  if (typeof payload.exp !== 'number' || payload.exp < nowMs) return null;
+  return payload;
+}
