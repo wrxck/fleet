@@ -83,4 +83,14 @@ describe('backup/totp session cookies', () => {
     expect(verifySession('garbage', SECRET, 0)).toBeNull();
     expect(verifySession('a.b.c', SECRET, 0)).toBeNull();
   });
+
+  it('rejects a cookie whose body is a non-object json value', () => {
+    // craft a cookie whose body is the literal `null`, correctly signed
+    const { createHmac } = require('node:crypto');
+    const body = Buffer.from('null').toString('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const sig = createHmac('sha256', SECRET).update(body).digest('base64')
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    expect(verifySession(`${body}.${sig}`, SECRET, 0)).toBeNull();
+  });
 });
