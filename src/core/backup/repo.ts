@@ -1,3 +1,5 @@
+import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process';
+
 import { FleetError } from '../errors';
 import { execSafe } from '../exec';
 
@@ -221,6 +223,20 @@ export function lsTree(app: string, snapshotId: string, dirPath: string): TreeEn
     throw new ResticError(`restic ls failed for ${dirPath}: ${r.stderr || r.stdout}`);
   }
   return parseLsOutput(r.stdout, dirPath);
+}
+
+/** the argv (after `restic`) for dumping a file from a snapshot. */
+export function dumpFileArgs(app: string, snapshotId: string, filePath: string): string[] {
+  return ['-r', repoUri(app), 'dump', snapshotId, filePath];
+}
+
+/** spawns `restic dump`; caller pipes child.stdout to an http response and
+ *  must handle 'error' / non-zero 'close'. streaming avoids buffering a
+ *  potentially multi-gb file in node memory. */
+export function dumpFileSpawn(app: string, snapshotId: string, filePath: string): ChildProcessWithoutNullStreams {
+  return spawn('restic', dumpFileArgs(app, snapshotId, filePath), {
+    env: { ...process.env, ...resticEnv(app) },
+  });
 }
 
 export function restore(app: string, opts: RestoreOptions, timeoutMs = 60 * 60_000): void {

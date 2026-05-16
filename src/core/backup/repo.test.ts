@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { isAppendOnly, parseLsOutput } from './repo';
+import { isAppendOnly, parseLsOutput, dumpFileArgs } from './repo';
 
 describe('isAppendOnly', () => {
   const original = process.env.FLEET_BACKUP_BASE_URL;
@@ -80,5 +80,15 @@ describe('backup/repo parseLsOutput', () => {
       JSON.stringify({ struct_type: 'node', name: 'x', type: 'file', path: '/home/x', size: 0, mtime: '' }),
     ].join('\n');
     expect(parseLsOutput(messy, '/home').map(e => e.name)).toEqual(['x']);
+  });
+});
+
+describe('backup/repo dumpFileArgs', () => {
+  it('builds restic dump args with repo and snapshot', () => {
+    const args = dumpFileArgs('myapp', 'abc12345', '/etc/hosts');
+    expect(args[0]).toBe('-r');
+    expect(args).toContain('dump');
+    expect(args).toContain('abc12345');
+    expect(args).toContain('/etc/hosts');
   });
 });
