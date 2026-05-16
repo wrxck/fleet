@@ -13,16 +13,16 @@ import type { AppEntry } from './registry';
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
-    name: 'macpool',
-    displayName: 'macpool',
+    name: 'poolside',
+    displayName: 'poolside',
     composePath: '/x',
     composeFile: null,
-    serviceName: 'macpool',
+    serviceName: 'poolside',
     domains: [],
     port: null,
     usesSharedDb: false,
     type: 'nextjs',
-    containers: ['macpool'],
+    containers: ['poolside'],
     dependsOnDatabases: false,
     registeredAt: '',
     ...overrides,
@@ -48,8 +48,8 @@ describe('inferLevel', () => {
 
 describe('matchesContainerGlob', () => {
   it('matches exact', () => {
-    expect(matchesContainerGlob('macpool', 'macpool')).toBe(true);
-    expect(matchesContainerGlob('macpool', 'shiftfaced')).toBe(false);
+    expect(matchesContainerGlob('poolside', 'poolside')).toBe(true);
+    expect(matchesContainerGlob('poolside', 'brewco')).toBe(false);
   });
   it('matches suffix wildcard', () => {
     expect(matchesContainerGlob('shared-postgres', '*-postgres')).toBe(true);
@@ -57,7 +57,7 @@ describe('matchesContainerGlob', () => {
     expect(matchesContainerGlob('postgres', '*-postgres')).toBe(false);
   });
   it('matches prefix wildcard', () => {
-    expect(matchesContainerGlob('macpool-staging', 'macpool-*')).toBe(true);
+    expect(matchesContainerGlob('poolside-staging', 'poolside-*')).toBe(true);
   });
   it('matches middle wildcard', () => {
     expect(matchesContainerGlob('shared-postgres', 'shared-*')).toBe(true);
@@ -70,8 +70,8 @@ describe('matchesContainerGlob', () => {
 
 describe('resolveSources', () => {
   const apps = [
-    makeApp({ name: 'macpool', containers: ['macpool'] }),
-    makeApp({ name: 'shiftfaced', containers: ['shiftfaced-server', 'shiftfaced-worker'] }),
+    makeApp({ name: 'poolside', containers: ['poolside'] }),
+    makeApp({ name: 'brewco', containers: ['brewco-server', 'brewco-worker'] }),
     makeApp({ name: 'docker-databases', containers: ['shared-postgres', 'shared-redis'] }),
   ];
 
@@ -80,16 +80,16 @@ describe('resolveSources', () => {
     expect(r).toHaveLength(5);
   });
   it('filters by app names', () => {
-    const r = resolveSources(apps, { apps: ['macpool', 'shiftfaced'] });
-    expect(r.map(s => s.container).sort()).toEqual(['macpool', 'shiftfaced-server', 'shiftfaced-worker']);
+    const r = resolveSources(apps, { apps: ['poolside', 'brewco'] });
+    expect(r.map(s => s.container).sort()).toEqual(['brewco-server', 'brewco-worker', 'poolside']);
   });
   it('filters by container glob', () => {
     const r = resolveSources(apps, { containers: ['*-postgres'] });
     expect(r).toEqual([{ app: 'docker-databases', container: 'shared-postgres' }]);
   });
   it('intersects apps + containers', () => {
-    const r = resolveSources(apps, { apps: ['shiftfaced'], containers: ['*-worker'] });
-    expect(r).toEqual([{ app: 'shiftfaced', container: 'shiftfaced-worker' }]);
+    const r = resolveSources(apps, { apps: ['brewco'], containers: ['*-worker'] });
+    expect(r).toEqual([{ app: 'brewco', container: 'brewco-worker' }]);
   });
 });
 

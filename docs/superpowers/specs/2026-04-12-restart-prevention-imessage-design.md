@@ -151,7 +151,7 @@ New file: `bot/adapter/bluebubbles.go`
   ```
   1. saas-plumber
   2. hostclaw
-  3. trustedpets
+  3. petcare
   Reply with a number to select.
   ```
 

@@ -61,7 +61,7 @@ function logsMulti(args: string[]): Promise<void> {
 
   if (!all && !appsCsv && !containersCsv) {
     error('Usage: fleet logs --all [-f] [--since 15m] [--grep err] [--level warn]');
-    error('       fleet logs --apps macpool,shiftfaced [-f]');
+    error('       fleet logs --apps poolside,brewco [-f]');
     error('       fleet logs --containers "*-postgres" [-f]');
     process.exit(1);
   }

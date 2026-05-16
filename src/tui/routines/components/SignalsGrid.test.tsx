@@ -29,11 +29,11 @@ describe('SignalsGrid', () => {
   });
 
   it('renders a row with repo name when signals present', () => {
-    const rows = [{ repo: 'abmanandvan', signals: [mkSignal('git-clean', 'ok')] }];
+    const rows = [{ repo: 'movers-co', signals: [mkSignal('git-clean', 'ok')] }];
     const { lastFrame } = render(
       <SignalsGrid rows={rows} selectedIndex={0} kinds={['git-clean']} />,
     );
-    expect(lastFrame()).toContain('abmanandvan');
+    expect(lastFrame()).toContain('movers-co');
   });
 
   it('shows empty-state message with no repos', () => {

@@ -8,16 +8,16 @@ import type { AppEntry } from './registry';
 
 function app(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
-    name: 'macpool',
-    displayName: 'macpool',
+    name: 'poolside',
+    displayName: 'poolside',
     composePath: '/x',
     composeFile: null,
-    serviceName: 'macpool',
+    serviceName: 'poolside',
     domains: [],
     port: null,
     usesSharedDb: false,
     type: 'nextjs',
-    containers: ['macpool'],
+    containers: ['poolside'],
     dependsOnDatabases: false,
     registeredAt: '',
     ...overrides,

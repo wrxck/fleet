@@ -163,16 +163,16 @@ Primary interface via `fleet deps`.
 
   App                  Score    Critical  High  Medium  Low
   hga                  ##___    1         3     12      8
-  zmb                  ####_    0         0     2       5
-  abmanandvan          ###__    0         2     6       3
-  leelas-ladybirds     #####    0         0     0       1
+  mediahub                  ####_    0         0     2       5
+  movers-co          ###__    0         2     6       3
+  daycare-co     #####    0         0     0       1
 
 --- Critical (1) ------------------------------------------
   hga: lodash 4.17.15 -- CVE-2024-XXXXX (CVSS 9.1)
 
 --- High (5) ----------------------------------------------
   hga: Node 18.19.0 -- EOL in 12 days (2026-04-09)
-  abmanandvan: express 4.18.2 -> 5.1.0 (major behind)
+  movers-co: express 4.18.2 -> 5.1.0 (major behind)
 ```
 
 **Commands:**
@@ -192,7 +192,7 @@ Script at `/etc/update-motd.d/99-fleet-deps`. Reads cache, outputs max ~10 lines
 -- Fleet Deps -----------------------------------------
   3 critical findings across 31 apps
   hga: CVE-2024-XXXXX (lodash), Node 18 EOL in 12 days
-  abmanandvan: 2 major versions behind
+  movers-co: 2 major versions behind
   14 apps fully up to date
   Last scan: 2h ago | Run: fleet deps
 ```
