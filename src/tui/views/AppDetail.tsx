@@ -4,11 +4,11 @@ import Spinner from 'ink-spinner';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch, useRedact } from '../state.js';
-import { runFleetCommand } from '../exec-bridge.js';
-import { colors } from '../theme.js';
-import { load, findApp } from '../../core/registry.js';
-import type { AppEntry } from '../../core/registry.js';
+import { useAppState, useAppDispatch, useRedact } from '../state';
+import { runFleetCommand } from '../exec-bridge';
+import { colors } from '../theme';
+import { load, findApp } from '../../core/registry';
+import type { AppEntry } from '../../core/registry';
 
 interface ActionItem {
   key: string;

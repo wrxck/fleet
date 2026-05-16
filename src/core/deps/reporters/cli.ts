@@ -1,5 +1,5 @@
-import { c, icon } from '../../../ui/output.js';
-import type { DepsCache, Finding, Severity } from '../types.js';
+import { c, icon } from '../../../ui/output';
+import type { DepsCache, Finding, Severity } from '../types';
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 

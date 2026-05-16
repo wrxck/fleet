@@ -35,12 +35,12 @@ vi.mock('../ui/output.js', () => ({
   warn: vi.fn(),
 }));
 
-import { load, save } from '../core/registry.js';
-import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd.js';
-import { listContainers, getContainersByCompose } from '../core/docker.js';
-import { listSites } from '../core/nginx.js';
-import { success, info } from '../ui/output.js';
-import { initCommand } from './init.js';
+import { load, save } from '../core/registry';
+import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd';
+import { listContainers, getContainersByCompose } from '../core/docker';
+import { listSites } from '../core/nginx';
+import { success, info } from '../ui/output';
+import { initCommand } from './init';
 
 beforeEach(() => {
   vi.clearAllMocks();

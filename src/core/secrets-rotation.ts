@@ -5,12 +5,12 @@
  * to thin wrappers so tests can run without a real vault.
  */
 
-import { decryptApp, sealApp, loadManifest, type Manifest } from './secrets.js';
-import { snapshotApp, restoreSnapshot } from './secrets-snapshots.js';
-import { auditLog } from './secrets-audit.js';
-import { markRotated } from './secrets-metadata.js';
-import { classifySecret, type ProviderDef } from './secrets-providers.js';
-import { SecretsError } from './errors.js';
+import { decryptApp, sealApp, loadManifest, type Manifest } from './secrets';
+import { snapshotApp, restoreSnapshot } from './secrets-snapshots';
+import { auditLog } from './secrets-audit';
+import { markRotated } from './secrets-metadata';
+import { classifySecret, type ProviderDef } from './secrets-providers';
+import { SecretsError } from './errors';
 
 /** Mask a NEW (just-entered) secret value for confirmation display. */
 export function maskNewValue(value: string): string {

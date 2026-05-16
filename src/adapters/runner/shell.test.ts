@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
-import type { RoutineTask, RunEvent } from '../../core/routines/schema.js';
-import type { RunContext } from '../types.js';
-import { createShellRunner } from './shell.js';
+import type { RoutineTask, RunEvent } from '../../core/routines/schema';
+import type { RunContext } from '../types';
+import { createShellRunner } from './shell';
 
 const ctx: RunContext = {
   repo: null,

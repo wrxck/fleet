@@ -18,11 +18,11 @@ vi.mock('../ui/output.js', () => ({
   error: vi.fn(),
 }));
 
-import { load, save, findApp } from '../core/registry.js';
-import { stopService, startService, enableService, disableService } from '../core/systemd.js';
-import { freezeApp, unfreezeApp } from './freeze.js';
-import { AppNotFoundError } from '../core/errors.js';
-import type { AppEntry, Registry } from '../core/registry.js';
+import { load, save, findApp } from '../core/registry';
+import { stopService, startService, enableService, disableService } from '../core/systemd';
+import { freezeApp, unfreezeApp } from './freeze';
+import { AppNotFoundError } from '../core/errors';
+import type { AppEntry, Registry } from '../core/registry';
 
 const mockLoad = vi.mocked(load);
 const mockSave = vi.mocked(save);

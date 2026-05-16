@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as git from './git.js';
-import type { GitStatus } from './git.js';
-import * as exec from './exec.js';
-import { preflight, fetchOrigin, refresh } from './boot-refresh.js';
+import * as git from './git';
+import type { GitStatus } from './git';
+import * as exec from './exec';
+import { preflight, fetchOrigin, refresh } from './boot-refresh';
 import * as fs from 'node:fs';
 
 vi.mock('./git.js');
@@ -96,10 +96,10 @@ describe('fetchOrigin', () => {
   });
 });
 
-import { fastForward, buildIfStale, recordBuiltCommit } from './boot-refresh.js';
-import * as docker from './docker.js';
-import * as registry from './registry.js';
-import type { AppEntry } from './registry.js';
+import { fastForward, buildIfStale, recordBuiltCommit } from './boot-refresh';
+import * as docker from './docker';
+import * as registry from './registry';
+import type { AppEntry } from './registry';
 
 vi.mock('./docker.js');
 vi.mock('./registry.js');

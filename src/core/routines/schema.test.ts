@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { RoutineSchema, RoutineTaskSchema, isExpired, type Signal } from './schema.js';
+import { RoutineSchema, RoutineTaskSchema, isExpired, type Signal } from './schema';
 
 describe('RoutineTaskSchema', () => {
   it('accepts a valid claude-cli task with defaults', () => {

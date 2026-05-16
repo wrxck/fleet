@@ -12,8 +12,8 @@ import {
   markRotated,
   enumerateSecrets,
   enumerateAllSecrets,
-} from './secrets-metadata.js';
-import { loadManifest, saveManifest, listSecrets } from './secrets.js';
+} from './secrets-metadata';
+import { loadManifest, saveManifest, listSecrets } from './secrets';
 
 const mockLoad = vi.mocked(loadManifest);
 const mockSave = vi.mocked(saveManifest);

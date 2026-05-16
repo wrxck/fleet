@@ -1,34 +1,34 @@
 import { writeFileSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSafe } from '../core/exec.js';
+import { execSafe } from '../core/exec';
 
-import { SecretsError } from '../core/errors.js';
-import { load, findApp } from '../core/registry.js';
-import { initVault, getPublicKey, loadManifest, listSecrets } from '../core/secrets.js';
-import { enumerateSecrets, enumerateAllSecrets, type EnrichedSecret } from '../core/secrets-metadata.js';
+import { SecretsError } from '../core/errors';
+import { load, findApp } from '../core/registry';
+import { initVault, getPublicKey, loadManifest, listSecrets } from '../core/secrets';
+import { enumerateSecrets, enumerateAllSecrets, type EnrichedSecret } from '../core/secrets-metadata';
 import {
   setSecret, getSecret, importEnvFile, importDbSecrets,
   exportApp, sealFromRuntime, rotateKey, getStatus,
   detectDrift,
-} from '../core/secrets-ops.js';
-import { restoreVaultFile } from '../core/secrets.js';
-import { generateUnsealService } from '../templates/unseal.js';
-import { validateApp, validateAll } from '../core/secrets-validate.js';
-import { confirm } from '../ui/confirm.js';
-import { prompt, promptHidden } from '../ui/prompt.js';
-import { c, heading, table, success, error, info, warn } from '../ui/output.js';
+} from '../core/secrets-ops';
+import { restoreVaultFile } from '../core/secrets';
+import { generateUnsealService } from '../templates/unseal';
+import { validateApp, validateAll } from '../core/secrets-validate';
+import { confirm } from '../ui/confirm';
+import { prompt, promptHidden } from '../ui/prompt';
+import { c, heading, table, success, error, info, warn } from '../ui/output';
 import {
   performRotation,
   validateFormat,
   checkEntropy,
   maskNewValue,
-} from '../core/secrets-rotation.js';
-import { unsealAll } from '../core/secrets-ops.js';
-import { restartService } from '../core/systemd.js';
-import { checkHealth } from '../core/health.js';
-import { listSnapshots, restoreSnapshot, snapshotApp } from '../core/secrets-snapshots.js';
-import { auditLog } from '../core/secrets-audit.js';
-import { summariseSecrets, formatSecretsMotd, generateSecretsMotdScript } from '../core/secrets-motd.js';
+} from '../core/secrets-rotation';
+import { unsealAll } from '../core/secrets-ops';
+import { restartService } from '../core/systemd';
+import { checkHealth } from '../core/health';
+import { listSnapshots, restoreSnapshot, snapshotApp } from '../core/secrets-snapshots';
+import { auditLog } from '../core/secrets-audit';
+import { summariseSecrets, formatSecretsMotd, generateSecretsMotdScript } from '../core/secrets-motd';
 
 function getDbSecretsDir(): string {
   const reg = load();

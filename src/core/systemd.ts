@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
-import { execSafe } from './exec.js';
-import { assertServiceName } from './validate.js';
+import { execSafe } from './exec';
+import { assertServiceName } from './validate';
 
 let _systemdAvailable: boolean | null = null;
 

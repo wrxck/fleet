@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import type { AppEntry } from './registry.js';
+import type { AppEntry } from './registry';
 
 vi.mock('./exec.js', () => ({
   execSafe: vi.fn(),
@@ -20,10 +20,10 @@ vi.mock('./docker.js', () => ({
   listContainers: vi.fn(),
 }));
 
-import { execSafe } from './exec.js';
-import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable } from './systemd.js';
-import { listContainers } from './docker.js';
-import { checkHealth, checkHttp, checkAllHealth } from './health.js';
+import { execSafe } from './exec';
+import { getServiceStatus, getMultipleServiceStatuses, systemdAvailable } from './systemd';
+import { listContainers } from './docker';
+import { checkHealth, checkHttp, checkAllHealth } from './health';
 
 const mockedExec = vi.mocked(execSafe);
 const mockedGetServiceStatus = vi.mocked(getServiceStatus);

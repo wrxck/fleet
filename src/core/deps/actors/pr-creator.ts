@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { execSafe } from '../../exec.js';
-import type { AppEntry } from '../../registry.js';
-import type { Finding } from '../types.js';
+import { execSafe } from '../../exec';
+import type { AppEntry } from '../../registry';
+import type { Finding } from '../types';
 
 export interface VersionBump {
   file: string;

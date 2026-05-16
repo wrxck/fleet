@@ -3,8 +3,8 @@ import React from 'react';
 import { render } from 'ink-testing-library';
 import { describe, it, expect } from 'vitest';
 
-import type { Signal } from '../../../core/routines/schema.js';
-import { SignalsGrid } from './SignalsGrid.js';
+import type { Signal } from '../../../core/routines/schema';
+import { SignalsGrid } from './SignalsGrid';
 
 const mkSignal = (kind: Signal['kind'], state: Signal['state'], detail = ''): Signal => ({
   repo: 'demo',

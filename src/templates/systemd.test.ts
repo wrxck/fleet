@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateServiceFile } from './systemd.js';
+import { generateServiceFile } from './systemd';
 
 function makeOpts(overrides: Partial<Parameters<typeof generateServiceFile>[0]> = {}) {
   return {

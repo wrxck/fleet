@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 
 import { Box, Text } from 'ink';
 
-import type { Signal, SignalKind } from '../../../core/routines/schema.js';
-import { signalStateColor, signalStateGlyph, truncate } from '../format.js';
+import type { Signal, SignalKind } from '../../../core/routines/schema';
+import { signalStateColor, signalStateGlyph, truncate } from '../format';
 
 export interface SignalsGridRow {
   repo: string;

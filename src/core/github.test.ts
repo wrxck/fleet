@@ -5,12 +5,12 @@ vi.mock('./exec.js', () => ({
 }));
 
 vi.mock('./errors.js', async () => {
-  const actual = await vi.importActual<typeof import('./errors.js')>('./errors.js');
+  const actual = await vi.importActual<typeof import('./errors')>('./errors.js');
   return actual;
 });
 
 vi.mock('./validate.js', async () => {
-  const actual = await vi.importActual<typeof import('./validate.js')>('./validate.js');
+  const actual = await vi.importActual<typeof import('./validate')>('./validate.js');
   return actual;
 });
 
@@ -19,7 +19,7 @@ vi.mock('node:fs', async () => {
   return { ...actual, writeFileSync: vi.fn(), unlinkSync: vi.fn() };
 });
 
-import { execSafe } from './exec.js';
+import { execSafe } from './exec';
 import {
   GITHUB_ORG,
   isGhAuthenticated,
@@ -30,8 +30,8 @@ import {
   createPullRequest,
   listPullRequests,
   protectBranch,
-} from './github.js';
-import { GitError } from './errors.js';
+} from './github';
+import { GitError } from './errors';
 
 const mockExec = execSafe as ReturnType<typeof vi.fn>;
 

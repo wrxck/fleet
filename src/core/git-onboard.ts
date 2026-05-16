@@ -2,9 +2,9 @@ import {
   GitStatus, ensureGitignore, gitInit, gitAdd, gitCommit,
   gitCheckout, gitPush, gitPushAll, gitAddRemote, gitSetRemoteUrl,
   branchExists, hasCommits,
-} from './git.js';
-import * as github from './github.js';
-import { load, findApp, save } from './registry.js';
+} from './git';
+import * as github from './github';
+import { load, findApp, save } from './registry';
 
 export type OnboardScenario = 'fresh' | 'migrate' | 'no-remote' | 'resume';
 

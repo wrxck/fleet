@@ -4,9 +4,9 @@ vi.mock('../core/registry.js', () => ({
   load: vi.fn(),
 }));
 
-import { load } from '../core/registry.js';
-import { generateUnsealService } from './unseal.js';
-import type { Registry, AppEntry } from '../core/registry.js';
+import { load } from '../core/registry';
+import { generateUnsealService } from './unseal';
+import type { Registry, AppEntry } from '../core/registry';
 
 const mockLoad = vi.mocked(load);
 

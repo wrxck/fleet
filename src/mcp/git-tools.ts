@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { load, findApp } from '../core/registry.js';
-import { getGitStatus, getProjectRoot, gitAddTracked, gitCommit, gitCheckout, gitPush } from '../core/git.js';
-import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard.js';
-import * as github from '../core/github.js';
-import { AppNotFoundError } from '../core/errors.js';
+import { load, findApp } from '../core/registry';
+import { getGitStatus, getProjectRoot, gitAddTracked, gitCommit, gitCheckout, gitPush } from '../core/git';
+import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard';
+import * as github from '../core/github';
+import { AppNotFoundError } from '../core/errors';
 
 function requireApp(name: string) {
   const reg = load();

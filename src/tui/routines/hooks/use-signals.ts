@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { Signal } from '../../../core/routines/schema.js';
-import type { SignalCollector, SignalTarget } from '../../../core/routines/signals-collector.js';
+import type { Signal } from '../../../core/routines/schema';
+import type { SignalCollector, SignalTarget } from '../../../core/routines/signals-collector';
 
 export interface UseSignalsResult {
   snapshot: Map<string, Signal[]>;
