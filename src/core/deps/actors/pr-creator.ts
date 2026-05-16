@@ -2,13 +2,18 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { execSafe } from '../../exec.js';
+import { getGitStatus } from '../../git.js';
 import type { AppEntry } from '../../registry.js';
 import type { Finding } from '../types.js';
 
 export interface VersionBump {
   file: string;
-  search: string;
+  searchRegex: RegExp;
   replace: string;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function generateVersionBump(finding: Finding): VersionBump | null {
@@ -16,30 +21,34 @@ export function generateVersionBump(finding: Finding): VersionBump | null {
     return null;
   }
 
+  const escName = escapeRegex(finding.package);
+  const escCurrent = escapeRegex(finding.currentVersion);
+
   switch (finding.source) {
     case 'npm':
       return {
         file: 'package.json',
-        search: `"${finding.package}": "${finding.currentVersion}"`,
-        replace: `"${finding.package}": "${finding.latestVersion}"`,
+        // capture optional leading range operator (^, ~, >=, <=, >, <, =) so it survives the rewrite
+        searchRegex: new RegExp(`("${escName}"\\s*:\\s*")([\\^~>=<]*)${escCurrent}(")`),
+        replace: `$1$2${finding.latestVersion}$3`,
       };
     case 'composer':
       return {
         file: 'composer.json',
-        search: `"${finding.package}": "${finding.currentVersion}"`,
-        replace: `"${finding.package}": "${finding.latestVersion}"`,
+        searchRegex: new RegExp(`("${escName}"\\s*:\\s*")([\\^~>=<]*)${escCurrent}(")`),
+        replace: `$1$2${finding.latestVersion}$3`,
       };
     case 'pip':
       return {
         file: 'requirements.txt',
-        search: `${finding.package}==${finding.currentVersion}`,
-        replace: `${finding.package}==${finding.latestVersion}`,
+        searchRegex: new RegExp(`(${escName}==)${escCurrent}\\b`),
+        replace: `$1${finding.latestVersion}`,
       };
     case 'docker-image':
       return {
         file: 'Dockerfile',
-        search: `${finding.package}:${finding.currentVersion}`,
-        replace: `${finding.package}:${finding.latestVersion}`,
+        searchRegex: new RegExp(`(${escName}:)${escCurrent}\\b`),
+        replace: `$1${finding.latestVersion}`,
       };
     default:
       return null;
@@ -75,11 +84,18 @@ export function buildPrBody(findings: Finding[]): string {
   return lines.join('\n');
 }
 
+export interface CreateDepsPrResult {
+  branch: string;
+  bumps: VersionBump[];
+  prUrl?: string;
+  error?: string;
+}
+
 export function createDepsPr(
   app: AppEntry,
   findings: Finding[],
   dryRun: boolean,
-): { branch: string; bumps: VersionBump[]; prUrl?: string } {
+): CreateDepsPrResult {
   const fixable = findings.filter(f => f.fixable);
   const bumps = fixable.map(generateVersionBump).filter((b): b is VersionBump => b !== null);
 
@@ -94,28 +110,79 @@ export function createDepsPr(
     return { branch, bumps };
   }
 
-  const sshEnv: Record<string, string> = process.env.SSH_AUTH_SOCK ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {};
-  execSafe('git', ['checkout', 'develop'], { cwd: app.composePath });
-  execSafe('git', ['pull'], { cwd: app.composePath, env: sshEnv });
-  execSafe('git', ['checkout', '-b', branch], { cwd: app.composePath });
+  // Working-tree precheck: refuse to operate on a dirty repo. Otherwise the
+  // checkout/pull below can fail mid-way and leave the repo in a partial state,
+  // or worse, run on stale content.
+  const status = getGitStatus(app.composePath);
+  if (!status.initialised) {
+    return { branch: '', bumps: [], error: `${app.composePath} is not a git repo` };
+  }
+  if (!status.clean) {
+    return {
+      branch: '',
+      bumps: [],
+      error: `working tree at ${app.composePath} is dirty (${status.staged} staged, ${status.modified} modified, ${status.untracked} untracked) — commit or stash before running deps fix`,
+    };
+  }
 
+  const sshEnv: Record<string, string> = process.env.SSH_AUTH_SOCK ? { SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK } : {};
+
+  const checkoutDevelop = execSafe('git', ['checkout', 'develop'], { cwd: app.composePath });
+  if (!checkoutDevelop.ok) {
+    return { branch: '', bumps: [], error: `git checkout develop failed: ${checkoutDevelop.stderr}` };
+  }
+
+  const pull = execSafe('git', ['pull'], { cwd: app.composePath, env: sshEnv });
+  if (!pull.ok) {
+    return { branch: '', bumps: [], error: `git pull failed: ${pull.stderr}` };
+  }
+
+  const checkoutBranch = execSafe('git', ['checkout', '-b', branch], { cwd: app.composePath });
+  if (!checkoutBranch.ok) {
+    return { branch: '', bumps: [], error: `git checkout -b ${branch} failed: ${checkoutBranch.stderr}` };
+  }
+
+  // Apply each bump and track which files actually changed.
+  const changedFiles = new Set<string>();
   for (const bump of bumps) {
     const filePath = join(app.composePath, bump.file);
     if (!existsSync(filePath)) continue;
-    let content = readFileSync(filePath, 'utf-8');
-    content = content.replace(bump.search, bump.replace);
-    writeFileSync(filePath, content);
+    const before = readFileSync(filePath, 'utf-8');
+    const after = before.replace(bump.searchRegex, bump.replace);
+    if (after !== before) {
+      writeFileSync(filePath, after);
+      changedFiles.add(bump.file);
+    }
   }
 
-  const files = [...new Set(bumps.map(b => b.file))];
-  execSafe('git', ['add', ...files], { cwd: app.composePath });
+  // Range mismatch / unknown file content / nothing to update — abort before
+  // committing or pushing so we never open an empty PR.
+  if (changedFiles.size === 0) {
+    return {
+      branch: '',
+      bumps: [],
+      error: `no files changed: regex did not match any of ${[...new Set(bumps.map(b => b.file))].join(', ')}; the manifest may already be at the target version, or the version range syntax is unsupported`,
+    };
+  }
+
+  const files = [...changedFiles];
+  const add = execSafe('git', ['add', ...files], { cwd: app.composePath });
+  if (!add.ok) {
+    return { branch: '', bumps: [], error: `git add failed: ${add.stderr}` };
+  }
 
   const commitMsg = bumps.length === 1
     ? `chore(deps): update ${fixable[0].package} from ${fixable[0].currentVersion} to ${fixable[0].latestVersion}`
     : `chore(deps): update ${bumps.length} dependencies`;
-  execSafe('git', ['commit', '-m', commitMsg], { cwd: app.composePath });
+  const commit = execSafe('git', ['commit', '-m', commitMsg], { cwd: app.composePath });
+  if (!commit.ok) {
+    return { branch: '', bumps: [], error: `git commit failed: ${commit.stderr}` };
+  }
 
-  execSafe('git', ['push', '-u', 'origin', branch], { cwd: app.composePath, env: sshEnv });
+  const push = execSafe('git', ['push', '-u', 'origin', branch], { cwd: app.composePath, env: sshEnv });
+  if (!push.ok) {
+    return { branch: '', bumps: [], error: `git push failed: ${push.stderr}` };
+  }
 
   if (!app.gitRepo) return { branch, bumps };
 
