@@ -1,4 +1,4 @@
-import type { Routine, RoutineTask, RunEvent, Signal, SignalKind } from '../core/routines/schema.js';
+import type { Routine, RoutineTask, RunEvent, Signal, SignalKind } from '../core/routines/schema';
 
 export interface ScheduledEntry {
   routineId: string;

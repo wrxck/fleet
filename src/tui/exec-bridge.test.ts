@@ -14,7 +14,7 @@ vi.mock('node:url', () => ({
   fileURLToPath: vi.fn().mockReturnValue('/fake/path/exec-bridge.ts'),
 }));
 
-import { runFleetCommand, runFleetJson, streamFleetCommand } from './exec-bridge.js';
+import { runFleetCommand, runFleetJson, streamFleetCommand } from './exec-bridge';
 
 beforeEach(() => {
   vi.clearAllMocks();

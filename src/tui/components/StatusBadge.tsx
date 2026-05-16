@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text } from 'ink';
-import { statusColor, healthColor } from '../theme.js';
+import { statusColor, healthColor } from '../theme';
 
 interface StatusBadgeProps {
   value: string;

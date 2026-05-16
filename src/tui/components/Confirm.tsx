@@ -2,8 +2,8 @@ import React from 'react';
 import { Text, Box } from 'ink';
 import { Modal } from '@matthesketh/ink-modal';
 
-import { useAppState } from '../state.js';
-import { colors } from '../theme.js';
+import { useAppState } from '../state';
+import { colors } from '../theme';
 
 export function Confirm(): React.JSX.Element | null {
   const { confirmAction } = useAppState();

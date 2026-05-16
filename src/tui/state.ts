@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, type Dispatch } from 'react';
-import type { TuiState, Action, View } from './types.js';
+import type { TuiState, Action, View } from './types';
 
 const TOP_VIEWS: View[] = ['dashboard', 'health', 'secrets', 'logs-multi'];
 

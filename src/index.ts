@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { run } from './cli.js';
-import { error } from './ui/output.js';
-import { FleetError } from './core/errors.js';
+import { run } from './cli';
+import { error } from './ui/output';
+import { FleetError } from './core/errors';
 
 const isMcp = process.argv.includes('mcp');
 const isInstallMcp = process.argv.includes('install-mcp');

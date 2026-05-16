@@ -1,8 +1,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
-import type { RoutineTask, RunEvent } from '../../core/routines/schema.js';
-import type { RunContext, RunnerAdapter } from '../types.js';
+import type { RoutineTask, RunEvent } from '../../core/routines/schema';
+import type { RunContext, RunnerAdapter } from '../types';
 
 export interface McpCallOptions {
   command?: string;

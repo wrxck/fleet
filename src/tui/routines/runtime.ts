@@ -3,18 +3,18 @@ import { fileURLToPath } from 'node:url';
 
 import type Database from 'better-sqlite3';
 
-import { createStdoutNotifier } from '../../adapters/notifier/index.js';
-import { builtInSignalProviders } from '../../adapters/signals/index.js';
-import type { RoutineEngine } from '../../core/routines/engine.js';
-import { closeDb, openDb } from '../../core/routines/db.js';
-import { builtInDefaultRoutines } from '../../core/routines/defaults.js';
-import { RoutineEngine as Engine } from '../../core/routines/engine.js';
-import { createClaudeCliRunner } from '../../adapters/runner/claude-cli.js';
-import { createMcpCallRunner } from '../../adapters/runner/mcp-call.js';
-import { createShellRunner } from '../../adapters/runner/shell.js';
-import { createSystemdTimerAdapter } from '../../adapters/scheduler/systemd-timer.js';
-import { RoutineStore } from '../../core/routines/store.js';
-import { SignalCollector } from '../../core/routines/signals-collector.js';
+import { createStdoutNotifier } from '../../adapters/notifier/index';
+import { builtInSignalProviders } from '../../adapters/signals/index';
+import type { RoutineEngine } from '../../core/routines/engine';
+import { closeDb, openDb } from '../../core/routines/db';
+import { builtInDefaultRoutines } from '../../core/routines/defaults';
+import { RoutineEngine as Engine } from '../../core/routines/engine';
+import { createClaudeCliRunner } from '../../adapters/runner/claude-cli';
+import { createMcpCallRunner } from '../../adapters/runner/mcp-call';
+import { createShellRunner } from '../../adapters/runner/shell';
+import { createSystemdTimerAdapter } from '../../adapters/scheduler/systemd-timer';
+import { RoutineStore } from '../../core/routines/store';
+import { SignalCollector } from '../../core/routines/signals-collector';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = join(__dirname, '..', '..', '..', 'data');

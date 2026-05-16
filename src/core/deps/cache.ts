@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from '
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { DepsCache } from './types.js';
+import type { DepsCache } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CACHE_PATH = join(__dirname, '..', '..', '..', 'data', 'deps-cache.json');

@@ -1,13 +1,13 @@
-import type { AppEntry } from '../registry.js';
-import type { Collector, DepsCache, DepsConfig, Finding, ScanError } from './types.js';
-import { NpmCollector } from './collectors/npm.js';
-import { ComposerCollector } from './collectors/composer.js';
-import { PipCollector } from './collectors/pip.js';
-import { DockerImageCollector } from './collectors/docker-image.js';
-import { DockerRunningCollector } from './collectors/docker-running.js';
-import { EolCollector } from './collectors/eol.js';
-import { VulnerabilityCollector } from './collectors/vulnerability.js';
-import { GitHubPrCollector } from './collectors/github-pr.js';
+import type { AppEntry } from '../registry';
+import type { Collector, DepsCache, DepsConfig, Finding, ScanError } from './types';
+import { NpmCollector } from './collectors/npm';
+import { ComposerCollector } from './collectors/composer';
+import { PipCollector } from './collectors/pip';
+import { DockerImageCollector } from './collectors/docker-image';
+import { DockerRunningCollector } from './collectors/docker-running';
+import { EolCollector } from './collectors/eol';
+import { VulnerabilityCollector } from './collectors/vulnerability';
+import { GitHubPrCollector } from './collectors/github-pr';
 
 export function createCollectors(config: DepsConfig): Collector[] {
   return [
@@ -17,7 +17,7 @@ export function createCollectors(config: DepsConfig): Collector[] {
     new DockerImageCollector(config.severityOverrides),
     new DockerRunningCollector(config.severityOverrides),
     new EolCollector(config.severityOverrides.eolDaysWarning),
-    new VulnerabilityCollector(),
+    new VulnerabilityCollector(config.osvSkipPatterns),
     new GitHubPrCollector(),
   ];
 }

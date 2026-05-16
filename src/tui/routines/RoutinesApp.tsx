@@ -5,24 +5,24 @@ import { Tabs } from '@matthesketh/ink-tabs';
 import { Modal } from '@matthesketh/ink-modal';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 
-import type { AppEntry, Registry } from '../../core/registry.js';
-import type { Routine } from '../../core/routines/schema.js';
-import type { RoutinesRuntime } from './runtime.js';
-import { CostTab } from './tabs/CostTab.js';
-import { DashboardTab } from './tabs/DashboardTab.js';
-import { GitTab } from './tabs/GitTab.js';
-import { LogsTab } from './tabs/LogsTab.js';
-import { OpsTab } from './tabs/OpsTab.js';
-import { RepoDetailView } from './tabs/RepoDetailView.js';
-import { RoutinesTab } from './tabs/RoutinesTab.js';
-import { ScaffoldTab } from './tabs/ScaffoldTab.js';
-import { SecurityTab } from './tabs/SecurityTab.js';
-import { SettingsTab } from './tabs/SettingsTab.js';
-import { TimelineTab } from './tabs/TimelineTab.js';
-import { RoutineForm } from './components/RoutineForm.js';
-import { CommandPalette, type PaletteAction } from './components/CommandPalette.js';
-import { LiveRunPanel } from './components/LiveRunPanel.js';
-import { useSignals } from './hooks/use-signals.js';
+import type { AppEntry, Registry } from '../../core/registry';
+import type { Routine } from '../../core/routines/schema';
+import type { RoutinesRuntime } from './runtime';
+import { CostTab } from './tabs/CostTab';
+import { DashboardTab } from './tabs/DashboardTab';
+import { GitTab } from './tabs/GitTab';
+import { LogsTab } from './tabs/LogsTab';
+import { OpsTab } from './tabs/OpsTab';
+import { RepoDetailView } from './tabs/RepoDetailView';
+import { RoutinesTab } from './tabs/RoutinesTab';
+import { ScaffoldTab } from './tabs/ScaffoldTab';
+import { SecurityTab } from './tabs/SecurityTab';
+import { SettingsTab } from './tabs/SettingsTab';
+import { TimelineTab } from './tabs/TimelineTab';
+import { RoutineForm } from './components/RoutineForm';
+import { CommandPalette, type PaletteAction } from './components/CommandPalette';
+import { LiveRunPanel } from './components/LiveRunPanel';
+import { useSignals } from './hooks/use-signals';
 
 type ActiveTab =
   | 'dashboard' | 'routines' | 'git' | 'ops' | 'security' | 'logs'

@@ -1,4 +1,4 @@
-import type { SignalState } from '../../core/routines/schema.js';
+import type { SignalState } from '../../core/routines/schema';
 
 export const signalStateColor: Record<SignalState, string> = {
   ok: 'green',

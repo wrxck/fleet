@@ -3,8 +3,8 @@ import React from 'react';
 import { render } from 'ink-testing-library';
 import { describe, it, expect } from 'vitest';
 
-import type { Signal } from '../../../core/routines/schema.js';
-import { SignalsGrid } from './SignalsGrid.js';
+import type { Signal } from '../../../core/routines/schema';
+import { SignalsGrid } from './SignalsGrid';
 
 const mkSignal = (kind: Signal['kind'], state: Signal['state'], detail = ''): Signal => ({
   repo: 'demo',
@@ -29,11 +29,11 @@ describe('SignalsGrid', () => {
   });
 
   it('renders a row with repo name when signals present', () => {
-    const rows = [{ repo: 'abmanandvan', signals: [mkSignal('git-clean', 'ok')] }];
+    const rows = [{ repo: 'movers-co', signals: [mkSignal('git-clean', 'ok')] }];
     const { lastFrame } = render(
       <SignalsGrid rows={rows} selectedIndex={0} kinds={['git-clean']} />,
     );
-    expect(lastFrame()).toContain('abmanandvan');
+    expect(lastFrame()).toContain('movers-co');
   });
 
   it('shows empty-state message with no repos', () => {

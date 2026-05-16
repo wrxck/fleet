@@ -1,12 +1,12 @@
-import { load, findApp } from '../core/registry.js';
-import { AppNotFoundError } from '../core/errors.js';
+import { load, findApp } from '../core/registry';
+import { AppNotFoundError } from '../core/errors';
 import {
   getGitStatus, getProjectRoot, gitAdd, gitCommit, gitCheckout, gitPush,
-} from '../core/git.js';
-import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard.js';
-import * as github from '../core/github.js';
-import { confirm } from '../ui/confirm.js';
-import { c, heading, table, success, error, info, warn } from '../ui/output.js';
+} from '../core/git';
+import { detectScenario, describeOnboardPlan, executeOnboard } from '../core/git-onboard';
+import * as github from '../core/github';
+import { confirm } from '../ui/confirm';
+import { c, heading, table, success, error, info, warn } from '../ui/output';
 
 function requireApp(name: string) {
   const reg = load();
@@ -115,7 +115,7 @@ async function gitOnboardCmd(args: string[]): Promise<void> {
     return;
   }
 
-  const result = executeOnboard(scenario, r, app.name, app.name, status);
+  const result = await executeOnboard(scenario, r, app.name, app.name, status);
   heading(`Onboarded: ${app.name}`);
   result.steps.forEach(s => success(s));
   info(`repo: ${result.repoUrl}`);
@@ -145,7 +145,7 @@ async function gitOnboardAllCmd(args: string[]): Promise<void> {
     if (!yes && !await confirm(`Onboard ${app.name} (${scenario})?`)) { warn(`skipped ${app.name}`); continue; }
 
     try {
-      const result = executeOnboard(scenario, r, app.name, app.name, status);
+      const result = await executeOnboard(scenario, r, app.name, app.name, status);
       success(`${app.name}: onboarded (${result.scenario})`);
     } catch (err) {
       error(`${app.name}: ${err instanceof Error ? err.message : String(err)}`);

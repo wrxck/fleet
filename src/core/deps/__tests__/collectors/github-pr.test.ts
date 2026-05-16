@@ -4,9 +4,9 @@ vi.mock('../../../exec.js', () => ({
   execSafe: vi.fn(),
 }));
 
-import { execSafe } from '../../../exec.js';
-import type { AppEntry } from '../../../registry.js';
-import { GitHubPrCollector } from '../../collectors/github-pr.js';
+import { execSafe } from '../../../exec';
+import type { AppEntry } from '../../../registry';
+import { GitHubPrCollector } from '../../collectors/github-pr';
 
 const mockExec = vi.mocked(execSafe);
 
@@ -16,7 +16,7 @@ function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
     composeFile: null, serviceName: 'test-app', domains: [], port: 3000,
     usesSharedDb: false, type: 'service', containers: ['test-app'],
     dependsOnDatabases: false, registeredAt: '2026-01-01T00:00:00Z',
-    gitRepo: 'heskethwebdesign/test-app',
+    gitRepo: 'test-org/test-app',
     ...overrides,
   };
 }

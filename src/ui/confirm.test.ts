@@ -14,7 +14,7 @@ vi.mock('node:readline', () => ({
   createInterface: mockCreateInterface,
 }));
 
-import { confirm } from './confirm.js';
+import { confirm } from './confirm';
 
 beforeEach(() => {
   vi.clearAllMocks();

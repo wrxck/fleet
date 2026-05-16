@@ -1,6 +1,6 @@
-import { load, findApp } from '../core/registry.js';
-import { execSafe } from '../core/exec.js';
-import { restartService } from '../core/systemd.js';
+import { load, findApp } from '../core/registry';
+import { execSafe } from '../core/exec';
+import { restartService } from '../core/systemd';
 
 function log(msg: string): void {
   process.stdout.write(`[rollback] ${msg}\n`);

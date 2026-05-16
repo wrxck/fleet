@@ -1,7 +1,7 @@
-import { load, findApp } from '../core/registry.js';
-import { checkHealth, checkAllHealth } from '../core/health.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { c, icon, heading, table } from '../ui/output.js';
+import { load, findApp } from '../core/registry';
+import { checkHealth, checkAllHealth } from '../core/health';
+import { AppNotFoundError } from '../core/errors';
+import { c, icon, heading, table } from '../ui/output';
 
 export function healthCommand(args: string[]): void {
   const json = args.includes('--json');

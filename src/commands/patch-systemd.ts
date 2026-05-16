@@ -1,9 +1,9 @@
 import { copyFileSync, existsSync, renameSync, writeFileSync } from 'node:fs';
 
-import { load } from '../core/registry.js';
-import { readServiceFile } from '../core/systemd.js';
-import { execSafe } from '../core/exec.js';
-import { success, warn, info, error } from '../ui/output.js';
+import { load } from '../core/registry';
+import { readServiceFile } from '../core/systemd';
+import { execSafe } from '../core/exec';
+import { success, warn, info, error } from '../ui/output';
 
 const SERVICE_DIR = '/etc/systemd/system';
 

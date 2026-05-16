@@ -1,6 +1,6 @@
-import { load } from '../core/registry.js';
-import { createRuntime } from '../tui/routines/runtime.js';
-import { error } from '../ui/output.js';
+import { load } from '../core/registry';
+import { createRuntime } from '../tui/routines/runtime';
+import { error } from '../ui/output';
 
 interface ParsedArgs {
   id?: string;

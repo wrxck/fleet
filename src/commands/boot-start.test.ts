@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as registry from '../core/registry.js';
-import * as refreshModule from '../core/boot-refresh.js';
-import * as docker from '../core/docker.js';
-import { bootStartCommand } from './boot-start.js';
+import * as registry from '../core/registry';
+import * as refreshModule from '../core/boot-refresh';
+import * as docker from '../core/docker';
+import { bootStartCommand } from './boot-start';
 
 vi.mock('../core/registry.js');
 vi.mock('../core/boot-refresh.js');

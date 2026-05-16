@@ -15,7 +15,7 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import type { AppEntry } from './registry.js';
+import type { AppEntry } from './registry';
 
 export interface LogSource {
   /** Logical app name (used in the prefix). */

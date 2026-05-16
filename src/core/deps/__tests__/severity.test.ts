@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { defaultConfig } from '../config.js';
-import { severityFromVersionDelta, severityFromEol, severityFromCvss } from '../severity.js';
+import { defaultConfig } from '../config';
+import { severityFromVersionDelta, severityFromEol, severityFromCvss } from '../severity';
 
 const overrides = defaultConfig().severityOverrides;
 

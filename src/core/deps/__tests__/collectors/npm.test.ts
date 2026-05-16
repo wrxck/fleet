@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import type { AppEntry } from '../../../registry.js';
-import { defaultConfig } from '../../config.js';
-import { NpmCollector } from '../../collectors/npm.js';
+import type { AppEntry } from '../../../registry';
+import { defaultConfig } from '../../config';
+import { NpmCollector } from '../../collectors/npm';
 
 let tmpDir: string;
 
@@ -94,6 +94,31 @@ describe('NpmCollector', () => {
       const findings = await collector.collect(makeApp(tmpDir));
       expect(findings).toHaveLength(1);
       expect(findings[0].currentVersion).toBe('18.3.1');
+    });
+
+    it('passes an AbortSignal to fetch (timeout wrapper)', async () => {
+      writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({
+        dependencies: { react: '18.3.1' },
+      }));
+
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ version: '19.1.0' }) });
+
+      await collector.collect(makeApp(tmpDir));
+      const init = mockFetch.mock.calls[0][1] as RequestInit;
+      expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('handles aborted fetch (timeout) without crashing', async () => {
+      writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({
+        dependencies: { react: '18.3.1' },
+      }));
+
+      mockFetch.mockRejectedValueOnce(
+        Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }),
+      );
+
+      const findings = await collector.collect(makeApp(tmpDir));
+      expect(findings).toHaveLength(0);
     });
   });
 });

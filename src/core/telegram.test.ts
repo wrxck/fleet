@@ -10,7 +10,7 @@ vi.mock('node:fs', async () => {
 });
 
 import { existsSync, readFileSync } from 'node:fs';
-import { loadTelegramConfig, sendTelegram } from './telegram.js';
+import { loadTelegramConfig, sendTelegram } from './telegram';
 
 const mockExists = existsSync as ReturnType<typeof vi.fn>;
 const mockRead = readFileSync as ReturnType<typeof vi.fn>;

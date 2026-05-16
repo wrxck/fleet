@@ -10,24 +10,52 @@ import (
 
 // TelegramAdapter wraps *bot.Bot and implements the Adapter interface.
 type TelegramAdapter struct {
-	b              *bot.Bot
-	allowedChatIDs []int64
-	alertChatIDs   []int64
+	b                *bot.Bot
+	allowedChatIDs   []int64
+	allowedSenderIDs []int64
+	alertChatIDs     []int64
 }
 
 // NewTelegram creates a TelegramAdapter. The bot.Bot is initialised with the
 // first allowedChatID as the primary chat (required by bot.New), falling back
 // to 0 when the slice is empty.
-func NewTelegram(botToken string, allowedChatIDs, alertChatIDs []int64) *TelegramAdapter {
+//
+// allowedSenderIDs gates per-user dispatch via the router's SenderAuthorizer
+// path. When empty, sender-level auth is a no-op and the chat-level allowlist
+// is the only gate (preserves single-user installs).
+func NewTelegram(botToken string, allowedChatIDs, allowedSenderIDs, alertChatIDs []int64) *TelegramAdapter {
 	var primaryChatID int64
 	if len(allowedChatIDs) > 0 {
 		primaryChatID = allowedChatIDs[0]
 	}
 	return &TelegramAdapter{
-		b:              bot.New(botToken, primaryChatID),
-		allowedChatIDs: allowedChatIDs,
-		alertChatIDs:   alertChatIDs,
+		b:                bot.New(botToken, primaryChatID),
+		allowedChatIDs:   allowedChatIDs,
+		allowedSenderIDs: allowedSenderIDs,
+		alertChatIDs:     alertChatIDs,
 	}
+}
+
+// IsAuthorizedSender reports whether senderID is in the allowed list.
+// Telegram senders are user IDs; we authorise by chat ID (transport-level)
+// AND by sender ID for parity with the BlueBubbles adapter.
+//
+// If no per-sender list is configured, fall back to chat-level allow
+// (preserves existing behaviour for single-user installs).
+func (a *TelegramAdapter) IsAuthorizedSender(senderID string) bool {
+	if len(a.allowedSenderIDs) == 0 {
+		return true
+	}
+	n, err := strconv.ParseInt(senderID, 10, 64)
+	if err != nil {
+		return false
+	}
+	for _, id := range a.allowedSenderIDs {
+		if id == n {
+			return true
+		}
+	}
+	return false
 }
 
 // Name returns the adapter identifier.

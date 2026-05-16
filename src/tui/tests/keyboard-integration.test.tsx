@@ -2,7 +2,7 @@ import React from 'react';
 import { render } from 'ink-testing-library';
 import { describe, it, expect } from 'vitest';
 
-import { TestApp } from './test-app.js';
+import { TestApp } from './test-app';
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const apps = ['app-alpha', 'app-bravo', 'app-charlie'];

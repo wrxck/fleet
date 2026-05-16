@@ -6,26 +6,26 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import { getStatusData } from '../commands/status.js';
-import { load, findApp, save, addApp, type AppEntry } from '../core/registry.js';
-import { startService, stopService, restartService } from '../core/systemd.js';
-import { getContainerLogs, getContainersByCompose } from '../core/docker.js';
-import { checkHealth, checkAllHealth } from '../core/health.js';
-import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx.js';
-import { generateNginxConfig } from '../templates/nginx.js';
-import { composeBuild } from '../core/docker.js';
-import { execSafe } from '../core/exec.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { assertAppName, assertServiceName, assertFilePath, assertDomain } from '../core/validate.js';
-import { loadManifest, listSecrets, isInitialized } from '../core/secrets.js';
-import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops.js';
-import { validateApp, validateAll } from '../core/secrets-validate.js';
-import { freezeApp, unfreezeApp } from '../commands/freeze.js';
-import { registerGitTools } from './git-tools.js';
-import { registerSecretsTools } from './secrets-tools.js';
-import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy.js';
-import { snapshotEgress } from '../core/egress.js';
-import { registerDepsTools } from './deps-tools.js';
+import { getStatusData } from '../commands/status';
+import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
+import { startService, stopService, restartService } from '../core/systemd';
+import { getContainerLogs, getContainersByCompose } from '../core/docker';
+import { checkHealth, checkAllHealth } from '../core/health';
+import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx';
+import { generateNginxConfig } from '../templates/nginx';
+import { composeBuild } from '../core/docker';
+import { execSafe } from '../core/exec';
+import { AppNotFoundError } from '../core/errors';
+import { assertAppName, assertServiceName, assertFilePath, assertDomain, assertComposeFile } from '../core/validate';
+import { loadManifest, listSecrets, isInitialized } from '../core/secrets';
+import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops';
+import { validateApp, validateAll } from '../core/secrets-validate';
+import { freezeApp, unfreezeApp } from '../commands/freeze';
+import { registerGitTools } from './git-tools';
+import { registerSecretsTools } from './secrets-tools';
+import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy';
+import { snapshotEgress } from '../core/egress';
+import { registerDepsTools } from './deps-tools';
 
 function requireApp(name: string) {
   const reg = load();
@@ -382,7 +382,7 @@ export async function startMcpServer(): Promise<void> {
         assertAppName(params.name);
         assertFilePath(params.composePath);
         if (params.serviceName) assertServiceName(params.serviceName);
-        if (params.composeFile) assertFilePath(params.composeFile);
+        if (params.composeFile) assertComposeFile(params.composeFile);
         for (const d of (params.domains ?? [])) assertDomain(d);
       } catch (err) {
         return text(`Validation error: ${(err as Error).message}`);
@@ -391,9 +391,6 @@ export async function startMcpServer(): Promise<void> {
       if (!existsSync(params.composePath)) {
         return text(`Error: composePath does not exist: ${params.composePath}`);
       }
-
-      const reg = load();
-      const existing = findApp(reg, params.name);
 
       let containers = params.containers;
       if (!containers || containers.length === 0) {
@@ -416,9 +413,13 @@ export async function startMcpServer(): Promise<void> {
         registeredAt: new Date().toISOString(),
       };
 
-      save(addApp(reg, entry));
+      let existed = false;
+      await withRegistry(reg => {
+        existed = !!findApp(reg, params.name);
+        return addApp(reg, entry);
+      });
 
-      const action = existing ? 'Updated' : 'Registered';
+      const action = existed ? 'Updated' : 'Registered';
       return text(`${action} app "${params.name}":\n${JSON.stringify(entry, null, 2)}`);
     }
   );
@@ -431,7 +432,7 @@ export async function startMcpServer(): Promise<void> {
       reason: z.string().optional().describe('Reason for freezing'),
     },
     async ({ app, reason }) => {
-      freezeApp(app, reason);
+      await freezeApp(app, reason);
       return text(`Frozen ${app}${reason ? `: ${reason}` : ''}`);
     }
   );
@@ -441,7 +442,7 @@ export async function startMcpServer(): Promise<void> {
     'Unfreeze a frozen service: clear frozen state, enable and start the service.',
     { app: z.string().describe('App name') },
     async ({ app }) => {
-      unfreezeApp(app);
+      await unfreezeApp(app);
       return text(`Unfrozen ${app} — service enabled and started`);
     }
   );

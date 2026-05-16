@@ -3,10 +3,10 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import type { RunEvent } from '../../core/routines/schema.js';
-import type { RunContext } from '../types.js';
-import { mkExecTmpDir, rmExecTmpDir } from '../../core/routines/test-utils.js';
-import { createMcpCallRunner } from './mcp-call.js';
+import type { RunEvent } from '../../core/routines/schema';
+import type { RunContext } from '../types';
+import { mkExecTmpDir, rmExecTmpDir } from '../../core/routines/test-utils';
+import { createMcpCallRunner } from './mcp-call';
 
 const makeCtx = (dir: string): RunContext => ({
   repo: null,

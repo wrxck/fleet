@@ -1,15 +1,16 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, chmodSync, statSync, rmSync, copyFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SecretsError, VaultNotInitializedError } from './errors.js';
-import { execSafe } from './exec.js';
-import { assertAppName, assertFilePath } from './validate.js';
+import { SecretsError, VaultNotInitializedError } from './errors';
+import { execSafe } from './exec';
+import { assertAppName, assertFilePath } from './validate';
+import { withFileLock } from './file-lock';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const VAULT_DIR = join(__dirname, '..', '..', 'vault');
 export const KEY_PATH = '/etc/fleet/age.key';
 export const RUNTIME_DIR = '/run/fleet-secrets';
-const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
+export const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
 const SECRET_DELIMITER = '---SECRET:';
 
 export interface SecretMetadata {
@@ -29,8 +30,10 @@ export interface ManifestEntry {
   /** Per-secret metadata, keyed by secret name. Backwards-compatible: missing means
    * lastRotated falls back to lastSealedAt and provider is auto-classified at read time. */
   secrets?: Record<string, SecretMetadata>;
-  /** Per-app age recipient public key, used by harden --per-app to limit blast radius. */
+  /** per-app age recipient public key. required when mode === 'socket'. */
   recipient?: string;
+  /** delivery mode. defaults to 'unseal' (v1 tmpfs path) when undefined for backward compat. */
+  mode?: 'unseal' | 'socket';
 }
 
 export interface Manifest {
@@ -98,35 +101,110 @@ export function saveManifest(manifest: Manifest): void {
   writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
 }
 
-export function backupVaultFile(app: string): string | null {
+/**
+ * Run an arbitrary transaction under the manifest's inter-process lock.
+ * The callback receives no manifest — it's responsible for any load / save
+ * it needs (the seal flows do their own validate → backup → seal → cleanup
+ * dance and don't fit a simple load/mutate/save shape).
+ *
+ * Important: NOT reentrant. Wrap only the outermost RMW boundary; inner
+ * helpers should call plain `loadManifest` / `saveManifest`.
+ */
+export async function lockManifest<T>(fn: () => Promise<T> | T): Promise<T> {
+  return withFileLock(MANIFEST_PATH, fn);
+}
+
+/**
+ * Run a simple load → mutate → save transaction against the secrets
+ * manifest under an inter-process lock. Used by callers that need a
+ * straightforward RMW with no extra side-effects.
+ *
+ * The mutator may return a different Manifest object or mutate the input
+ * and return it. The returned value is persisted on a successful run; if
+ * the mutator throws, no save happens and the lock is released.
+ *
+ * Important: NOT reentrant. Wrap only the outermost RMW boundary; inner
+ * helpers should call plain `loadManifest` / `saveManifest`.
+ */
+export async function withManifest(
+  fn: (m: Manifest) => Manifest | Promise<Manifest>,
+): Promise<void> {
+  await lockManifest(async () => {
+    const manifest = loadManifest();
+    const next = await fn(manifest);
+    saveManifest(next);
+  });
+}
+
+// monotonic counter so two backupVaultFile calls in the same millisecond
+// (same process, same default-tag path) still produce distinct bak filenames.
+let backupSeq = 0;
+
+/**
+ * Create a per-op backup of an app's encrypted vault file.
+ *
+ * Each call produces a unique `.bak-<tag>` path so concurrent operations do
+ * not silently overwrite each other's recovery point. If you don't supply a
+ * tag, one is generated from PID + timestamp + an in-process monotonic
+ * counter. Callers MUST keep the returned path and pass it to
+ * `restoreVaultFile` / `removeBackup`.
+ */
+export function backupVaultFile(app: string, tag?: string): string | null {
   const manifest = loadManifest();
   const entry = manifest.apps[app];
   if (!entry) return null;
   const src = join(VAULT_DIR, entry.encryptedFile);
   if (!existsSync(src)) return null;
-  const bak = src + '.bak';
+  const t = tag ?? `${process.pid}-${Date.now()}-${++backupSeq}`;
+  const bak = `${src}.bak-${t}`;
   copyFileSync(src, bak);
   return bak;
 }
 
-export function restoreVaultFile(app: string): boolean {
+/**
+ * Find the newest `<encryptedFile>.bak-*` for an app, if any. Returns the full
+ * path (in VAULT_DIR) or null. Used as a best-effort fallback when no specific
+ * backup path was supplied (e.g. the simple CLI / MCP `secrets restore` flow).
+ */
+function findNewestBackup(encryptedFile: string): string | null {
+  if (!existsSync(VAULT_DIR)) return null;
+  const prefix = `${encryptedFile}.bak-`;
+  let newest: { path: string; mtime: number } | null = null;
+  for (const name of readdirSync(VAULT_DIR)) {
+    if (!name.startsWith(prefix)) continue;
+    const full = join(VAULT_DIR, name);
+    try {
+      const m = statSync(full).mtimeMs;
+      if (!newest || m > newest.mtime) newest = { path: full, mtime: m };
+    } catch {
+      // ignore stat failures — file may have been removed mid-scan
+    }
+  }
+  return newest ? newest.path : null;
+}
+
+export function restoreVaultFile(app: string, bakPath?: string): boolean {
   const manifest = loadManifest();
   const entry = manifest.apps[app];
   if (!entry) return false;
   const src = join(VAULT_DIR, entry.encryptedFile);
-  const bak = src + '.bak';
-  if (!existsSync(bak)) return false;
+  const bak = bakPath ?? findNewestBackup(entry.encryptedFile);
+  if (!bak || !existsSync(bak)) return false;
   copyFileSync(bak, src);
   rmSync(bak, { force: true });
   return true;
 }
 
-export function removeBackup(app: string): void {
+export function removeBackup(app: string, bakPath?: string): void {
+  if (bakPath) {
+    rmSync(bakPath, { force: true });
+    return;
+  }
   const manifest = loadManifest();
   const entry = manifest.apps[app];
   if (!entry) return;
-  const bak = join(VAULT_DIR, entry.encryptedFile) + '.bak';
-  rmSync(bak, { force: true });
+  const bak = findNewestBackup(entry.encryptedFile);
+  if (bak) rmSync(bak, { force: true });
 }
 
 export function ageEncrypt(plaintext: string): string {

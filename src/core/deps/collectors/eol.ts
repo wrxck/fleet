@@ -1,9 +1,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { AppEntry } from '../../registry.js';
-import type { Collector, Finding } from '../types.js';
-import { severityFromEol } from '../severity.js';
+import type { AppEntry } from '../../registry';
+import type { Collector, Finding } from '../types';
+import { severityFromEol } from '../severity';
 
 interface RuntimeRef {
   product: string;

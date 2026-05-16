@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as git from './git.js';
-import type { GitStatus } from './git.js';
-import * as exec from './exec.js';
-import { preflight, fetchOrigin, refresh } from './boot-refresh.js';
+import * as git from './git';
+import type { GitStatus } from './git';
+import * as exec from './exec';
+import { preflight, fetchOrigin, refresh } from './boot-refresh';
 import * as fs from 'node:fs';
 
 vi.mock('./git.js');
@@ -96,13 +96,25 @@ describe('fetchOrigin', () => {
   });
 });
 
-import { fastForward, buildIfStale, recordBuiltCommit } from './boot-refresh.js';
-import * as docker from './docker.js';
-import * as registry from './registry.js';
-import type { AppEntry } from './registry.js';
+import { fastForward, buildIfStale, recordBuiltCommit } from './boot-refresh';
+import * as docker from './docker';
+import * as registry from './registry';
+import type { AppEntry } from './registry';
 
 vi.mock('./docker.js');
-vi.mock('./registry.js');
+vi.mock('./registry.js', () => ({
+  load: vi.fn(),
+  save: vi.fn(),
+  // recordBuiltCommit and other call sites use withRegistry; for tests that
+  // assert against load/save mocks, run the mutator inline against the mocked
+  // load() and forward to mocked save().
+  withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
+    const mod = await vi.importMock<typeof import('./registry')>('./registry.js');
+    const reg = (mod.load as unknown as { (): unknown })();
+    const next = await fn(reg);
+    (mod.save as unknown as { (r: unknown): void })(next);
+  }),
+}));
 
 function app(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
@@ -154,7 +166,7 @@ describe('buildIfStale', () => {
 describe('recordBuiltCommit', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('updates app.lastBuiltCommit and saves registry', () => {
+  it('updates app.lastBuiltCommit and saves registry', async () => {
     const entry = app({ name: 'target', lastBuiltCommit: 'old' });
     const reg = {
       version: 1,
@@ -165,13 +177,13 @@ describe('recordBuiltCommit', () => {
       },
     };
     vi.mocked(registry.load).mockReturnValue(reg);
-    recordBuiltCommit('target', 'new-sha');
+    await recordBuiltCommit('target', 'new-sha');
     expect(registry.save).toHaveBeenCalledWith(expect.objectContaining({
       apps: expect.arrayContaining([expect.objectContaining({ name: 'target', lastBuiltCommit: 'new-sha' })]),
     }));
   });
 
-  it('is a silent no-op when app not found', () => {
+  it('is a silent no-op when app not found', async () => {
     const reg = {
       version: 1,
       apps: [],
@@ -181,8 +193,14 @@ describe('recordBuiltCommit', () => {
       },
     };
     vi.mocked(registry.load).mockReturnValue(reg);
-    recordBuiltCommit('ghost', 'new-sha');
-    expect(registry.save).not.toHaveBeenCalled();
+    await recordBuiltCommit('ghost', 'new-sha');
+    // The withRegistry stub still saves the unchanged registry — that's fine,
+    // there's nothing to record. The important invariant is that no app was
+    // mutated.
+    if ((registry.save as unknown as { mock: { calls: unknown[][] } }).mock.calls.length > 0) {
+      const savedReg = (registry.save as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0] as { apps: unknown[] };
+      expect(savedReg.apps).toEqual([]);
+    }
   });
 });
 

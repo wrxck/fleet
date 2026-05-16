@@ -6,9 +6,9 @@ import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 import { Viewport } from '@matthesketh/ink-viewport';
 import { ToastProvider, ToastContainer } from '@matthesketh/ink-toast';
 
-import { load } from '../core/registry.js';
-import { RoutinesApp } from '../tui/routines/RoutinesApp.js';
-import { createRuntime, type RoutinesRuntime } from '../tui/routines/runtime.js';
+import { load } from '../core/registry';
+import { RoutinesApp } from '../tui/routines/RoutinesApp';
+import { createRuntime, type RoutinesRuntime } from '../tui/routines/runtime';
 
 function Shell({ runtime, registry }: { runtime: RoutinesRuntime; registry: ReturnType<typeof load> }): React.JSX.Element {
   const globalHandler: InputHandler = (input, _key) => {

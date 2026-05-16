@@ -42,7 +42,7 @@ export interface DumpHook {
 }
 
 export interface AppBackupConfig {
-  /** the app name as known to fleet (or `system`, `root-home`, `matt-home` for pseudo-apps). */
+  /** the app name as known to fleet (or `system`, `root-home`, `user-home` for pseudo-apps). */
   app: string;
   /** systemd OnCalendar expression. */
   schedule: Schedule;
@@ -79,7 +79,7 @@ export interface RepoStats {
 }
 
 export const PSEUDO_APPS = [
-  'system', 'root-home', 'matt-home',
+  'system', 'root-home', 'user-home',
   'shared-postgres', 'shared-mysql', 'shared-mongodb',
 ] as const;
 export type PseudoApp = typeof PSEUDO_APPS[number];

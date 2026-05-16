@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import type { AppEntry } from '../../../registry.js';
-import { defaultConfig } from '../../config.js';
-import { PipCollector } from '../../collectors/pip.js';
+import type { AppEntry } from '../../../registry';
+import { defaultConfig } from '../../config';
+import { PipCollector } from '../../collectors/pip';
 
 let tmpDir: string;
 

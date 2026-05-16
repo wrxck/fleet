@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { isInitialized } from '../core/secrets.js';
-import { restoreVaultFile } from '../core/secrets.js';
+import { isInitialized } from '../core/secrets';
+import { restoreVaultFile } from '../core/secrets';
 import {
   setSecret, getSecret, sealFromRuntime, detectDrift,
-} from '../core/secrets-ops.js';
+} from '../core/secrets-ops';
 
 function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
@@ -29,7 +29,7 @@ export function registerSecretsTools(server: McpServer): void {
     },
     async ({ app, key, value }) => {
       requireVault();
-      setSecret(app, key, value);
+      await setSecret(app, key, value);
       return text(`Set ${key} for ${app} in vault. Run fleet_secrets_unseal + restart the app to apply at runtime.`);
     },
   );
@@ -62,7 +62,7 @@ export function registerSecretsTools(server: McpServer): void {
     },
     async ({ app }) => {
       requireVault();
-      const sealed = sealFromRuntime(app);
+      const sealed = await sealFromRuntime(app);
       return text(`Sealed ${sealed.length} app(s): ${sealed.join(', ')}. Changes will now persist across reboots.`);
     },
   );

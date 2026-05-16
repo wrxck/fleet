@@ -9,6 +9,15 @@ vi.mock('../core/registry.js', () => ({
   load: vi.fn(),
   save: vi.fn(),
   addApp: vi.fn(),
+  // addCommand now uses withRegistry; for tests, run the mutator inline
+  // against the mocked registry and forward to mocked save() so the existing
+  // toHaveBeenCalled assertions keep working.
+  withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
+    const mod = await vi.importMock<typeof import('../core/registry')>('../core/registry.js');
+    const reg = (mod.load as unknown as { (): unknown })();
+    const next = await fn(reg);
+    (mod.save as unknown as { (r: unknown): void })(next);
+  }),
 }));
 
 vi.mock('../core/docker.js', () => ({
@@ -37,12 +46,12 @@ vi.mock('../ui/confirm.js', () => ({
 }));
 
 import { existsSync } from 'node:fs';
-import { addCommand } from './add.js';
-import { load, save, addApp } from '../core/registry.js';
-import { getContainersByCompose } from '../core/docker.js';
-import { installServiceFile, readServiceFile, enableService } from '../core/systemd.js';
-import { generateServiceFile } from '../templates/systemd.js';
-import { confirm } from '../ui/confirm.js';
+import { addCommand } from './add';
+import { load, save, addApp } from '../core/registry';
+import { getContainersByCompose } from '../core/docker';
+import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
+import { generateServiceFile } from '../templates/systemd';
+import { confirm } from '../ui/confirm';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockLoad = vi.mocked(load);
