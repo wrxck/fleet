@@ -1,3 +1,5 @@
+import { assertComposeFile } from '../core/validate.js';
+
 interface SystemdOpts {
   serviceName: string;
   description: string;
@@ -7,6 +9,10 @@ interface SystemdOpts {
 }
 
 export function generateServiceFile(opts: SystemdOpts): string {
+  // Defence-in-depth: even if a caller skipped upstream validation, refuse to
+  // emit a unit file with a composeFile value that could break out of the
+  // quoted -f argument and inject extra docker-compose flags or shell.
+  if (opts.composeFile) assertComposeFile(opts.composeFile);
   const fileFlag = opts.composeFile ? ` -f "${opts.composeFile}"` : '';
   const dbDep = opts.dependsOnDatabases ? ' docker-databases.service' : '';
 

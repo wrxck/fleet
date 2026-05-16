@@ -7,6 +7,7 @@ import {
   assertHealthPath,
   assertFilePath,
   assertSecretKey,
+  assertComposeFile,
 } from './validate.js';
 
 describe('assertAppName', () => {
@@ -287,5 +288,68 @@ describe('assertSecretKey', () => {
 
   it('rejects path traversal attempts', () => {
     expect(() => assertSecretKey('../etc/passwd')).toThrow();
+  });
+});
+
+describe('assertComposeFile', () => {
+  it('accepts standard compose filenames', () => {
+    expect(() => assertComposeFile('docker-compose.yml')).not.toThrow();
+    expect(() => assertComposeFile('docker-compose.yaml')).not.toThrow();
+    expect(() => assertComposeFile('compose.yaml')).not.toThrow();
+    expect(() => assertComposeFile('compose.yml')).not.toThrow();
+    expect(() => assertComposeFile('production.yml')).not.toThrow();
+    expect(() => assertComposeFile('docker-compose.prod.yml')).not.toThrow();
+    expect(() => assertComposeFile('a.yml')).not.toThrow();
+  });
+
+  it('rejects empty string', () => {
+    expect(() => assertComposeFile('')).toThrow();
+  });
+
+  it('rejects filenames without a yaml/yml extension', () => {
+    expect(() => assertComposeFile('foo')).toThrow();
+    expect(() => assertComposeFile('foo.txt')).toThrow();
+    expect(() => assertComposeFile('foo.json')).toThrow();
+    expect(() => assertComposeFile('docker-compose')).toThrow();
+  });
+
+  it('rejects filenames containing path separators', () => {
+    expect(() => assertComposeFile('../etc/passwd.yml')).toThrow();
+    expect(() => assertComposeFile('subdir/compose.yml')).toThrow();
+    expect(() => assertComposeFile('/absolute/path.yml')).toThrow();
+    expect(() => assertComposeFile('..\\windows\\evil.yml')).toThrow();
+  });
+
+  it('rejects filenames containing whitespace', () => {
+    expect(() => assertComposeFile('foo bar.yml')).toThrow();
+    expect(() => assertComposeFile('foo\tbar.yml')).toThrow();
+    expect(() => assertComposeFile('foo\nbar.yml')).toThrow();
+    expect(() => assertComposeFile(' compose.yml')).toThrow();
+  });
+
+  it('rejects filenames containing quotes', () => {
+    expect(() => assertComposeFile('a"b.yml')).toThrow();
+    expect(() => assertComposeFile("a'b.yml")).toThrow();
+  });
+
+  it('rejects shell metacharacters', () => {
+    expect(() => assertComposeFile('foo.yml; rm -rf /')).toThrow();
+    expect(() => assertComposeFile('foo.yml && evil')).toThrow();
+    expect(() => assertComposeFile('foo.yml | cat')).toThrow();
+    expect(() => assertComposeFile('foo$(cmd).yml')).toThrow();
+    expect(() => assertComposeFile('foo`cmd`.yml')).toThrow();
+  });
+
+  it('rejects argument-injection attempting to add a second -f flag', () => {
+    // This is the specific exploit: a value containing a closing quote and
+    // another -f directive, which would land as a separate docker-compose
+    // argument when interpolated into ExecStart.
+    expect(() => assertComposeFile('a.yml" -f "/tmp/evil')).toThrow();
+    expect(() => assertComposeFile('evil.yml" -f "/tmp/attacker.yml')).toThrow();
+  });
+
+  it('rejects null bytes', () => {
+    expect(() => assertComposeFile('foo.yml\x00')).toThrow();
+    expect(() => assertComposeFile('foo\x00.yml')).toThrow();
   });
 });
