@@ -25,7 +25,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { existsSync, copyFileSync, rmSync, readFileSync } from 'node:fs';
-import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR } from './secrets.js';
+import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR } from './secrets';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockCopyFileSync = vi.mocked(copyFileSync);

@@ -1,4 +1,4 @@
-import type { AppEntry } from '../registry.js';
+import type { AppEntry } from '../registry';
 
 export type CollectorType =
   | 'npm' | 'composer' | 'pip'

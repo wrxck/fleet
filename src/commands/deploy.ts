@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { load, save, findApp } from '../core/registry.js';
-import { composeBuild, composeUp, composeDown } from '../core/docker.js';
-import { startService, restartService, getServiceStatus } from '../core/systemd.js';
-import { FleetError } from '../core/errors.js';
-import { success, error, info, warn, heading } from '../ui/output.js';
-import { addCommand } from './add.js';
-import { execGit } from '../core/exec.js';
-import { getProjectRoot } from '../core/git.js';
-import { recordBuiltCommit } from '../core/boot-refresh.js';
+import { load, save, findApp } from '../core/registry';
+import { composeBuild, composeUp, composeDown } from '../core/docker';
+import { startService, restartService, getServiceStatus } from '../core/systemd';
+import { FleetError } from '../core/errors';
+import { success, error, info, warn, heading } from '../ui/output';
+import { addCommand } from './add';
+import { execGit } from '../core/exec';
+import { getProjectRoot } from '../core/git';
+import { recordBuiltCommit } from '../core/boot-refresh';
 
 export async function deployCommand(args: string[]): Promise<void> {
   const dryRun = args.includes('--dry-run');

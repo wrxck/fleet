@@ -27,11 +27,11 @@ vi.mock('../ui/output.js', () => ({
   warn: vi.fn(),
 }));
 
-import { nginxCommand } from './nginx.js';
-import * as nginxCore from '../core/nginx.js';
-import { generateNginxConfig } from '../templates/nginx.js';
-import { confirm } from '../ui/confirm.js';
-import { error } from '../ui/output.js';
+import { nginxCommand } from './nginx';
+import * as nginxCore from '../core/nginx';
+import { generateNginxConfig } from '../templates/nginx';
+import { confirm } from '../ui/confirm';
+import { error } from '../ui/output';
 
 const mockReadConfig = vi.mocked(nginxCore.readConfig);
 const mockInstallConfig = vi.mocked(nginxCore.installConfig);

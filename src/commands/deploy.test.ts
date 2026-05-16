@@ -53,14 +53,14 @@ vi.mock('../core/boot-refresh.js', () => ({
 }));
 
 import { existsSync } from 'node:fs';
-import { deployCommand } from './deploy.js';
-import { load, save } from '../core/registry.js';
-import { composeBuild } from '../core/docker.js';
-import { startService, restartService, getServiceStatus } from '../core/systemd.js';
-import { addCommand } from './add.js';
-import { execSafe, execGit } from '../core/exec.js';
-import { getProjectRoot } from '../core/git.js';
-import { recordBuiltCommit } from '../core/boot-refresh.js';
+import { deployCommand } from './deploy';
+import { load, save } from '../core/registry';
+import { composeBuild } from '../core/docker';
+import { startService, restartService, getServiceStatus } from '../core/systemd';
+import { addCommand } from './add';
+import { execSafe, execGit } from '../core/exec';
+import { getProjectRoot } from '../core/git';
+import { recordBuiltCommit } from '../core/boot-refresh';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockLoad = vi.mocked(load);

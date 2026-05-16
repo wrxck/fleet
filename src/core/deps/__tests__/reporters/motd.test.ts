@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 
-import { defaultConfig } from '../../config.js';
-import { formatMotd, generateMotdScript } from '../../reporters/motd.js';
-import type { Finding, DepsCache } from '../../types.js';
+import { defaultConfig } from '../../config';
+import { formatMotd, generateMotdScript } from '../../reporters/motd';
+import type { Finding, DepsCache } from '../../types';
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {

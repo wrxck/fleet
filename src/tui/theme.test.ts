@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { colors, statusColor, healthColor } from './theme.js';
+import { colors, statusColor, healthColor } from './theme';
 
 describe('colors', () => {
   it('has primary color', () => {

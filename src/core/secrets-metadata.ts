@@ -4,15 +4,15 @@
  * `lastRotated = entry.lastSealedAt`, provider derived via classifySecret.
  */
 
-import { loadManifest, saveManifest, listSecrets, type SecretMetadata } from './secrets.js';
+import { loadManifest, saveManifest, listSecrets, type SecretMetadata } from './secrets';
 import {
   classifySecret,
   getProviderById,
   ageInDays,
   isStale,
   type ProviderDef,
-} from './secrets-providers.js';
-import { SecretsError } from './errors.js';
+} from './secrets-providers';
+import { SecretsError } from './errors';
 
 export interface EnrichedSecret {
   /** The env var (or filename for secrets-dir apps). */

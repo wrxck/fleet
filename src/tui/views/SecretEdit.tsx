@@ -4,10 +4,10 @@ import TextInput from 'ink-text-input';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch } from '../state.js';
-import { useSecrets } from '../hooks/use-secrets.js';
-import { getSecret as getCoreSecret } from '../../core/secrets-ops.js';
-import { colors } from '../theme.js';
+import { useAppState, useAppDispatch } from '../state';
+import { useSecrets } from '../hooks/use-secrets';
+import { getSecret as getCoreSecret } from '../../core/secrets-ops';
+import { colors } from '../theme';
 
 export function SecretEdit(): React.JSX.Element {
   const { selectedApp, selectedSecret } = useAppState();

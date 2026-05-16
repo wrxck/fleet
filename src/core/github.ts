@@ -2,9 +2,9 @@ import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { execSafe } from './exec.js';
-import { GitError } from './errors.js';
-import { assertAppName } from './validate.js';
+import { execSafe } from './exec';
+import { GitError } from './errors';
+import { assertAppName } from './validate';
 
 export const GITHUB_ORG = 'heskethwebdesign';
 

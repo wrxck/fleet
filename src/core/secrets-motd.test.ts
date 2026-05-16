@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./secrets-metadata.js', () => ({ enumerateAllSecrets: vi.fn() }));
 
-import { summariseSecrets, formatSecretsMotd } from './secrets-motd.js';
-import { enumerateAllSecrets } from './secrets-metadata.js';
+import { summariseSecrets, formatSecretsMotd } from './secrets-motd';
+import { enumerateAllSecrets } from './secrets-metadata';
 
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
 

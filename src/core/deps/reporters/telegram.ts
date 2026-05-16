@@ -2,8 +2,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { Finding, Severity } from '../types.js';
-import { loadTelegramConfig, sendTelegram } from '../../telegram.js';
+import type { Finding, Severity } from '../types';
+import { loadTelegramConfig, sendTelegram } from '../../telegram';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const NOTIFIED_PATH = join(__dirname, '..', '..', '..', '..', 'data', 'notified-findings.json');

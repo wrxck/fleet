@@ -7,9 +7,9 @@ import {
   buildComposeOverride,
   DEFAULT_POLICY,
   readContainerLogs,
-} from './logs-policy.js';
-import type { AppEntry } from './registry.js';
-import { execSafe } from './exec.js';
+} from './logs-policy';
+import type { AppEntry } from './registry';
+import { execSafe } from './exec';
 
 function app(overrides: Partial<AppEntry> = {}): AppEntry {
   return {

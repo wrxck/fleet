@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as registry from '../core/registry.js';
-import * as exec from '../core/exec.js';
-import * as systemd from '../core/systemd.js';
-import { rollbackCommand } from './rollback.js';
+import * as registry from '../core/registry';
+import * as exec from '../core/exec';
+import * as systemd from '../core/systemd';
+import { rollbackCommand } from './rollback';
 
 vi.mock('../core/registry.js');
 vi.mock('../core/exec.js');

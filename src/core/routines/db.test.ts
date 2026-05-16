@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { openDb, closeDb, currentSchemaVersion } from './db.js';
+import { openDb, closeDb, currentSchemaVersion } from './db';
 
 describe('openDb', () => {
   let dir: string;

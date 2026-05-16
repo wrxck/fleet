@@ -27,9 +27,9 @@ vi.mock('./registry.js', () => ({
   save: vi.fn(),
 }));
 
-import { detectScenario, describeOnboardPlan, executeOnboard } from './git-onboard.js';
-import type { OnboardScenario } from './git-onboard.js';
-import type { GitStatus } from './git.js';
+import { detectScenario, describeOnboardPlan, executeOnboard } from './git-onboard';
+import type { OnboardScenario } from './git-onboard';
+import type { GitStatus } from './git';
 
 function makeStatus(overrides: Partial<GitStatus> = {}): GitStatus {
   return {
@@ -125,7 +125,7 @@ describe('executeOnboard', () => {
   });
 
   it('fresh scenario initialises git and commits', async () => {
-    const { gitInit, gitAdd, gitCommit } = await import('./git.js');
+    const { gitInit, gitAdd, gitCommit } = await import('./git');
     executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
     expect(gitInit).toHaveBeenCalledWith('/app');
     expect(gitAdd).toHaveBeenCalled();
@@ -133,21 +133,21 @@ describe('executeOnboard', () => {
   });
 
   it('migrate scenario sets remote URL', async () => {
-    const { gitSetRemoteUrl, gitPushAll } = await import('./git.js');
+    const { gitSetRemoteUrl, gitPushAll } = await import('./git');
     executeOnboard('migrate', '/app', 'myapp', 'myapp', makeStatus());
     expect(gitSetRemoteUrl).toHaveBeenCalled();
     expect(gitPushAll).toHaveBeenCalled();
   });
 
   it('no-remote scenario commits outstanding changes when dirty', async () => {
-    const { gitAdd, gitCommit } = await import('./git.js');
+    const { gitAdd, gitCommit } = await import('./git');
     executeOnboard('no-remote', '/app', 'myapp', 'myapp', makeStatus({ clean: false }));
     expect(gitAdd).toHaveBeenCalled();
     expect(gitCommit).toHaveBeenCalledWith('/app', 'Pre-onboard commit');
   });
 
   it('resume scenario pushes existing commits', async () => {
-    const { gitPushAll, hasCommits } = await import('./git.js');
+    const { gitPushAll, hasCommits } = await import('./git');
     (hasCommits as ReturnType<typeof vi.fn>).mockReturnValue(true);
     executeOnboard('resume', '/app', 'myapp', 'myapp', makeStatus());
     expect(gitPushAll).toHaveBeenCalled();

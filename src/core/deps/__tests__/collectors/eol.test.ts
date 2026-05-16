@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import type { AppEntry } from '../../../registry.js';
-import { EolCollector } from '../../collectors/eol.js';
+import type { AppEntry } from '../../../registry';
+import { EolCollector } from '../../collectors/eol';
 
 let tmpDir: string;
 

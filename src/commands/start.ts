@@ -1,7 +1,7 @@
-import { load, findApp } from '../core/registry.js';
-import { startService } from '../core/systemd.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { success, error } from '../ui/output.js';
+import { load, findApp } from '../core/registry';
+import { startService } from '../core/systemd';
+import { AppNotFoundError } from '../core/errors';
+import { success, error } from '../ui/output';
 
 export function startCommand(args: string[]): void {
   const appName = args[0];

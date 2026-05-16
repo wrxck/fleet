@@ -156,7 +156,7 @@ vi.mock('./deps-tools.js', () => ({
   registerDepsTools: vi.fn(),
 }));
 
-import { startMcpServer } from './server.js';
+import { startMcpServer } from './server';
 
 describe('MCP server tool registration', () => {
   beforeEach(async () => {

@@ -29,12 +29,12 @@ vi.mock('../ui/output.js', () => ({
 }));
 
 import { readFileSync } from 'node:fs';
-import { load } from '../core/registry.js';
-import { checkAllHealth } from '../core/health.js';
-import { getServiceStatus } from '../core/systemd.js';
-import { loadNotifyConfig, sendNotification } from '../core/notify.js';
-import { success, warn } from '../ui/output.js';
-import { watchdogCommand } from './watchdog.js';
+import { load } from '../core/registry';
+import { checkAllHealth } from '../core/health';
+import { getServiceStatus } from '../core/systemd';
+import { loadNotifyConfig, sendNotification } from '../core/notify';
+import { success, warn } from '../ui/output';
+import { watchdogCommand } from './watchdog';
 
 beforeEach(() => {
   vi.clearAllMocks();

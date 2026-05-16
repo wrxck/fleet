@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, chmodSync, statSync, rmSync, copyFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SecretsError, VaultNotInitializedError } from './errors.js';
-import { execSafe } from './exec.js';
-import { assertAppName, assertFilePath } from './validate.js';
+import { SecretsError, VaultNotInitializedError } from './errors';
+import { execSafe } from './exec';
+import { assertAppName, assertFilePath } from './validate';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const VAULT_DIR = join(__dirname, '..', '..', 'vault');

@@ -3,7 +3,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { error, info, success } from '../ui/output.js';
+import { error, info, success } from '../ui/output';
 
 // scripts that ship inside the npm package (under scripts/guard/) and get
 // installed to /usr/local/sbin during `fleet guard install`.

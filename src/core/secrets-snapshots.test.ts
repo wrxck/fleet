@@ -14,8 +14,8 @@ vi.mock('./secrets.js', async () => {
 });
 
 import { join } from 'node:path';
-import { snapshotApp, listSnapshots, restoreSnapshot, pruneSnapshots, getSnapshotDir } from './secrets-snapshots.js';
-import { loadManifest } from './secrets.js';
+import { snapshotApp, listSnapshots, restoreSnapshot, pruneSnapshots, getSnapshotDir } from './secrets-snapshots';
+import { loadManifest } from './secrets';
 
 const APP = 'macpool';
 const ENC_FILE = 'macpool.env.age';

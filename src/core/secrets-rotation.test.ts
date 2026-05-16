@@ -21,12 +21,12 @@ import {
   serialiseEnv,
   applyRotation,
   performRotation,
-} from './secrets-rotation.js';
-import { classifySecret } from './secrets-providers.js';
-import { loadManifest, decryptApp, sealApp } from './secrets.js';
-import { snapshotApp, restoreSnapshot } from './secrets-snapshots.js';
-import { markRotated } from './secrets-metadata.js';
-import { auditLog } from './secrets-audit.js';
+} from './secrets-rotation';
+import { classifySecret } from './secrets-providers';
+import { loadManifest, decryptApp, sealApp } from './secrets';
+import { snapshotApp, restoreSnapshot } from './secrets-snapshots';
+import { markRotated } from './secrets-metadata';
+import { auditLog } from './secrets-audit';
 
 describe('maskNewValue', () => {
   it('masks short values', () => {

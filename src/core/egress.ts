@@ -10,8 +10,8 @@
  * data shape so the upgrade is non-breaking.
  */
 
-import { execSafe } from './exec.js';
-import type { AppEntry } from './registry.js';
+import { execSafe } from './exec';
+import type { AppEntry } from './registry';
 
 export interface EgressFlow {
   /** App that owns the source container. */

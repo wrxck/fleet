@@ -1,9 +1,9 @@
-import * as nginxCore from '../core/nginx.js';
+import * as nginxCore from '../core/nginx';
 
-import { generateNginxConfig } from '../templates/nginx.js';
-import { FleetError } from '../core/errors.js';
-import { c, heading, table, success, error, info, warn } from '../ui/output.js';
-import { confirm } from '../ui/confirm.js';
+import { generateNginxConfig } from '../templates/nginx';
+import { FleetError } from '../core/errors';
+import { c, heading, table, success, error, info, warn } from '../ui/output';
+import { confirm } from '../ui/confirm';
 
 export async function nginxCommand(args: string[]): Promise<void> {
   const sub = args[0];

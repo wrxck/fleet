@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import type { AppEntry, Registry } from '../core/registry.js';
+import type { AppEntry, Registry } from '../core/registry';
 
 vi.mock('../core/registry.js', () => ({
   load: vi.fn(),
@@ -26,11 +26,11 @@ vi.mock('../ui/output.js', () => ({
        magenta: '', cyan: '', white: '', gray: '' },
 }));
 
-import { load, findApp } from '../core/registry.js';
-import { getContainerLogs } from '../core/docker.js';
-import { execLive } from '../core/exec.js';
-import { error } from '../ui/output.js';
-import { logsCommand } from './logs.js';
+import { load, findApp } from '../core/registry';
+import { getContainerLogs } from '../core/docker';
+import { execLive } from '../core/exec';
+import { error } from '../ui/output';
+import { logsCommand } from './logs';
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {

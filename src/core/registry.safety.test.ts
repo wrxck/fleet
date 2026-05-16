@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { load, save } from './registry.js';
-import type { AppEntry, Registry } from './registry.js';
+import { load, save } from './registry';
+import type { AppEntry, Registry } from './registry';
 
 function makeEmptyRegistry(): Registry {
   return {

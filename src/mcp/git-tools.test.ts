@@ -25,9 +25,9 @@ vi.mock('../core/github.js', () => ({
   listPullRequests: vi.fn(),
 }));
 
-import { load, findApp } from '../core/registry.js';
-import { getGitStatus, getProjectRoot } from '../core/git.js';
-import { registerGitTools } from './git-tools.js';
+import { load, findApp } from '../core/registry';
+import { getGitStatus, getProjectRoot } from '../core/git';
+import { registerGitTools } from './git-tools';
 
 beforeEach(() => vi.clearAllMocks());
 

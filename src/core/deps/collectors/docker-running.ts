@@ -1,6 +1,6 @@
-import { execSafe } from '../../exec.js';
-import type { AppEntry } from '../../registry.js';
-import type { Collector, Finding, DepsConfig } from '../types.js';
+import { execSafe } from '../../exec';
+import type { AppEntry } from '../../registry';
+import type { Collector, Finding, DepsConfig } from '../types';
 
 type SeverityOverrides = DepsConfig['severityOverrides'];
 

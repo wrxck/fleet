@@ -23,11 +23,11 @@ vi.mock('../core/deps/actors/pr-creator.js', () => ({
   createDepsPr: vi.fn(),
 }));
 
-import { load } from '../core/registry.js';
-import { loadConfig } from '../core/deps/config.js';
-import { loadCache, saveCache } from '../core/deps/cache.js';
-import { runScan } from '../core/deps/scanner.js';
-import { registerDepsTools } from './deps-tools.js';
+import { load } from '../core/registry';
+import { loadConfig } from '../core/deps/config';
+import { loadCache, saveCache } from '../core/deps/cache';
+import { runScan } from '../core/deps/scanner';
+import { registerDepsTools } from './deps-tools';
 
 beforeEach(() => vi.clearAllMocks());
 

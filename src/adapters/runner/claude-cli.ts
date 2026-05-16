@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import lockfile from 'proper-lockfile';
 
-import type { RoutineTask, RunEvent } from '../../core/routines/schema.js';
-import type { RunContext, RunnerAdapter } from '../types.js';
+import type { RoutineTask, RunEvent } from '../../core/routines/schema';
+import type { RunContext, RunnerAdapter } from '../types';
 
 export interface ClaudeCliOptions {
   binary?: string;

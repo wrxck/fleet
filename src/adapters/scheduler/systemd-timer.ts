@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 
-import { execSafe } from '../../core/exec.js';
-import type { Routine } from '../../core/routines/schema.js';
-import type { SchedulerAdapter, ScheduledEntry } from '../types.js';
+import { execSafe } from '../../core/exec';
+import type { Routine } from '../../core/routines/schema';
+import type { SchedulerAdapter, ScheduledEntry } from '../types';
 
 const UNIT_DIR = '/etc/systemd/system';
 const UNIT_PREFIX = 'fleet-routine-';

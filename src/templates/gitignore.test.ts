@@ -6,7 +6,7 @@ vi.mock('node:fs', async () => {
 });
 
 import { existsSync } from 'node:fs';
-import { detectProjectType, generateGitignore } from './gitignore.js';
+import { detectProjectType, generateGitignore } from './gitignore';
 
 const mockExists = existsSync as ReturnType<typeof vi.fn>;
 

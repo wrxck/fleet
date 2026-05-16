@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStableState } from '@matthesketh/ink-stable-state';
-import { runFleetJson } from '../exec-bridge.js';
-import { useInterval } from './use-interval.js';
-import type { StatusData } from '../../commands/status.js';
+import { runFleetJson } from '../exec-bridge';
+import { useInterval } from './use-interval';
+import type { StatusData } from '../../commands/status';
 
 interface FleetData {
   status: StatusData | null;

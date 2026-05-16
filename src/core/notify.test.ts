@@ -10,7 +10,7 @@ vi.mock('node:fs', async () => {
 });
 
 import { existsSync, readFileSync } from 'node:fs';
-import { loadNotifyConfig } from './notify.js';
+import { loadNotifyConfig } from './notify';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);
