@@ -43,6 +43,7 @@ import {
 } from '../core/backup/unlock';
 import { FleetError } from '../core/errors';
 import { execSafe } from '../core/exec';
+import { loadOperator } from '../core/operator';
 import { c, heading, table, info, success, error, warn } from '../ui/output';
 
 const HELP = `fleet backup - encrypted off-host backups via restic + age
@@ -508,7 +509,7 @@ function readCredential(name: string): string {
 function cmdServe(args: string[]): void {
   if (args.includes('--setup-totp')) {
     const secret = generateSecret();
-    const uri = totpUri(secret, 'matt', 'fleet-backups');
+    const uri = totpUri(secret, loadOperator().username, 'fleet-backups');
     process.stdout.write(
       `1. seal this secret into the credstore (root):\n` +
       `   printf '%s' '${secret}' | systemd-creds encrypt --name=mx-totp - /etc/credstore.encrypted/mx-totp\n\n` +
