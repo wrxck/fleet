@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 import { describe, it, expect } from 'vitest';
 
-import { load } from './registry.js';
+import { load } from './registry';
 
 // these tests read actual systemd service files — skip in CI
 const isCI = !!process.env.CI;

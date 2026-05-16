@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { type Routine } from './schema.js';
-import { RoutineStore } from './store.js';
+import { type Routine } from './schema';
+import { RoutineStore } from './store';
 
 const mkRoutine = (id: string, overrides: Partial<Routine> = {}): Routine => ({
   id,

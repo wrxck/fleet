@@ -1,8 +1,8 @@
 import { realpathSync } from 'node:fs';
 
-import { execSafe } from '../../core/exec.js';
-import type { Signal } from '../../core/routines/schema.js';
-import type { SignalProvider } from '../types.js';
+import { execSafe } from '../../core/exec';
+import type { Signal } from '../../core/routines/schema';
+import type { SignalProvider } from '../types';
 
 function resolveSafe(path: string): string | null {
   try { return realpathSync(path); } catch { return null; }

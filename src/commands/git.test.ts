@@ -39,10 +39,10 @@ vi.mock('../ui/output.js', () => ({
   warn: vi.fn(),
 }));
 
-import { load, findApp } from '../core/registry.js';
-import { getGitStatus, getProjectRoot } from '../core/git.js';
-import { error } from '../ui/output.js';
-import { gitCommand } from './git.js';
+import { load, findApp } from '../core/registry';
+import { getGitStatus, getProjectRoot } from '../core/git';
+import { error } from '../ui/output';
+import { gitCommand } from './git';
 
 beforeEach(() => {
   vi.clearAllMocks();

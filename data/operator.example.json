@@ -1,0 +1,6 @@
+{
+  "username": "operator",
+  "homeDir": "/home/operator",
+  "domain": "fleet.example.com",
+  "githubOrg": "your-github-org"
+}

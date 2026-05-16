@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { success, error, info, warn } from '../ui/output.js';
+import { success, error, info, warn } from '../ui/output';
 
 const FLEET_DIST = resolve(join(import.meta.dirname!, '..', '..', 'dist', 'index.js'));
 

@@ -1,10 +1,10 @@
-import { load, findApp } from '../core/registry.js';
-import { getContainerLogs } from '../core/docker.js';
-import { execLive } from '../core/exec.js';
-import { AppNotFoundError } from '../core/errors.js';
-import { c, error, heading, info, success, table, warn } from '../ui/output.js';
-import { confirm } from '../ui/confirm.js';
-import { prompt } from '../ui/prompt.js';
+import { load, findApp } from '../core/registry';
+import { getContainerLogs } from '../core/docker';
+import { execLive } from '../core/exec';
+import { AppNotFoundError } from '../core/errors';
+import { c, error, heading, info, success, table, warn } from '../ui/output';
+import { confirm } from '../ui/confirm';
+import { prompt } from '../ui/prompt';
 import {
   effectivePolicy,
   writeComposeOverride,
@@ -12,8 +12,8 @@ import {
   pruneLogs,
   readContainerLogs,
   type LogPolicy,
-} from '../core/logs-policy.js';
-import { startMultiTail, resolveSources, type LogLine } from '../core/logs-multi.js';
+} from '../core/logs-policy';
+import { startMultiTail, resolveSources, type LogLine } from '../core/logs-multi';
 
 export function logsCommand(args: string[]): void | Promise<void> {
   const sub = args[0];
@@ -61,7 +61,7 @@ function logsMulti(args: string[]): Promise<void> {
 
   if (!all && !appsCsv && !containersCsv) {
     error('Usage: fleet logs --all [-f] [--since 15m] [--grep err] [--level warn]');
-    error('       fleet logs --apps macpool,shiftfaced [-f]');
+    error('       fleet logs --apps poolside,brewco [-f]');
     error('       fleet logs --containers "*-postgres" [-f]');
     process.exit(1);
   }

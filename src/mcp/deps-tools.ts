@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { load, findApp } from '../core/registry.js';
-import { loadConfig, saveConfig } from '../core/deps/config.js';
-import { loadCache, saveCache } from '../core/deps/cache.js';
-import { runScan } from '../core/deps/scanner.js';
-import { createDepsPr } from '../core/deps/actors/pr-creator.js';
-import { AppNotFoundError } from '../core/errors.js';
+import { load, findApp } from '../core/registry';
+import { loadConfig, saveConfig } from '../core/deps/config';
+import { loadCache, saveCache } from '../core/deps/cache';
+import { runScan } from '../core/deps/scanner';
+import { createDepsPr } from '../core/deps/actors/pr-creator';
+import { AppNotFoundError } from '../core/errors';
 
 function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };

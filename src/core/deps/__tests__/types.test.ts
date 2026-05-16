@@ -8,7 +8,7 @@ import type {
   IgnoreRule,
   DepsConfig,
   DepsCache,
-} from '../types.js';
+} from '../types';
 
 describe('Finding', () => {
   it('accepts required fields only', () => {
@@ -82,6 +82,7 @@ describe('DepsCache', () => {
         minorVersionBehind: 'medium',
         patchVersionBehind: 'low',
       },
+      osvSkipPatterns: [],
     };
 
     const cache: DepsCache = {
@@ -135,6 +136,7 @@ describe('DepsCache', () => {
         minorVersionBehind: 'high',
         patchVersionBehind: 'info',
       },
+      osvSkipPatterns: ['^@matthesketh/'],
     };
 
     const cache: DepsCache = {

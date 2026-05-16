@@ -6,10 +6,10 @@ import { ScrollableList } from '@matthesketh/ink-scrollable-list';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useHealth } from '../hooks/use-health.js';
-import { StatusBadge } from '../components/StatusBadge.js';
-import { useAppState, useAppDispatch, useRedact } from '../state.js';
-import { colors } from '../theme.js';
+import { useHealth } from '../hooks/use-health';
+import { StatusBadge } from '../components/StatusBadge';
+import { useAppState, useAppDispatch, useRedact } from '../state';
+import { colors } from '../theme';
 
 export function HealthView(): React.JSX.Element {
   const state = useAppState();

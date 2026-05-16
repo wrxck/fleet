@@ -1,4 +1,4 @@
-import type { Routine } from './schema.js';
+import type { Routine } from './schema';
 
 export function builtInDefaultRoutines(): Routine[] {
   return [

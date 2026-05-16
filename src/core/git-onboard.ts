@@ -2,9 +2,9 @@ import {
   GitStatus, ensureGitignore, gitInit, gitAdd, gitCommit,
   gitCheckout, gitPush, gitPushAll, gitAddRemote, gitSetRemoteUrl,
   branchExists, hasCommits,
-} from './git.js';
-import * as github from './github.js';
-import { load, findApp, save } from './registry.js';
+} from './git';
+import * as github from './github';
+import { load, findApp, save } from './registry';
 
 export type OnboardScenario = 'fresh' | 'migrate' | 'no-remote' | 'resume';
 
@@ -17,14 +17,13 @@ export interface OnboardResult {
 
 export function detectScenario(status: GitStatus): OnboardScenario {
   if (!status.initialised) return 'fresh';
-  if (status.remoteUrl && status.remoteUrl.includes('heskethwebdesign/')) return 'resume';
-  if (status.remoteUrl && status.remoteUrl.includes('wrxck/')) return 'migrate';
   if (!status.remoteUrl) return 'no-remote';
-  return 'fresh';
+  // a remote already on the configured org is a resume; any other org is a migrate.
+  return status.remoteUrl.includes(`${github.githubOrg()}/`) ? 'resume' : 'migrate';
 }
 
 export function describeOnboardPlan(scenario: OnboardScenario, repoName: string, _status: GitStatus): string[] {
-  const repoUrl = `git@github.com:heskethwebdesign/${repoName}.git`;
+  const repoUrl = `git@github.com:${github.githubOrg()}/${repoName}.git`;
   const steps: string[] = [];
 
   switch (scenario) {
@@ -32,7 +31,7 @@ export function describeOnboardPlan(scenario: OnboardScenario, repoName: string,
       steps.push('generate .gitignore');
       steps.push('git init -b main');
       steps.push('git add . && git commit -m "initial commit"');
-      steps.push(`create private repo heskethwebdesign/${repoName}`);
+      steps.push(`create private repo ${github.githubOrg()}/${repoName}`);
       steps.push(`add remote origin ${repoUrl}`);
       steps.push('push main');
       steps.push('create and push develop branch');
@@ -41,7 +40,7 @@ export function describeOnboardPlan(scenario: OnboardScenario, repoName: string,
       break;
     case 'migrate':
       steps.push('ensure .gitignore exists');
-      steps.push(`create private repo heskethwebdesign/${repoName}`);
+      steps.push(`create private repo ${github.githubOrg()}/${repoName}`);
       steps.push(`git remote set-url origin ${repoUrl}`);
       steps.push('git push --all origin');
       steps.push('ensure develop branch exists');
@@ -51,7 +50,7 @@ export function describeOnboardPlan(scenario: OnboardScenario, repoName: string,
     case 'no-remote':
       steps.push('ensure .gitignore exists');
       steps.push('commit any outstanding changes');
-      steps.push(`create private repo heskethwebdesign/${repoName}`);
+      steps.push(`create private repo ${github.githubOrg()}/${repoName}`);
       steps.push(`add remote origin ${repoUrl}`);
       steps.push('git push --all origin');
       steps.push('ensure develop branch exists');
@@ -103,7 +102,7 @@ export function executeOnboard(
       steps.push('created initial commit');
 
       github.createRepo(repoName);
-      steps.push(`created private repo heskethwebdesign/${repoName}`);
+      steps.push(`created private repo ${github.githubOrg()}/${repoName}`);
 
       gitAddRemote(cwd, 'origin', repoUrl);
       gitPush(cwd, 'main', true);
@@ -117,7 +116,7 @@ export function executeOnboard(
 
     case 'migrate': {
       github.createRepo(repoName);
-      steps.push(`created private repo heskethwebdesign/${repoName}`);
+      steps.push(`created private repo ${github.githubOrg()}/${repoName}`);
 
       gitSetRemoteUrl(cwd, repoUrl);
       steps.push(`updated remote to ${repoUrl}`);
@@ -143,7 +142,7 @@ export function executeOnboard(
       }
 
       github.createRepo(repoName);
-      steps.push(`created private repo heskethwebdesign/${repoName}`);
+      steps.push(`created private repo ${github.githubOrg()}/${repoName}`);
 
       gitAddRemote(cwd, 'origin', repoUrl);
       gitPushAll(cwd);
@@ -178,7 +177,7 @@ export function executeOnboard(
   const reg = load();
   const app = findApp(reg, appName);
   if (app) {
-    app.gitRepo = `heskethwebdesign/${repoName}`;
+    app.gitRepo = `${github.githubOrg()}/${repoName}`;
     app.gitRemoteUrl = repoUrl;
     app.gitOnboardedAt = new Date().toISOString();
     save(reg);

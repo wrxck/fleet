@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { DepsConfig } from './types.js';
+import type { DepsConfig } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CONFIG_PATH = join(__dirname, '..', '..', '..', 'data', 'deps-config.json');
@@ -25,6 +25,12 @@ export function defaultConfig(): DepsConfig {
       minorVersionBehind: 'medium',
       patchVersionBehind: 'low',
     },
+    // Skip OSV lookups for the user's own npm scope by default — OSV is a
+    // third-party service (Google) and sending internal package names there
+    // leaks the proprietary dependency manifest. Backwards compat: if an
+    // existing deps-config.json is missing this field, mergeConfig fills it
+    // in from these defaults.
+    osvSkipPatterns: ['^@matthesketh/'],
   };
 }
 

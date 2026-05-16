@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { formatDuration, formatRelative, formatUsd, truncate } from './format.js';
+import { formatDuration, formatRelative, formatUsd, truncate } from './format';
 
 describe('format helpers', () => {
   it('formatRelative returns em-dash for null', () => {

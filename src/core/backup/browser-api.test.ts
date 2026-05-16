@@ -11,6 +11,7 @@ function ctx(over: Partial<ApiContext> = {}): ApiContext {
     totpSecret: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ',
     sessionSecret: 'test-session-secret',
     sessionTtlMs: 12 * 3600_000,
+    domain: 'fleet.test',
     listApps: () => ['demo'],
     statusReport: () => ({ generatedAt: 'now', backend: 'rest', appendOnly: true, apps: [] }),
     snapshots: () => [{ id: 'abc12345', shortId: 'abc12345', time: 't', hostname: 'h', paths: [], tags: [] }],
@@ -28,7 +29,7 @@ function req(over: Partial<ApiRequest> = {}): ApiRequest {
     method: 'GET',
     path: '/api/apps',
     query: {},
-    headers: { 'x-fleet-backup': '1', origin: 'https://fleet.hesketh.pro' },
+    headers: { 'x-fleet-backup': '1', origin: 'https://fleet.test' },
     cookies: {},
     ...over,
   };
@@ -62,7 +63,7 @@ describe('browser-api auth', () => {
   });
 
   it('rejects /api requests missing the CSRF header', () => {
-    const res = handle(req({ headers: { origin: 'https://fleet.hesketh.pro' } }), ctx());
+    const res = handle(req({ headers: { origin: 'https://fleet.test' } }), ctx());
     expect(res.status).toBe(403);
   });
 

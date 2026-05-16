@@ -6,8 +6,8 @@
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { execSafe } from './exec.js';
-import type { AppEntry } from './registry.js';
+import { execSafe } from './exec';
+import type { AppEntry } from './registry';
 
 export interface LogPolicy {
   retentionDays: number;

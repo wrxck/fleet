@@ -17,8 +17,8 @@ vi.mock('./validate.js', () => ({
 }));
 
 import { existsSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
-import { execSafe } from './exec.js';
-import { assertDomain } from './validate.js';
+import { execSafe } from './exec';
+import { assertDomain } from './validate';
 import {
   listSites,
   installConfig,
@@ -28,7 +28,7 @@ import {
   readConfig,
   extractPortFromConfig,
   extractDomainsFromConfig,
-} from './nginx.js';
+} from './nginx';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReaddirSync = vi.mocked(readdirSync);

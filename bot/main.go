@@ -63,7 +63,7 @@ func main() {
 
 	// Add adapters based on config.
 	if tg := cfg.Adapters.Telegram; tg != nil && tg.Enabled {
-		tgAdapter := adapter.NewTelegram(tg.BotToken, tg.AllowedChatIDs, tg.AlertChatIDs)
+		tgAdapter := adapter.NewTelegram(tg.BotToken, tg.AllowedChatIDs, tg.AllowedSenderIDs, tg.AlertChatIDs)
 		r.AddAdapter(tgAdapter)
 		log.Println("telegram adapter registered")
 	}

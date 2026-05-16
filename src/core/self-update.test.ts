@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./exec.js', () => ({ execSafe: vi.fn() }));
 
-import { checkForUpdate, applyUpdate } from './self-update.js';
-import { execSafe } from './exec.js';
+import { checkForUpdate, applyUpdate } from './self-update';
+import { execSafe } from './exec';
 
 const ok = (stdout: string) => ({ ok: true, stdout, stderr: '', exitCode: 0 });
 const fail = (stderr: string) => ({ ok: false, stdout: '', stderr, exitCode: 1 });
