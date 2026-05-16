@@ -5,6 +5,11 @@ const HEALTH_PATH_RE = /^\/[a-zA-Z0-9/_.-]*$/;
 const SERVICE_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9@._-]*$/;
 // Secret keys must be valid env var names (alphanumeric + underscore, no leading digit)
 const SECRET_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+// Compose filenames must be a bare filename (no path separators) ending in
+// .yml or .yaml. The value is interpolated into systemd ExecStart directives,
+// so it must not contain quotes, spaces, newlines, or any shell-meaningful
+// character that would let an attacker inject extra `-f` flags or commands.
+const COMPOSE_FILE_RE = /^[A-Za-z0-9_.-]+\.ya?ml$/;
 
 function assert(value: string, label: string, pattern: RegExp): void {
   if (!pattern.test(value)) {
@@ -42,6 +47,10 @@ export function assertHealthPath(path: string): void {
 
 export function assertFilePath(path: string): void {
   assertNoTraversal(path, 'file path');
+}
+
+export function assertComposeFile(name: string): void {
+  assert(name, 'compose filename', COMPOSE_FILE_RE);
 }
 
 export function assertSecretKey(key: string): void {
