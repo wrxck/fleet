@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,6 +35,8 @@ import {
 import { isPseudoApp } from '../core/backup/types';
 import { renderStatusHtml } from '../core/backup/statuspage';
 import { buildStatusReport } from '../core/backup/status';
+import { startServer } from '../core/backup/browser-server';
+import { generateSecret, totpUri } from '../core/backup/totp';
 import {
   generateAndStorePassword,
   vaultPath,
@@ -62,6 +64,7 @@ Subcommands:
   schedule-all [--dry-run]         schedule every configured app per its config
   unschedule <app>                 disable + remove timer
   status                           dashboard of all configured backups
+  serve [--setup-totp]             run the /backups explorer service
   test <app>                       e2e: snapshot, list, restore-to-tmp, diff, cleanup
 `;
 
@@ -83,6 +86,7 @@ export function backupCommand(args: string[]): void {
     case 'unschedule':   return cmdUnschedule(rest);
     case 'integrity':    return cmdIntegrity(rest);
     case 'status':       return cmdStatus(rest);
+    case 'serve':        return cmdServe(rest);
     case 'test':         return cmdTest(rest);
     case '--help':
     case '-h':
@@ -492,4 +496,34 @@ function humanBytes(n: number): string {
 
 function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
+/** reads a systemd-provided credential, or throws a clear error. */
+function readCredential(name: string): string {
+  const dir = process.env.CREDENTIALS_DIRECTORY;
+  if (!dir) throw new FleetError('CREDENTIALS_DIRECTORY not set — run via the systemd unit');
+  return readFileSync(`${dir}/${name}`, 'utf-8').trim();
+}
+
+function cmdServe(args: string[]): void {
+  if (args.includes('--setup-totp')) {
+    const secret = generateSecret();
+    const uri = totpUri(secret, 'matt', 'fleet-backups');
+    process.stdout.write(
+      `1. seal this secret into the credstore (root):\n` +
+      `   printf '%s' '${secret}' | systemd-creds encrypt --name=mx-totp - /etc/credstore.encrypted/mx-totp\n\n` +
+      `2. add this to 1Password / your authenticator:\n   ${uri}\n`,
+    );
+    return;
+  }
+
+  const port = 4322;
+  const totpSecret = readCredential('mx-totp');
+  const sessionSecret = readCredential('mx-session');
+  startServer({ port, totpSecret, sessionSecret })
+    .then(() => info(`backup explorer listening on 127.0.0.1:${port}`))
+    .catch((e: unknown) => {
+      error(`backup explorer failed to start: ${(e as Error).message}`);
+      process.exitCode = 1;
+    });
 }
