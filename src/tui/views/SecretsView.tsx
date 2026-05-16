@@ -1,11 +1,11 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { Box, Text } from 'ink';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 import { ScrollableList } from '@matthesketh/ink-scrollable-list';
 import { useAvailableHeight } from '@matthesketh/ink-viewport';
 import type { InputHandler } from '@matthesketh/ink-input-dispatcher';
 
-import { useAppState, useAppDispatch, useRedact } from '../state';
+import { useAppState, useAppDispatch, useRedact, redactName } from '../state';
 import { useSecrets } from '../hooks/use-secrets';
 import { colors } from '../theme';
 
@@ -16,6 +16,16 @@ export function SecretsView(): React.JSX.Element {
   const secrets = useSecrets();
   const availableHeight = useAvailableHeight();
   const { secretsSubView: subView, secretsIndex: selectedIndex, selectedApp } = state;
+
+  const appItems = useMemo(
+    () => secrets.apps.map(a => ({
+      ...a,
+      // same reasoning as the dashboard view — ScrollableList memoises rows by
+      // item identity, so the redacted label must live on the item itself.
+      displayApp: state.redacted ? redactName(a.app) : a.app,
+    })),
+    [secrets.apps, state.redacted],
+  );
 
   const refresh = secrets.refresh;
   useEffect(() => {
@@ -151,15 +161,15 @@ export function SecretsView(): React.JSX.Element {
         <Box flexDirection="column">
           <Text bold>Apps with secrets:</Text>
           <ScrollableList
-            items={secrets.apps}
-            selectedIndex={Math.min(selectedIndex, secrets.apps.length - 1)}
+            items={appItems}
+            selectedIndex={Math.min(selectedIndex, appItems.length - 1)}
             maxVisible={listHeight}
             emptyText="  No secrets managed"
             renderItem={(app, selected) => (
               <Box>
                 <Text color={colors.primary}>{selected ? '> ' : '  '}</Text>
                 <Text bold={selected} color={selected ? colors.primary : colors.text}>
-                  {redact(app.app).padEnd(24)}
+                  {app.displayApp.padEnd(24)}
                 </Text>
                 <Text color={colors.muted}>{app.type.padEnd(14)}</Text>
                 <Text>{String(app.keyCount).padEnd(8)} keys</Text>
