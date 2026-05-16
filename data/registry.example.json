@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "apps": [],
+  "infrastructure": {
+    "databases": {
+      "serviceName": "docker-databases",
+      "composePath": "/home/user/docker-databases"
+    },
+    "nginx": {
+      "configPath": "/etc/nginx"
+    }
+  }
+}
