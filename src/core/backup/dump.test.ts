@@ -107,10 +107,10 @@ describe('dumpStreamCommand', () => {
       type: 'redis',
       container: 'glitchtip-redis',
       port: 19011,
-      passwordHostCommand: 'grep ^REDIS_PASSWORD /home/matt/glitchtip/.env | cut -d= -f2-',
+      passwordHostCommand: 'grep ^REDIS_PASSWORD /home/operator/glitchtip/.env | cut -d= -f2-',
     });
     expect(cmd).toContain('-e REDIS_PASSWORD="$(');
-    expect(cmd).toContain('grep ^REDIS_PASSWORD /home/matt/glitchtip/.env');
+    expect(cmd).toContain('grep ^REDIS_PASSWORD /home/operator/glitchtip/.env');
     expect(cmd).toContain('-p 19011');
     // password reference inside container uses the injected env var
     expect(cmd).toContain('"$REDIS_PASSWORD"');
