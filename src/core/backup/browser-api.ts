@@ -181,6 +181,37 @@ function handleApi(req: ApiRequest, ctx: ApiContext): ApiResponse {
     return json(200, { staging: ctx.listStaging() });
   }
 
+  if (route === '/api/restore' && req.method === 'POST') {
+    const b = (req.body ?? {}) as { app?: string; snap?: string; path?: string };
+    const app = b.app ?? '';
+    const snap = b.snap ?? '';
+    const path = b.path ?? '';
+    if (!ctx.listApps().includes(app)) return json(404, { error: 'unknown app' });
+    if (!SNAP_RE.test(snap)) return json(400, { error: 'bad snapshot id' });
+    if (!validPath(path)) return json(400, { error: 'bad path' });
+    try {
+      return json(200, ctx.restore(app, snap, path));
+    } catch (e) {
+      const msg = (e as Error).message;
+      // doRestore throws a code-507 error when staging space is short
+      const status = (e as { code?: number }).code === 507 ? 507 : 500;
+      return json(status, { error: msg });
+    }
+  }
+
+  if (route === '/api/staging' && req.method === 'DELETE') {
+    const p = query.path ?? '';
+    if (!p.startsWith('/var/restore/') || p.includes('..')) {
+      return json(400, { error: 'bad staging path' });
+    }
+    try {
+      ctx.deleteStaging(p);
+      return json(200, { ok: true });
+    } catch (e) {
+      return json(500, { error: (e as Error).message });
+    }
+  }
+
   if (route === '/api/file' && req.method === 'GET') {
     const { app = '', snap = '', path = '', dl } = query;
     if (!ctx.listApps().includes(app)) return json(404, { error: 'unknown app' });

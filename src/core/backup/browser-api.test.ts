@@ -140,3 +140,70 @@ describe('browser-api read endpoints', () => {
     expect(res.status).toBe(503);
   });
 });
+
+describe('browser-api restore', () => {
+  it('POST /api/restore returns the staging target', () => {
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      body: { app: 'demo', snap: 'abc12345', path: '/home/app/index.ts' },
+    }), ctx());
+    expect(res.status).toBe(200);
+    if (res.kind !== 'json') throw new Error('expected json');
+    expect((res.body as { target: string }).target).toContain('/var/restore/');
+  });
+
+  it('POST /api/restore validates the snapshot id', () => {
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      body: { app: 'demo', snap: 'BAD', path: '/x' },
+    }), ctx());
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/restore rejects path traversal', () => {
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      body: { app: 'demo', snap: 'abc12345', path: '/a/../../etc' },
+    }), ctx());
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/restore rejects an unknown app', () => {
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      body: { app: 'nope', snap: 'abc12345', path: '/x' },
+    }), ctx());
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /api/restore is rejected (POST only)', () => {
+    const res = handle(authReq({ path: '/api/restore' }), ctx());
+    expect(res.status).toBe(404);
+  });
+
+  it('surfaces restore failures as 500', () => {
+    const c = ctx({ restore: () => { throw new Error('restic restore failed: boom'); } });
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      body: { app: 'demo', snap: 'abc12345', path: '/home/app/index.ts' },
+    }), c);
+    expect(res.status).toBe(500);
+  });
+
+  it('DELETE /api/staging removes a staging dir', () => {
+    let deleted = '';
+    const c = ctx({ deleteStaging: (p: string) => { deleted = p; } });
+    const res = handle(authReq({
+      method: 'DELETE', path: '/api/staging', query: { path: '/var/restore/demo-x' },
+    }), c);
+    expect(res.status).toBe(200);
+    expect(deleted).toBe('/var/restore/demo-x');
+  });
+
+  it('DELETE /api/staging rejects a path outside /var/restore', () => {
+    const res = handle(authReq({
+      method: 'DELETE', path: '/api/staging', query: { path: '/etc/passwd' },
+    }), ctx());
+    expect(res.status).toBe(400);
+  });
+});
