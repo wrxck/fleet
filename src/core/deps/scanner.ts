@@ -17,7 +17,7 @@ export function createCollectors(config: DepsConfig): Collector[] {
     new DockerImageCollector(config.severityOverrides),
     new DockerRunningCollector(config.severityOverrides),
     new EolCollector(config.severityOverrides.eolDaysWarning),
-    new VulnerabilityCollector(),
+    new VulnerabilityCollector(config.osvSkipPatterns),
     new GitHubPrCollector(),
   ];
 }
