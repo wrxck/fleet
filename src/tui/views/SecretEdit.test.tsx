@@ -5,9 +5,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { InputDispatcher } from '@matthesketh/ink-input-dispatcher';
 
-import { AppStateContext, AppDispatchContext, initialState } from '../state.js';
-import type { TuiState, Action } from '../types.js';
-import { SecretEdit } from './SecretEdit.js';
+import { AppStateContext, AppDispatchContext, initialState } from '../state';
+import type { TuiState, Action } from '../types';
+import { SecretEdit } from './SecretEdit';
 
 // Mock useSecrets so the component doesn't try to touch the real vault.
 vi.mock('../hooks/use-secrets.js', () => ({

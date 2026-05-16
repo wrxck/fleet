@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync, renam
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { withFileLock } from './file-lock.js';
+import { withFileLock } from './file-lock';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
-import { isGitRepo, getGitStatus } from './git.js';
-import { execGit } from './exec.js';
-import type { AppEntry } from './registry.js';
-import { withRegistry } from './registry.js';
-import { composeBuild } from './docker.js';
+import { isGitRepo, getGitStatus } from './git';
+import { execGit } from './exec';
+import type { AppEntry } from './registry';
+import { withRegistry } from './registry';
+import { composeBuild } from './docker';
 
 export type PreflightResult =
   | { ok: true; branch: string }
