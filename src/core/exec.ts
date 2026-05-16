@@ -10,7 +10,7 @@ export interface ExecResult {
 export function execSafe(
   cmd: string,
   args: string[],
-  opts: { timeout?: number; cwd?: string; env?: Record<string, string>; input?: string } = {},
+  opts: { timeout?: number; cwd?: string; env?: Record<string, string>; input?: string; maxBuffer?: number } = {},
 ): ExecResult {
   const result = spawnSync(cmd, args, {
     timeout: opts.timeout ?? 30_000,
@@ -19,6 +19,10 @@ export function execSafe(
     encoding: 'utf-8',
     stdio: 'pipe',
     input: opts.input,
+    // node's default is 1mb. restic --json on a long-running snapshot emits
+    // hundreds of progress lines that easily blow past that; bump to 256mb
+    // so a multi-hour run can't hit ENOBUFS just from status chatter.
+    maxBuffer: opts.maxBuffer ?? 256 * 1024 * 1024,
   });
   if (result.error) {
     return {
