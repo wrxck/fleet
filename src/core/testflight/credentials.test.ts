@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { resolveAscCredentials, hasAscCredentials, easEnv } from './credentials';
+import { resolveAscCredentials, hasAscCredentials } from './credentials';
 
 const FAKE_KEY = '-----BEGIN PRIVATE KEY-----\nMIGdummy\n-----END PRIVATE KEY-----';
 const FAKE_KEY_B64 = Buffer.from(FAKE_KEY).toString('base64');
@@ -41,18 +41,5 @@ describe('hasAscCredentials', () => {
 
   it('is false when anything is missing', () => {
     expect(hasAscCredentials({ ASC_API_KEY_ID: 'KEY1' })).toBe(false);
-  });
-});
-
-describe('easEnv', () => {
-  it('picks only the keys eas consumes', () => {
-    expect(
-      easEnv({
-        EXPO_TOKEN: 'tok',
-        APPLE_ID: 'a@b.com',
-        ASC_APP_ID: '123',
-        UNRELATED: 'drop me',
-      }),
-    ).toEqual({ EXPO_TOKEN: 'tok', APPLE_ID: 'a@b.com', ASC_APP_ID: '123' });
   });
 });

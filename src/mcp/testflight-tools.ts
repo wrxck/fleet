@@ -4,7 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { resolveTestflightTarget, appSecretsEnv } from '../core/testflight/resolve';
 import { resolveAscCredentials, hasAscCredentials } from '../core/testflight/credentials';
 import { listBuilds, verifyApp } from '../core/testflight/asc';
-import { easVersion } from '../core/testflight/eas';
+import { ghVersion, resolveRepo } from '../core/testflight/workflow';
 
 function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
@@ -32,15 +32,16 @@ export function registerTestflightTools(server: McpServer): void {
 
   server.tool(
     'fleet_testflight_doctor',
-    'Check TestFlight publishing readiness for an app: eas-cli availability, App Store ' +
-    'Connect credentials, and — when ASC_APP_ID is set — that the ASC API is reachable.',
+    'Check TestFlight publishing readiness for an app: GitHub CLI availability, the ' +
+    'GitHub repo backing the build workflow, App Store Connect credentials, and — when ' +
+    'ASC_APP_ID is set — that the ASC API is reachable.',
     { app: z.string().describe('Registered fleet app name') },
     async ({ app }) => {
-      const { app: name } = resolveTestflightTarget(app);
+      const { app: name, projectPath } = resolveTestflightTarget(app);
       const env = appSecretsEnv(name);
       const lines = [
-        `eas-cli: ${easVersion() ?? 'not reachable'}`,
-        `expo token: ${env.EXPO_TOKEN ? 'set' : 'missing'}`,
+        `gh cli: ${ghVersion() ?? 'not found'}`,
+        `github repo: ${resolveRepo(projectPath) ?? 'not resolved'}`,
       ];
       if (!hasAscCredentials(env)) {
         lines.push('asc credentials: missing — need ASC_API_KEY_ID, ASC_API_KEY_ISSUER_ID, ASC_API_KEY_B64');
@@ -55,7 +56,7 @@ export function registerTestflightTools(server: McpServer): void {
           lines.push(`asc api: check failed — ${(err as Error).message}`);
         }
       } else {
-        lines.push('asc app id: not set (publish can still create the app)');
+        lines.push('asc app id: not set');
       }
       return text(lines.join('\n'));
     },

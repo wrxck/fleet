@@ -55,11 +55,11 @@ Commands:
   deps config         Show/set configuration
   deps ignore <pkg>   Suppress a finding
   deps init           Install cron + MOTD for automated scanning
-  testflight publish <app>     Build + submit the mobile app to TestFlight
+  testflight publish <app>     Dispatch the macOS build workflow to TestFlight
   testflight builds <app>      List TestFlight builds
   testflight update <app> --build <id> --whats-new "..."  Set test notes
   testflight delete <app> --build <id>   Expire a TestFlight build
-  testflight doctor <app>      Check eas + App Store Connect credentials
+  testflight doctor <app>      Check gh + App Store Connect credentials
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]

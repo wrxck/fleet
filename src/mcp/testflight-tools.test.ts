@@ -9,18 +9,19 @@ vi.mock('../core/testflight/credentials.js', () => ({
   hasAscCredentials: vi.fn(),
 }));
 vi.mock('../core/testflight/asc.js', () => ({ listBuilds: vi.fn(), verifyApp: vi.fn() }));
-vi.mock('../core/testflight/eas.js', () => ({ easVersion: vi.fn() }));
+vi.mock('../core/testflight/workflow.js', () => ({ ghVersion: vi.fn(), resolveRepo: vi.fn() }));
 
 import { appSecretsEnv } from '../core/testflight/resolve';
 import { hasAscCredentials } from '../core/testflight/credentials';
 import { listBuilds } from '../core/testflight/asc';
-import { easVersion } from '../core/testflight/eas';
+import { ghVersion, resolveRepo } from '../core/testflight/workflow';
 import { registerTestflightTools } from './testflight-tools';
 
 const mockEnv = vi.mocked(appSecretsEnv);
 const mockHasCreds = vi.mocked(hasAscCredentials);
 const mockListBuilds = vi.mocked(listBuilds);
-const mockEasVersion = vi.mocked(easVersion);
+const mockGhVersion = vi.mocked(ghVersion);
+const mockResolveRepo = vi.mocked(resolveRepo);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function register(): any[] {
@@ -65,13 +66,15 @@ describe('registerTestflightTools', () => {
     expect(res.content[0].text).toContain('"b1"');
   });
 
-  it('fleet_testflight_doctor reports eas and credential state', async () => {
-    mockEasVersion.mockReturnValue('eas-cli/18.0.0');
+  it('fleet_testflight_doctor reports gh, repo and credential state', async () => {
+    mockGhVersion.mockReturnValue('gh version 2.40.0');
+    mockResolveRepo.mockReturnValue('wrxck/shiftfaced');
     mockHasCreds.mockReturnValue(false);
     mockEnv.mockReturnValue({});
     const doctor = handlerFor(register(), 'fleet_testflight_doctor');
     const res = await doctor({ app: 'shiftfaced' });
-    expect(res.content[0].text).toContain('eas-cli/18.0.0');
+    expect(res.content[0].text).toContain('gh version 2.40.0');
+    expect(res.content[0].text).toContain('github repo: wrxck/shiftfaced');
     expect(res.content[0].text).toContain('asc credentials: missing');
   });
 });
