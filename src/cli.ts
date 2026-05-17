@@ -7,7 +7,6 @@ import { getCommand } from './registry/registry';
 import { parseArgs } from './registry/parse-args';
 import { renderToText } from './registry/render';
 import { makeCliContext } from './registry/context';
-import { listCommand } from './commands/list';
 import { startCommand } from './commands/start';
 import { stopCommand } from './commands/stop';
 import { restartCommand } from './commands/restart';
@@ -186,7 +185,6 @@ export async function run(argv: string[]): Promise<void> {
   if (await dispatchRegistryCommand(command, rest)) return;
 
   switch (command) {
-    case 'list': return listCommand(rest);
     case 'start': return startCommand(rest);
     case 'stop': return stopCommand(rest);
     case 'restart': return restartCommand(rest);
