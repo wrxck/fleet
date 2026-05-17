@@ -106,6 +106,32 @@ describe('patchSystemdCommand run() — patch happy path', () => {
     expect(result.ok).toBeTruthy();
     expect(writeFileSync).toHaveBeenCalled();
     expect(result.data).toMatchObject({ action: 'patch' });
+
+    // the rewritten unit file must carry the new settings for an app service.
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).toContain('StartLimitBurst=5');
+    expect(written).toContain('StartLimitIntervalSec=300');
+    expect(written).toContain('ExecStart=/usr/bin/env fleet boot-start fleet-app1');
+    expect(written).toContain('TimeoutStartSec=900');
+    expect(written).not.toContain('TimeoutStartSec=300');
+  });
+
+  it('does not duplicate StartLimitBurst on a partially-patched service', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry());
+    // already has StartLimitBurst but lacks the boot-start ExecStart.
+    vi.mocked(readServiceFile).mockReturnValue(
+      '[Service]\nStartLimitBurst=5\nStartLimitIntervalSec=300\nExecStart=/usr/bin/docker compose up\nTimeoutStartSec=300',
+    );
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    const result = await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeTruthy();
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    // StartLimitBurst already present — must appear exactly once, not be re-inserted.
+    expect(written.match(/StartLimitBurst=/g)).toHaveLength(1);
+    expect(written).toContain('ExecStart=/usr/bin/env fleet boot-start fleet-app1');
   });
 });
 
