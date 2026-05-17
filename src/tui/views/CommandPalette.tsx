@@ -15,8 +15,12 @@ export function CommandPalette(props: {
   onOpenView: (view: string) => void;
   onClose: () => void;
 }): React.JSX.Element {
-  loadRegistry();
-  const commands = useMemo(() => allCommands().filter(c => !c.cliOnly), []);
+  // load the registry once and snapshot the visible commands. a lazy useState
+  // initialiser runs exactly once — unlike a bare call in the render body.
+  const [commands] = useState<CommandDef[]>(() => {
+    loadRegistry();
+    return allCommands().filter(c => !c.cliOnly);
+  });
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const [chosen, setChosen] = useState<CommandDef | null>(null);
