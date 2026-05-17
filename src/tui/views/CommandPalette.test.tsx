@@ -56,8 +56,7 @@ describe('CommandPalette', () => {
   });
 
   it('calls onOpenView when enter is pressed on a command with a tui view', async () => {
-    // status has tui: { view: 'dashboard' } — use it directly (no ad-hoc commands
-    // so sort order is predictable: status is index 0).
+    // type 'stat' to filter to only status, then press enter.
     const onOpenView = vi.fn();
 
     const { stdin } = render(
@@ -65,6 +64,15 @@ describe('CommandPalette', () => {
         <CommandPalette onOpenView={onOpenView} onClose={() => {}} />
       </InputDispatcher>,
     );
+    await flush();
+
+    stdin.write('s');
+    await flush();
+    stdin.write('t');
+    await flush();
+    stdin.write('a');
+    await flush();
+    stdin.write('t');
     await flush();
 
     stdin.write('\r');

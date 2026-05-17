@@ -1,9 +1,10 @@
 import { register, _resetRegistry } from './registry';
+import { listCommand } from '../commands/list';
 import { statusCommand } from '../commands/status';
 
 /** every command definition. commands are added here as they are migrated
  *  onto the registry. */
-const ALL = [statusCommand];
+const ALL = [statusCommand, listCommand];
 
 let loaded = false;
 

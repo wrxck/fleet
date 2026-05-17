@@ -49,11 +49,6 @@ export async function startMcpServer(): Promise<void> {
 
   registerRegistryTools(server);
 
-  server.tool('fleet_list', 'List all registered apps with their configuration', async () => {
-    const reg = load();
-    return text(JSON.stringify(reg.apps, null, 2));
-  });
-
   server.tool(
     'fleet_start',
     'Start an app via systemctl',

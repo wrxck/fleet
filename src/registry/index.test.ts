@@ -9,8 +9,9 @@ describe('registry assembly', () => {
 
   it('registers all commands in ALL without throwing', () => {
     loadRegistry();
-    expect(allCommands()).toHaveLength(1);
+    expect(allCommands().length).toBeGreaterThanOrEqual(2);
     expect(getCommand('status')?.name).toBe('status');
+    expect(getCommand('list')?.name).toBe('list');
   });
 
   it('is idempotent — repeated calls do not throw', () => {
