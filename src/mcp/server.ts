@@ -23,6 +23,7 @@ import { validateApp, validateAll } from '../core/secrets-validate';
 import { freezeApp, unfreezeApp } from '../commands/freeze';
 import { registerGitTools } from './git-tools';
 import { registerSecretsTools } from './secrets-tools';
+import { registerRegistryTools } from './registry-bridge';
 import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy';
 import { snapshotEgress } from '../core/egress';
 import { registerDepsTools } from './deps-tools';
@@ -46,6 +47,8 @@ export async function startMcpServer(): Promise<void> {
     name: 'fleet',
     version: pkg.version,
   });
+
+  registerRegistryTools(server);
 
   server.tool('fleet_status', 'Dashboard data for all apps: systemd state, containers, health', async () => {
     const data = getStatusData();
