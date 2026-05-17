@@ -124,4 +124,38 @@ describe('registerRegistryTools handler', () => {
     const result = await handlers.get('fleet_objy')!({}) as { structuredContent: { count: number } };
     expect(result.structuredContent).toEqual({ count: 2 });
   });
+
+  it('rejects args that fail the command schema', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'needs-app',
+      summary: 'requires an app arg',
+      args: z.object({ app: z.string() }),
+      async run(args) { return { ok: true, summary: `app=${args.app}`, data: null }; },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+
+    const bad = await handlers.get('fleet_needs-app')!({}) as { isError: boolean; content: Array<{ text: string }> };
+    expect(bad.isError).toBeTruthy();
+    expect(bad.content[0].text).toContain('app');
+
+    const good = await handlers.get('fleet_needs-app')!({ app: 'web' }) as { isError: boolean; content: Array<{ text: string }> };
+    expect(good.isError).toBeFalsy();
+    expect(good.content[0].text).toBe('app=web');
+  });
+
+  it('applies schema defaults before running, matching the cli surface', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'has-default',
+      summary: 'has a defaulted flag',
+      args: z.object({ verbose: z.boolean().default(false) }),
+      async run(args) { return { ok: true, summary: `verbose=${args.verbose}`, data: null }; },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+    const result = await handlers.get('fleet_has-default')!({}) as { content: Array<{ text: string }> };
+    expect(result.content[0].text).toBe('verbose=false');
+  });
 });

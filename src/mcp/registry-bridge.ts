@@ -33,9 +33,24 @@ export function registerRegistryTools(server: McpServer): void {
   for (const def of allCommands()) {
     if (def.cliOnly) continue;
     server.tool(toMcpToolName(def.name), def.summary, def.args.shape, async (args: Record<string, unknown>) => {
+      // `confirm` is mcp surface plumbing, not a command arg — read it from the
+      // raw input before the schema parse below strips unknown keys.
       const ctx = makeMcpContext(args.confirm === true);
       try {
-        const result = await def.run(args, ctx);
+        // validate, coerce and default args against the command schema — the
+        // same safeParse the cli dispatcher runs via parseArgs, so both
+        // surfaces invoke `run` with an identically-validated args shape.
+        const parsed = def.args.safeParse(args);
+        if (!parsed.success) {
+          const detail = parsed.error.issues
+            .map(iss => `${iss.path.join('.')}: ${iss.message}`)
+            .join('; ');
+          return {
+            content: [{ type: 'text' as const, text: `invalid arguments: ${detail}` }],
+            isError: true,
+          };
+        }
+        const result = await def.run(parsed.data, ctx);
         return {
           content: [{ type: 'text' as const, text: result.summary }],
           // structuredContent must be an object — only attach it when the
