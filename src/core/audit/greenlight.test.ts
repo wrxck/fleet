@@ -80,13 +80,26 @@ describe('runPreflight', () => {
     );
   });
 
+  it('strips the human banner greenlight prints before the json', () => {
+    const banner =
+      '\n  greenlight preflight — every check, one command, zero uploads.\n' +
+      '  Project: /p\n  Checks:  metadata + codescan + privacy\n\n';
+    mockExec.mockReturnValue(ok(banner + JSON.stringify(sampleReport)));
+    expect(runPreflight('/p', {}, 'greenlight').summary.passed).toBe(true);
+  });
+
   it('throws when the scan exits non-zero', () => {
     mockExec.mockReturnValue(fail('bad path'));
     expect(() => runPreflight('/p', {}, 'greenlight')).toThrow(/greenlight preflight failed/);
   });
 
-  it('throws when greenlight emits non-json', () => {
-    mockExec.mockReturnValue(ok('not json at all'));
+  it('throws when greenlight emits no json object', () => {
+    mockExec.mockReturnValue(ok('no braces in this output at all'));
+    expect(() => runPreflight('/p', {}, 'greenlight')).toThrow(/no json report/);
+  });
+
+  it('throws when the json object is malformed', () => {
+    mockExec.mockReturnValue(ok('banner text\n{ "broken": '));
     expect(() => runPreflight('/p', {}, 'greenlight')).toThrow(/not valid json/);
   });
 });

@@ -79,8 +79,17 @@ export function runPreflight(
       `greenlight preflight failed: ${res.stderr || res.stdout || 'unknown error'}`,
     );
   }
+  // greenlight prints a human banner (project path, scanner list) to stdout
+  // before the json document even under --format json, so slice from the
+  // first brace. the banner is plain text and never contains one.
+  const jsonStart = res.stdout.indexOf('{');
+  if (jsonStart === -1) {
+    throw new FleetError(
+      `greenlight produced no json report:\n${res.stdout.slice(0, 500)}`,
+    );
+  }
   try {
-    return JSON.parse(res.stdout) as GreenlightReport;
+    return JSON.parse(res.stdout.slice(jsonStart)) as GreenlightReport;
   } catch {
     throw new FleetError(
       `greenlight returned output that is not valid json:\n${res.stdout.slice(0, 500)}`,
