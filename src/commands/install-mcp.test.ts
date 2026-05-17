@@ -1,37 +1,46 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+import { installMcpCommand } from './install-mcp';
+import { makeCliContext } from '../registry/context';
+import type { CommandContext } from '../registry/types';
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
   return { ...actual, existsSync: vi.fn(), readFileSync: vi.fn(), writeFileSync: vi.fn() };
 });
 
-vi.mock('../ui/output.js', () => ({
-  success: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-}));
-
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { success, info } from '../ui/output';
-import { installMcpCommand } from './install-mcp';
-
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.HOME = '/home/testuser';
 });
 
-describe('installMcpCommand', () => {
+/** a context whose log is a spy, so log levels can be asserted. */
+function spyContext(): { ctx: CommandContext; log: ReturnType<typeof vi.fn> } {
+  const log = vi.fn();
+  return { ctx: { ...makeCliContext(), log }, log };
+}
+
+describe('install-mcp CommandDef', () => {
+  it('has the correct registry metadata', () => {
+    expect(installMcpCommand.name).toBe('install-mcp');
+    expect(installMcpCommand.cliOnly).toBeTruthy();
+  });
+
   it('installs MCP server config when not present', async () => {
     vi.mocked(existsSync).mockImplementation((p) => {
       if (String(p).includes('.claude.json')) return false;
       return true;
     });
+    vi.mocked(readFileSync).mockReturnValue('{}');
 
-    await installMcpCommand([]);
+    const result = await installMcpCommand.run({ uninstall: false }, makeCliContext());
 
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/install/i);
+    expect(result.data).toEqual({ installed: true });
     expect(writeFileSync).toHaveBeenCalled();
-    expect(success).toHaveBeenCalledWith(expect.stringContaining('Installed'));
   });
 
   it('updates existing MCP server config', async () => {
@@ -40,10 +49,12 @@ describe('installMcpCommand', () => {
       mcpServers: { fleet: { command: 'old', args: [] } },
     }));
 
-    await installMcpCommand([]);
+    const result = await installMcpCommand.run({ uninstall: false }, makeCliContext());
 
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/updat/i);
+    expect(result.data).toEqual({ installed: true });
     expect(writeFileSync).toHaveBeenCalled();
-    expect(success).toHaveBeenCalledWith(expect.stringContaining('Updated'));
   });
 
   it('uninstalls MCP server config', async () => {
@@ -52,18 +63,22 @@ describe('installMcpCommand', () => {
       mcpServers: { fleet: { command: 'node', args: [] } },
     }));
 
-    await installMcpCommand(['--uninstall']);
+    const result = await installMcpCommand.run({ uninstall: true }, makeCliContext());
 
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/remov/i);
+    expect(result.data).toEqual({ installed: false });
     expect(writeFileSync).toHaveBeenCalled();
-    expect(success).toHaveBeenCalledWith(expect.stringContaining('Removed'));
   });
 
   it('handles uninstall when not configured', async () => {
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue('{}');
 
-    await installMcpCommand(['--uninstall']);
+    const result = await installMcpCommand.run({ uninstall: true }, makeCliContext());
 
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('not configured'));
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/not configured|nothing to remov/i);
+    expect(result.data).toEqual({ installed: false });
   });
 });

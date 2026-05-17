@@ -15,7 +15,6 @@ import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
 import { depsCommand } from './commands/deps';
 import { watchdogCommand } from './commands/watchdog';
-import { installMcpCommand } from './commands/install-mcp';
 import { guardCommand } from './commands/guard';
 import { backupCommand } from './commands/backup';
 import { routineRunCommand } from './commands/routine-run';
@@ -182,7 +181,6 @@ export async function run(argv: string[]): Promise<void> {
     case 'secrets': return secretsCommand(rest);
     case 'git': return gitCommand(rest);
     case 'watchdog': return watchdogCommand(rest);
-    case 'install-mcp': return installMcpCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
     case 'mcp': return startMcpServer();
