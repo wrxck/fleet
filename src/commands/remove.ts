@@ -1,41 +1,32 @@
+import { z } from 'zod';
+
 import { load, findApp, removeApp, withRegistry } from '../core/registry';
 import { stopService, disableService } from '../core/systemd';
 import { AppNotFoundError } from '../core/errors';
-import { success, error, info, warn } from '../ui/output';
-import { confirm } from '../ui/confirm';
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
-export async function removeCommand(args: string[]): Promise<void> {
-  const yes = args.includes('-y') || args.includes('--yes');
-  const appName = args.find(a => !a.startsWith('-'));
-
-  if (!appName) {
-    error('Usage: fleet remove <app>');
-    process.exit(1);
-  }
-
-  // Read first (without the lock) so we can prompt the user / run systemctl
-  // outside the locked region. We re-resolve and remove inside withRegistry
-  // so the actual mutation runs against a fresh-loaded registry.
-  const previewReg = load();
-  const previewApp = findApp(previewReg, appName);
-  if (!previewApp) throw new AppNotFoundError(appName);
-
-  if (!yes && !await confirm(`Remove ${previewApp.name}? This will stop and disable the service.`)) {
-    info('Cancelled');
-    return;
-  }
-
-  info(`Stopping ${previewApp.serviceName}...`);
-  stopService(previewApp.serviceName);
-
-  info(`Disabling ${previewApp.serviceName}...`);
-  disableService(previewApp.serviceName);
-
-  await withRegistry(reg => {
-    const app = findApp(reg, appName);
-    if (!app) throw new AppNotFoundError(appName);
-    return removeApp(reg, app.name);
-  });
-  success(`Removed ${previewApp.name} from registry`);
-  warn('Service file not deleted - remove manually if needed');
-}
+export const removeCommand = defineCommand({
+  name: 'remove',
+  summary: 'Stop, disable and deregister an app',
+  args: z.object({ app: z.string(), yes: z.boolean().default(false) }),
+  destructive: true,
+  async run(args, ctx): Promise<CommandResult<{ app: string }>> {
+    const app = findApp(load(), args.app);
+    if (!app) {
+      return { ok: false, summary: `app not found: ${args.app}`, data: { app: args.app } };
+    }
+    if (!args.yes && !(await ctx.confirm(`Remove ${app.name}? This will stop and disable the service.`))) {
+      return { ok: false, summary: 'cancelled', data: { app: app.name } };
+    }
+    stopService(app.serviceName);
+    disableService(app.serviceName);
+    await withRegistry(reg => {
+      const fresh = findApp(reg, app.name);
+      if (!fresh) throw new AppNotFoundError(app.name);
+      return removeApp(reg, fresh.name);
+    });
+    ctx.log({ level: 'warn', message: 'service file not deleted — remove manually if needed' });
+    return { ok: true, summary: `removed ${app.name} from registry`, data: { app: app.name } };
+  },
+});
