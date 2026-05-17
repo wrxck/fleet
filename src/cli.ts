@@ -18,6 +18,7 @@ import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
 import { initCommand } from './commands/init';
 import { depsCommand } from './commands/deps';
+import { testflightCommand } from './commands/testflight';
 import { watchdogCommand } from './commands/watchdog';
 import { installMcpCommand } from './commands/install-mcp';
 import { patchSystemdCommand } from './commands/patch-systemd';
@@ -54,6 +55,11 @@ Commands:
   deps config         Show/set configuration
   deps ignore <pkg>   Suppress a finding
   deps init           Install cron + MOTD for automated scanning
+  testflight publish <app>     Build + submit the mobile app to TestFlight
+  testflight builds <app>      List TestFlight builds
+  testflight update <app> --build <id> --whats-new "..."  Set test notes
+  testflight delete <app> --build <id>   Expire a TestFlight build
+  testflight doctor <app>      Check eas + App Store Connect credentials
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
@@ -129,6 +135,7 @@ export async function run(argv: string[]): Promise<void> {
   const ROOT_COMMANDS = new Set([
     'start', 'stop', 'restart', 'deploy', 'freeze', 'unfreeze',
     'nginx', 'secrets', 'patch-systemd', 'init', 'watchdog', 'backup',
+    'testflight',
   ]);
 
   if (ROOT_COMMANDS.has(command) && process.getuid && process.getuid() !== 0) {
@@ -146,6 +153,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'egress': return egressCommand(rest);
     case 'health': return healthCommand(rest);
     case 'deps': return depsCommand(rest);
+    case 'testflight': return testflightCommand(rest);
     case 'add': return addCommand(rest);
     case 'remove': return removeCommand(rest);
     case 'deploy': return deployCommand(rest);
