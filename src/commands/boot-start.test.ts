@@ -12,8 +12,15 @@ import { refresh } from '../core/boot-refresh';
 import { composeUp } from '../core/docker';
 import { bootStartCommand } from './boot-start';
 import { makeCliContext } from '../registry/context';
+import type { CommandContext } from '../registry/types';
 
 beforeEach(() => vi.clearAllMocks());
+
+/** a context whose log is a spy, so log levels can be asserted. */
+function spyContext(): { ctx: CommandContext; log: ReturnType<typeof vi.fn> } {
+  const log = vi.fn();
+  return { ctx: { ...makeCliContext(), log }, log };
+}
 
 describe('boot-start CommandDef', () => {
   it('has the correct registry metadata', () => {
@@ -58,5 +65,27 @@ describe('boot-start CommandDef', () => {
     const result = await bootStartCommand.run({ app: 'web' }, makeCliContext());
     expect(result.ok).toBeTruthy();
     expect(vi.mocked(composeUp)).toHaveBeenCalled();
+  });
+
+  it('still runs composeUp when refresh returns failed-safe, logging it at warn', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockResolvedValue({ kind: 'failed-safe', step: 'fetch', detail: 'no network' } as never);
+    vi.mocked(composeUp).mockReturnValue(true);
+    const { ctx, log } = spyContext();
+    const result = await bootStartCommand.run({ app: 'web' }, ctx);
+    expect(result.ok).toBeTruthy();
+    expect(vi.mocked(composeUp)).toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
+  });
+
+  it('logs a refreshed result at info level', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockResolvedValue({ kind: 'refreshed', head: 'abc', built: true } as never);
+    vi.mocked(composeUp).mockReturnValue(true);
+    const { ctx, log } = spyContext();
+    await bootStartCommand.run({ app: 'web' }, ctx);
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ level: 'info' }));
   });
 });
