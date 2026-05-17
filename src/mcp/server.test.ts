@@ -141,10 +141,14 @@ vi.mock('../core/secrets-validate.js', () => ({
   validateApp: vi.fn(),
   validateAll: vi.fn(),
 }));
-vi.mock('../commands/freeze.js', () => ({
-  freezeApp: vi.fn(),
-  unfreezeApp: vi.fn(),
-}));
+vi.mock('../commands/freeze.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../commands/freeze')>();
+  return {
+    ...actual,
+    freezeApp: vi.fn(),
+    unfreezeApp: vi.fn(),
+  };
+});
 vi.mock('./git-tools.js', () => ({
   registerGitTools: vi.fn(),
 }));

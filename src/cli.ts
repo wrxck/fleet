@@ -20,7 +20,6 @@ import { depsCommand } from './commands/deps';
 import { watchdogCommand } from './commands/watchdog';
 import { installMcpCommand } from './commands/install-mcp';
 import { patchSystemdCommand } from './commands/patch-systemd';
-import { freezeCommand, unfreezeCommand } from './commands/freeze';
 import { guardCommand } from './commands/guard';
 import { bootStartCommand } from './commands/boot-start';
 import { rollbackCommand } from './commands/rollback';
@@ -195,9 +194,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'install-mcp': return installMcpCommand(rest);
     case 'patch-systemd': return patchSystemdCommand(rest);
     case 'boot-start': return bootStartCommand(rest);
-    case 'freeze': return freezeCommand(rest);
     case 'rollback': return rollbackCommand(rest);
-    case 'unfreeze': return unfreezeCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
     case 'mcp': return startMcpServer();
