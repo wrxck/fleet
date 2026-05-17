@@ -7,6 +7,7 @@ import { makeMcpContext } from '../registry/context';
 export interface BridgeTool {
   toolName: string;
   summary: string;
+  cliOnly?: boolean;
 }
 
 /** registry commands as flat tool descriptors, for inspection and tests. */
