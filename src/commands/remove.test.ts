@@ -123,6 +123,18 @@ describe('removeCommand run()', () => {
     expect(result.data).toEqual({ app: 'web' });
   });
 
+  it('returns { ok: false } when the app vanishes between the preview and the lock', async () => {
+    const app = makeApp();
+    mockLoad.mockReturnValue(makeRegistry(app));
+    // resolves on the unlocked preview, gone on the in-lock re-resolve (toctou race).
+    mockFindApp.mockReturnValueOnce(app).mockReturnValueOnce(undefined);
+
+    const result = await removeCommand.run({ app: 'web', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(mockRemoveApp).not.toHaveBeenCalled();
+  });
+
   it('stops, disables, removes app, and returns { ok: true } when confirmation is granted', async () => {
     const app = makeApp();
     const reg = makeRegistry(app);
