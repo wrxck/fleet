@@ -43,12 +43,14 @@ describe('health CommandDef', () => {
 
   it('checks a single resolved app', async () => {
     vi.mocked(load).mockReturnValue({ apps: [] } as never);
-    vi.mocked(findApp).mockReturnValue({ name: 'web' } as never);
+    const resolved = { name: 'web' };
+    vi.mocked(findApp).mockReturnValue(resolved as never);
     vi.mocked(checkHealth).mockReturnValue(hr('web', 'degraded') as never);
     const result = await healthCommand.run({ app: 'web' }, makeCliContext());
     expect(result.ok).toBeTruthy();
     expect(result.data).toHaveLength(1);
-    expect(vi.mocked(checkHealth)).toHaveBeenCalled();
+    // the app findApp resolved must be the one passed to checkHealth.
+    expect(vi.mocked(checkHealth)).toHaveBeenCalledWith(resolved);
   });
 
   it('returns an expected failure for an unknown app', async () => {
@@ -94,6 +96,7 @@ describe('health CommandDef', () => {
     };
     vi.mocked(checkAllHealth).mockReturnValue([withHttp] as never);
     const result = await healthCommand.run({}, makeCliContext());
+    expect(result.render?.kind).toBe('table');
     if (result.render?.kind === 'table') {
       // http column is index 3
       expect(result.render.rows[0][3]).toBe('200');
