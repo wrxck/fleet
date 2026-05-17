@@ -90,7 +90,7 @@ export const initCommand = defineCommand({
       render: {
         kind: 'table',
         columns: ['NAME', 'PATH', 'TYPE', 'PORT'],
-        rows: reg.apps.map(a => [a.name, a.composePath, a.type, a.port?.toString() ?? '—']),
+        rows: discovered.apps.map(a => [a.name, a.composePath, a.type, a.port?.toString() ?? '—']),
       },
     };
   },
