@@ -9,7 +9,6 @@ import { renderToText } from './registry/render';
 import { makeCliContext } from './registry/context';
 import { logsCommand } from './commands/logs';
 import { egressCommand } from './commands/egress';
-import { addCommand } from './commands/add';
 import { removeCommand } from './commands/remove';
 import { deployCommand } from './commands/deploy';
 import { nginxCommand } from './commands/nginx';
@@ -182,7 +181,6 @@ export async function run(argv: string[]): Promise<void> {
     case 'logs': return logsCommand(rest);
     case 'egress': return egressCommand(rest);
     case 'deps': return depsCommand(rest);
-    case 'add': return addCommand(rest);
     case 'remove': return removeCommand(rest);
     case 'deploy': return deployCommand(rest);
     case 'nginx': return nginxCommand(rest);
