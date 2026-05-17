@@ -6,7 +6,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import { getStatusData } from '../commands/status';
 import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
 import { startService, stopService, restartService } from '../core/systemd';
 import { getContainerLogs, getContainersByCompose } from '../core/docker';
@@ -49,11 +48,6 @@ export async function startMcpServer(): Promise<void> {
   });
 
   registerRegistryTools(server);
-
-  server.tool('fleet_status', 'Dashboard data for all apps: systemd state, containers, health', async () => {
-    const data = getStatusData();
-    return text(JSON.stringify(data, null, 2));
-  });
 
   server.tool('fleet_list', 'List all registered apps with their configuration', async () => {
     const reg = load();

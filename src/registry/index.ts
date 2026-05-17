@@ -1,9 +1,9 @@
 import { register, _resetRegistry } from './registry';
-import type { CommandDef } from './types';
+import { statusCommand } from '../commands/status';
 
 /** every command definition. commands are added here as they are migrated
- *  onto the registry — empty until the first command migration task. */
-const ALL: CommandDef[] = [];
+ *  onto the registry. */
+const ALL = [statusCommand];
 
 let loaded = false;
 
