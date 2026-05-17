@@ -63,5 +63,29 @@ describe('rollback CommandDef', () => {
     expect(result.ok).toBeTruthy();
     expect(result.summary).toMatch(/rolled back/i);
     expect(vi.mocked(restartService)).toHaveBeenCalledWith('fleet-web');
+    // the previous tag is re-applied over the latest tag.
+    expect(vi.mocked(execSafe)).toHaveBeenCalledWith(
+      'docker',
+      ['tag', 'registry.example/web:fleet-previous', 'registry.example/web:latest'],
+      expect.anything(),
+    );
+  });
+
+  it('splits the image base at the tag colon, not a registry port colon', async () => {
+    // `docker compose config --images` reports a registry-with-port image.
+    const portImage = { ok: true, stdout: 'registry.example:5000/web:latest\n', stderr: '', exitCode: 0 };
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', serviceName: 'fleet-web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(execSafe).mockImplementation((_cmd, a) =>
+      (a.includes('config') ? portImage : okExec) as never);
+    vi.mocked(restartService).mockReturnValue(true);
+    const result = await rollbackCommand.run({ app: 'web', yes: true }, makeMcpContext(true));
+    expect(result.ok).toBeTruthy();
+    // :fleet-previous must replace the :latest tag, leaving the :5000 port intact.
+    expect(vi.mocked(execSafe)).toHaveBeenCalledWith(
+      'docker',
+      ['tag', 'registry.example:5000/web:fleet-previous', 'registry.example:5000/web:latest'],
+      expect.anything(),
+    );
   });
 });
