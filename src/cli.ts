@@ -122,8 +122,10 @@ export async function dispatchRegistryCommand(
   const def = getCommand(command);
   if (!def) return false;
 
-  // --json is a global output flag handled here, not a per-command argument,
-  // so it is stripped before the schema parse would reject it as unknown.
+  // --json is an output flag for the registry dispatch path — handled here,
+  // not a per-command argument, so it is stripped before the schema parse
+  // would reject it as unknown. legacy (non-registry) commands that still
+  // live in the switch below parse --json themselves.
   const jsonMode = rest.includes('--json');
   const cmdArgs = rest.filter(arg => arg !== '--json');
 

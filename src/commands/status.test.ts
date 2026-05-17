@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../core/registry.js', () => ({
+vi.mock('../core/registry', () => ({
   load: vi.fn(),
 }));
 
-vi.mock('../core/systemd.js', () => ({
+vi.mock('../core/systemd', () => ({
   systemdAvailable: vi.fn(),
   getMultipleServiceStatuses: vi.fn(),
 }));
 
-vi.mock('../core/docker.js', () => ({
+vi.mock('../core/docker', () => ({
   listContainers: vi.fn(),
 }));
 
