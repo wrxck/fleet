@@ -121,8 +121,7 @@ describe('CommandPalette', () => {
     );
     await flush();
 
-    // allCommands(): 'demo-flag' (0) < 'demo-run'? no — only demo-flag is registered
-    // here. sorted order: demo-flag (0), status (1). press enter on demo-flag.
+    // sorted order: demo-flag (0), status (1). press enter on demo-flag.
     stdin.write('\r');
     await flush();
 
