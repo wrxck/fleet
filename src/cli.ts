@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { loadRegistry } from './registry/index';
+import { getCommand } from './registry/registry';
+import { parseArgs } from './registry/parse-args';
+import { renderToText } from './registry/render';
+import { makeCliContext } from './registry/context';
 import { statusCommand } from './commands/status';
 import { listCommand } from './commands/list';
 import { startCommand } from './commands/start';
@@ -105,6 +110,41 @@ Global flags:
   -h, --help          Show this help
 `;
 
+/**
+ * resolves a command from the registry and runs it. returns true when handled,
+ * false when the name is unknown (so run() falls through to the legacy switch).
+ */
+export async function dispatchRegistryCommand(
+  command: string,
+  rest: string[],
+  write: (s: string) => void = s => process.stdout.write(s),
+): Promise<boolean> {
+  loadRegistry();
+  const def = getCommand(command);
+  if (!def) return false;
+
+  const parsed = parseArgs(def.args, rest);
+  if (parsed.help) {
+    write(`${def.name} — ${def.summary}\n`);
+    return true;
+  }
+  if (!parsed.ok) {
+    process.stderr.write(`error: ${parsed.error}\n`);
+    process.exitCode = 1;
+    return true;
+  }
+
+  const result = await def.run(parsed.values, makeCliContext());
+  if (parsed.values.json) {
+    write(JSON.stringify(result.data, null, 2) + '\n');
+  } else {
+    if (result.render) write(renderToText(result.render) + '\n');
+    write(result.summary + '\n');
+  }
+  if (!result.ok) process.exitCode = 1;
+  return true;
+}
+
 export async function run(argv: string[]): Promise<void> {
   const args = argv.slice(2);
   const command = args[0];
@@ -135,6 +175,8 @@ export async function run(argv: string[]): Promise<void> {
     error(`'fleet ${command}' requires root privileges. Run with sudo.`);
     process.exit(1);
   }
+
+  if (await dispatchRegistryCommand(command, rest)) return;
 
   switch (command) {
     case 'status': return statusCommand(rest);
