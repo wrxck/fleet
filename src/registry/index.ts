@@ -4,10 +4,11 @@ import { statusCommand } from '../commands/status';
 import { startCommand } from '../commands/start';
 import { stopCommand } from '../commands/stop';
 import { restartCommand } from '../commands/restart';
+import { healthCommand } from '../commands/health';
 
 /** every command definition. commands are added here as they are migrated
  *  onto the registry. */
-const ALL = [statusCommand, listCommand, startCommand, stopCommand, restartCommand];
+const ALL = [statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand];
 
 let loaded = false;
 

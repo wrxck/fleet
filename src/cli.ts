@@ -9,7 +9,6 @@ import { renderToText } from './registry/render';
 import { makeCliContext } from './registry/context';
 import { logsCommand } from './commands/logs';
 import { egressCommand } from './commands/egress';
-import { healthCommand } from './commands/health';
 import { addCommand } from './commands/add';
 import { removeCommand } from './commands/remove';
 import { deployCommand } from './commands/deploy';
@@ -184,7 +183,6 @@ export async function run(argv: string[]): Promise<void> {
   switch (command) {
     case 'logs': return logsCommand(rest);
     case 'egress': return egressCommand(rest);
-    case 'health': return healthCommand(rest);
     case 'deps': return depsCommand(rest);
     case 'add': return addCommand(rest);
     case 'remove': return removeCommand(rest);

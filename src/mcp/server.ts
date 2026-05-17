@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
 import { restartService } from '../core/systemd';
 import { getContainerLogs, getContainersByCompose } from '../core/docker';
-import { checkHealth, checkAllHealth } from '../core/health';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx';
 import { generateNginxConfig } from '../templates/nginx';
 import { composeBuild } from '../core/docker';
@@ -217,23 +216,6 @@ export async function startMcpServer(): Promise<void> {
         for (const s of status) out.push({ ...s, sizeMB: s.totalBytes != null ? +(s.totalBytes / 1024 / 1024).toFixed(2) : null, policy });
       }
       return text(JSON.stringify(out, null, 2));
-    }
-  );
-
-  server.tool(
-    'fleet_health',
-    'Run health checks for one or all apps',
-    { app: z.string().optional().describe('App name (omit for all apps)') },
-    async ({ app }) => {
-      const reg = load();
-      if (app) {
-        const entry = findApp(reg, app);
-        if (!entry) throw new AppNotFoundError(app);
-        const result = checkHealth(entry);
-        return text(JSON.stringify(result, null, 2));
-      }
-      const results = checkAllHealth(reg.apps);
-      return text(JSON.stringify(results, null, 2));
     }
   );
 
