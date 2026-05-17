@@ -22,7 +22,6 @@ import { installMcpCommand } from './commands/install-mcp';
 import { patchSystemdCommand } from './commands/patch-systemd';
 import { guardCommand } from './commands/guard';
 import { bootStartCommand } from './commands/boot-start';
-import { rollbackCommand } from './commands/rollback';
 import { backupCommand } from './commands/backup';
 import { routineRunCommand } from './commands/routine-run';
 import { routinesCommand } from './commands/routines';
@@ -194,7 +193,6 @@ export async function run(argv: string[]): Promise<void> {
     case 'install-mcp': return installMcpCommand(rest);
     case 'patch-systemd': return patchSystemdCommand(rest);
     case 'boot-start': return bootStartCommand(rest);
-    case 'rollback': return rollbackCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
     case 'mcp': return startMcpServer();
