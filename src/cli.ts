@@ -17,7 +17,6 @@ import { depsCommand } from './commands/deps';
 import { watchdogCommand } from './commands/watchdog';
 import { installMcpCommand } from './commands/install-mcp';
 import { guardCommand } from './commands/guard';
-import { bootStartCommand } from './commands/boot-start';
 import { backupCommand } from './commands/backup';
 import { routineRunCommand } from './commands/routine-run';
 import { routinesCommand } from './commands/routines';
@@ -184,7 +183,6 @@ export async function run(argv: string[]): Promise<void> {
     case 'git': return gitCommand(rest);
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
-    case 'boot-start': return bootStartCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
     case 'mcp': return startMcpServer();

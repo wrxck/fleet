@@ -11,10 +11,11 @@ import { rollbackCommand } from '../commands/rollback';
 import { removeCommand } from '../commands/remove';
 import { initCommand } from '../commands/init';
 import { patchSystemdCommand } from '../commands/patch-systemd';
+import { bootStartCommand } from '../commands/boot-start';
 
 /** every command definition. commands are added here as they are migrated
  *  onto the registry. */
-const ALL = [addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand, initCommand, patchSystemdCommand];
+const ALL = [addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand, initCommand, patchSystemdCommand, bootStartCommand];
 
 let loaded = false;
 
