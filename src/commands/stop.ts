@@ -1,23 +1,22 @@
+import { z } from 'zod';
+
 import { load, findApp } from '../core/registry';
 import { stopService } from '../core/systemd';
-import { AppNotFoundError } from '../core/errors';
-import { success, error } from '../ui/output';
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
-export function stopCommand(args: string[]): void {
-  const appName = args[0];
-  if (!appName) {
-    error('Usage: fleet stop <app>');
-    process.exit(1);
-  }
-
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (!app) throw new AppNotFoundError(appName);
-
-  if (stopService(app.serviceName)) {
-    success(`Stopped ${app.name}`);
-  } else {
-    error(`Failed to stop ${app.name}`);
-    process.exit(1);
-  }
-}
+export const stopCommand = defineCommand({
+  name: 'stop',
+  summary: 'Stop an app via systemctl',
+  args: z.object({ app: z.string() }),
+  async run(args): Promise<CommandResult<{ app: string; service: string }>> {
+    const app = findApp(load(), args.app);
+    if (!app) {
+      return { ok: false, summary: `app not found: ${args.app}`, data: { app: args.app, service: '' } };
+    }
+    if (!stopService(app.serviceName)) {
+      return { ok: false, summary: `failed to stop ${app.name}`, data: { app: app.name, service: app.serviceName } };
+    }
+    return { ok: true, summary: `stopped ${app.name}`, data: { app: app.name, service: app.serviceName } };
+  },
+});

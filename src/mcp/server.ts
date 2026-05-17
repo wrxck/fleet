@@ -7,7 +7,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
-import { startService, stopService, restartService } from '../core/systemd';
+import { restartService } from '../core/systemd';
 import { getContainerLogs, getContainersByCompose } from '../core/docker';
 import { checkHealth, checkAllHealth } from '../core/health';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx';
@@ -48,39 +48,6 @@ export async function startMcpServer(): Promise<void> {
   });
 
   registerRegistryTools(server);
-
-  server.tool(
-    'fleet_start',
-    'Start an app via systemctl',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-      const ok = startService(entry.serviceName);
-      return text(ok ? `Started ${entry.name}` : `Failed to start ${entry.name}`);
-    }
-  );
-
-  server.tool(
-    'fleet_stop',
-    'Stop an app via systemctl',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-      const ok = stopService(entry.serviceName);
-      return text(ok ? `Stopped ${entry.name}` : `Failed to stop ${entry.name}`);
-    }
-  );
-
-  server.tool(
-    'fleet_restart',
-    'Restart an app via systemctl',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-      const ok = restartService(entry.serviceName);
-      return text(ok ? `Restarted ${entry.name}` : `Failed to restart ${entry.name}`);
-    }
-  );
 
   server.tool(
     'fleet_logs',

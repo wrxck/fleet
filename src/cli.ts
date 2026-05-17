@@ -7,9 +7,6 @@ import { getCommand } from './registry/registry';
 import { parseArgs } from './registry/parse-args';
 import { renderToText } from './registry/render';
 import { makeCliContext } from './registry/context';
-import { startCommand } from './commands/start';
-import { stopCommand } from './commands/stop';
-import { restartCommand } from './commands/restart';
 import { logsCommand } from './commands/logs';
 import { egressCommand } from './commands/egress';
 import { healthCommand } from './commands/health';
@@ -185,9 +182,6 @@ export async function run(argv: string[]): Promise<void> {
   if (await dispatchRegistryCommand(command, rest)) return;
 
   switch (command) {
-    case 'start': return startCommand(rest);
-    case 'stop': return stopCommand(rest);
-    case 'restart': return restartCommand(rest);
     case 'logs': return logsCommand(rest);
     case 'egress': return egressCommand(rest);
     case 'health': return healthCommand(rest);
