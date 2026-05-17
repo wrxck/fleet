@@ -59,7 +59,7 @@ const viewHints: Record<View, KeyHintItem[]> = {
     { key: 'q', label: 'quit' },
   ],
   'command-palette': [
-    { key: 'j/k', label: 'navigate' },
+    { key: '↑/↓', label: 'navigate' },
     { key: 'Enter', label: 'run' },
     { key: 'Esc', label: 'close' },
   ],
