@@ -123,8 +123,14 @@ export async function dispatchRegistryCommand(
   const def = getCommand(command);
   if (!def) return false;
 
-  const parsed = parseArgs(def.args, rest);
+  // --json is a global output flag handled here, not a per-command argument,
+  // so it is stripped before the schema parse would reject it as unknown.
+  const jsonMode = rest.includes('--json');
+  const cmdArgs = rest.filter(arg => arg !== '--json');
+
+  const parsed = parseArgs(def.args, cmdArgs);
   if (parsed.help) {
+    // minimal help for now — one-line summary; richer per-command help is future work.
     write(`${def.name} — ${def.summary}\n`);
     return true;
   }
@@ -135,7 +141,7 @@ export async function dispatchRegistryCommand(
   }
 
   const result = await def.run(parsed.values, makeCliContext());
-  if (parsed.values.json) {
+  if (jsonMode) {
     write(JSON.stringify(result.data, null, 2) + '\n');
   } else {
     if (result.render) write(renderToText(result.render) + '\n');
