@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { z } from 'zod';
 
-import { load, withRegistry } from '../core/registry';
+import { withRegistry } from '../core/registry';
 import type { AppEntry, Registry } from '../core/registry';
 import { discoverServices, parseServiceFile, readServiceFile } from '../core/systemd';
 import { listContainers, getContainersByCompose } from '../core/docker';
@@ -26,7 +26,8 @@ export const initCommand = defineCommand({
     ctx.log({ level: 'info', message: `found ${services.length} compose services, ${containers.length} running containers, ${sites.length} nginx sites` });
 
     let added = 0;
-    let finalReg: Registry | null = null;
+    // assigned inside the withRegistry callback below, which always runs.
+    let discovered!: Registry;
 
     await withRegistry(reg => {
       for (const serviceName of services) {
@@ -78,15 +79,14 @@ export const initCommand = defineCommand({
         added++;
         ctx.log({ level: 'info', message: `${serviceName} (${composePath})` });
       }
-      finalReg = reg;
+      discovered = reg;
       return reg;
     });
 
-    const reg = finalReg ?? load();
     return {
       ok: true,
       summary: `registered ${added} app${added === 1 ? '' : 's'}`,
-      data: reg,
+      data: discovered,
       render: {
         kind: 'table',
         columns: ['NAME', 'PATH', 'TYPE', 'PORT'],
