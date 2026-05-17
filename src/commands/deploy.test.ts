@@ -139,7 +139,9 @@ describe('deployCommand — app not registered', () => {
     expect(mockAddCommandRun).toHaveBeenCalled();
   });
 
-  it('throws if add fails to register app', async () => {
+  it('throws if the app is still not in the registry after add runs', async () => {
+    // deploy re-reads the registry rather than trusting add's result; if the
+    // app is absent on the re-read it fails loud regardless of add's outcome.
     mockLoad.mockReturnValue(makeRegistry([]));
     mockAddCommandRun.mockResolvedValue({ ok: true, summary: 'registered', data: null });
     await expect(deployCommand(['/apps/myapp', '-y'])).rejects.toThrow('Failed to register app');
