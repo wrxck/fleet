@@ -26,6 +26,7 @@ import { registerSecretsTools } from './secrets-tools';
 import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy';
 import { snapshotEgress } from '../core/egress';
 import { registerDepsTools } from './deps-tools';
+import { registerTestflightTools } from './testflight-tools';
 
 function requireApp(name: string) {
   const reg = load();
@@ -486,6 +487,7 @@ export async function startMcpServer(): Promise<void> {
   registerGitTools(server);
   registerSecretsTools(server);
   registerDepsTools(server);
+  registerTestflightTools(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
