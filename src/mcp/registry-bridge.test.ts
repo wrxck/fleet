@@ -80,6 +80,22 @@ describe('registerRegistryTools handler', () => {
     expect(result.content[0].text).toBe('kaboom');
   });
 
+  it('stringifies a non-Error throw', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'boom-string',
+      summary: 'throws a string',
+      args: z.object({}),
+      // eslint-disable-next-line no-throw-literal
+      async run(): Promise<never> { throw 'plain string failure'; },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+    const result = await handlers.get('fleet_boom-string')!({}) as { isError: boolean; content: Array<{ text: string }> };
+    expect(result.isError).toBeTruthy();
+    expect(result.content[0].text).toBe('plain string failure');
+  });
+
   it('omits structuredContent for non-object data', async () => {
     loadRegistry();
     register(defineCommand({
