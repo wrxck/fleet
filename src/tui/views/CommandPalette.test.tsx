@@ -100,7 +100,10 @@ describe('CommandPalette', () => {
     );
     await flush();
 
-    // allCommands() sorts by name: 'demo-run' (index 0) before 'status' (index 1).
+    // type 'demo-run' to filter to exactly this command so the test is
+    // stable regardless of how many other commands are in the registry.
+    for (const ch of 'demo-run') { stdin.write(ch); await flush(); }
+
     // press enter on demo-run → ArgForm shown (no tui field).
     stdin.write('\r');
     await flush();
@@ -129,7 +132,11 @@ describe('CommandPalette', () => {
     );
     await flush();
 
-    // sorted order: demo-flag (0), status (1). press enter on demo-flag.
+    // type 'demo-flag' to filter to exactly this command so the test is
+    // stable regardless of how many other commands are in the registry.
+    for (const ch of 'demo-flag') { stdin.write(ch); await flush(); }
+
+    // press enter on demo-flag.
     stdin.write('\r');
     await flush();
 
