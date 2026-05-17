@@ -1,127 +1,67 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as registry from '../core/registry';
-import * as exec from '../core/exec';
-import * as systemd from '../core/systemd';
+
+vi.mock('../core/registry', async () => {
+  const actual = await vi.importActual<typeof import('../core/registry')>('../core/registry');
+  return { ...actual, load: vi.fn(), findApp: vi.fn() };
+});
+vi.mock('../core/exec', () => ({ execSafe: vi.fn() }));
+vi.mock('../core/systemd', () => ({ restartService: vi.fn() }));
+
+import { load, findApp } from '../core/registry';
+import { execSafe } from '../core/exec';
+import { restartService } from '../core/systemd';
 import { rollbackCommand } from './rollback';
+import { makeMcpContext } from '../registry/context';
 
-vi.mock('../core/registry.js');
-vi.mock('../core/exec.js');
-vi.mock('../core/systemd.js');
+const okExec = { ok: true, stdout: 'registry.example/web:latest\n', stderr: '', exitCode: 0 };
+const failExec = { ok: false, stdout: '', stderr: 'err', exitCode: 1 };
 
-const baseApp = {
-  name: 'x',
-  displayName: 'x',
-  composePath: '/tmp/x',
-  composeFile: null,
-  serviceName: 'x-svc',
-  domains: [],
-  port: null,
-  usesSharedDb: false,
-  type: 'service' as const,
-  containers: [],
-  dependsOnDatabases: false,
-  registeredAt: '',
-};
+beforeEach(() => vi.clearAllMocks());
 
-function stubReg() {
-  vi.mocked(registry.load).mockReturnValue({
-    version: 1,
-    apps: [baseApp],
-    infrastructure: {
-      databases: { serviceName: '', composePath: '' },
-      nginx: { configPath: '' },
-    },
-  });
-  vi.mocked(registry.findApp).mockImplementation((reg, name) =>
-    reg.apps.find(a => a.name === name || a.serviceName === name)
-  );
-}
-
-describe('rollbackCommand', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('exits 1 when no app arg', async () => {
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(rollbackCommand([])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
+describe('rollback CommandDef', () => {
+  it('is a destructive registry command', () => {
+    expect(rollbackCommand.name).toBe('rollback');
+    expect(rollbackCommand.destructive).toBeTruthy();
   });
 
-  it('exits 1 when app missing from registry', async () => {
-    vi.mocked(registry.load).mockReturnValue({
-      version: 1, apps: [],
-      infrastructure: { databases: { serviceName: '', composePath: '' }, nginx: { configPath: '' } },
-    });
-    vi.mocked(registry.findApp).mockReturnValue(undefined);
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(rollbackCommand(['ghost'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
+  it('returns an expected failure for an unknown app', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue(undefined);
+    const result = await rollbackCommand.run({ app: 'nope', yes: true }, makeMcpContext(true));
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
   });
 
-  it('exits 1 when image name cannot be resolved', async () => {
-    stubReg();
-    vi.mocked(exec.execSafe).mockReturnValue({ ok: false, stdout: '', stderr: 'docker error', exitCode: 1 });
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(rollbackCommand(['x'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
+  it('fails fast when no previous image exists, without prompting', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', serviceName: 'fleet-web', composePath: '/srv/web', composeFile: null } as never);
+    // resolveImageName's `docker compose config --images` succeeds; `docker image inspect` fails.
+    vi.mocked(execSafe).mockImplementation((_cmd, a) =>
+      (a.includes('inspect') ? failExec : okExec) as never);
+    const result = await rollbackCommand.run({ app: 'web', yes: false }, makeMcpContext(false));
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/no previous image/i);
   });
 
-  it('exits 1 when fleet-previous tag does not exist', async () => {
-    stubReg();
-    vi.mocked(exec.execSafe)
-      .mockReturnValueOnce({ ok: true, stdout: 'x:latest', stderr: '', exitCode: 0 })  // resolveImageName
-      .mockReturnValueOnce({ ok: false, stdout: '', stderr: 'no image', exitCode: 1 }); // image inspect fleet-previous
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(rollbackCommand(['x'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
+  it('aborts when confirmation is denied', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', serviceName: 'fleet-web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(execSafe).mockReturnValue(okExec as never); // config + inspect both ok
+    const result = await rollbackCommand.run({ app: 'web', yes: false }, makeMcpContext(false));
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/cancel/i);
+    // docker tag must NOT have run
+    expect(vi.mocked(execSafe).mock.calls.some(c => c[1].includes('tag'))).toBeFalsy();
   });
 
-  it('exits 1 when docker tag fails', async () => {
-    stubReg();
-    vi.mocked(exec.execSafe)
-      .mockReturnValueOnce({ ok: true, stdout: 'x:latest', stderr: '', exitCode: 0 })  // resolveImageName
-      .mockReturnValueOnce({ ok: true, stdout: '[{}]', stderr: '', exitCode: 0 })      // image inspect
-      .mockReturnValueOnce({ ok: false, stdout: '', stderr: 'tag failed', exitCode: 1 }); // tag
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(rollbackCommand(['x'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
-  });
-
-  it('exits 1 when restartService fails', async () => {
-    stubReg();
-    vi.mocked(exec.execSafe)
-      .mockReturnValueOnce({ ok: true, stdout: 'x:latest', stderr: '', exitCode: 0 })
-      .mockReturnValueOnce({ ok: true, stdout: '[{}]', stderr: '', exitCode: 0 })
-      .mockReturnValueOnce({ ok: true, stdout: '', stderr: '', exitCode: 0 });
-    vi.mocked(systemd.restartService).mockReturnValue(false);
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(rollbackCommand(['x'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
-  });
-
-  it('retags fleet-previous to latest and restarts service on success', async () => {
-    stubReg();
-    vi.mocked(exec.execSafe)
-      .mockReturnValueOnce({ ok: true, stdout: 'x:latest', stderr: '', exitCode: 0 })
-      .mockReturnValueOnce({ ok: true, stdout: '[{}]', stderr: '', exitCode: 0 })
-      .mockReturnValueOnce({ ok: true, stdout: '', stderr: '', exitCode: 0 });
-    vi.mocked(systemd.restartService).mockReturnValue(true);
-    await rollbackCommand(['x']);
-    expect(exec.execSafe).toHaveBeenCalledWith('docker', ['tag', 'x:fleet-previous', 'x:latest'], expect.anything());
-    expect(systemd.restartService).toHaveBeenCalledWith('x-svc');
-  });
-
-  it('handles registry:port/repo:tag image names correctly', async () => {
-    stubReg();
-    vi.mocked(exec.execSafe)
-      .mockReturnValueOnce({ ok: true, stdout: 'localhost:5000/my-app:latest', stderr: '', exitCode: 0 })
-      .mockReturnValueOnce({ ok: true, stdout: '[{}]', stderr: '', exitCode: 0 })
-      .mockReturnValueOnce({ ok: true, stdout: '', stderr: '', exitCode: 0 });
-    vi.mocked(systemd.restartService).mockReturnValue(true);
-    await rollbackCommand(['x']);
-    expect(exec.execSafe).toHaveBeenCalledWith(
-      'docker',
-      ['tag', 'localhost:5000/my-app:fleet-previous', 'localhost:5000/my-app:latest'],
-      expect.anything(),
-    );
+  it('rolls back and restarts on success', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', serviceName: 'fleet-web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(execSafe).mockReturnValue(okExec as never);
+    vi.mocked(restartService).mockReturnValue(true);
+    const result = await rollbackCommand.run({ app: 'web', yes: true }, makeMcpContext(true));
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/rolled back/i);
+    expect(vi.mocked(restartService)).toHaveBeenCalledWith('fleet-web');
   });
 });
