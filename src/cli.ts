@@ -16,7 +16,6 @@ import { gitCommand } from './commands/git';
 import { depsCommand } from './commands/deps';
 import { watchdogCommand } from './commands/watchdog';
 import { installMcpCommand } from './commands/install-mcp';
-import { patchSystemdCommand } from './commands/patch-systemd';
 import { guardCommand } from './commands/guard';
 import { bootStartCommand } from './commands/boot-start';
 import { backupCommand } from './commands/backup';
@@ -185,7 +184,6 @@ export async function run(argv: string[]): Promise<void> {
     case 'git': return gitCommand(rest);
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
-    case 'patch-systemd': return patchSystemdCommand(rest);
     case 'boot-start': return bootStartCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
