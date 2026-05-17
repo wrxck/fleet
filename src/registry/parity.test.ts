@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../core/registry.js', () => ({
+vi.mock('../core/registry', () => ({
   load: vi.fn(),
 }));
 
-vi.mock('../core/systemd.js', () => ({
+vi.mock('../core/systemd', () => ({
   systemdAvailable: vi.fn(),
   getMultipleServiceStatuses: vi.fn(),
 }));
 
-vi.mock('../core/docker.js', () => ({
+vi.mock('../core/docker', () => ({
   listContainers: vi.fn(),
 }));
 
@@ -50,8 +50,12 @@ describe('phase 1 parity — status', () => {
   });
 
   it('status is runnable through the cli dispatcher', async () => {
-    const handled = await dispatchRegistryCommand('status', [], () => {});
+    const out: string[] = [];
+    const handled = await dispatchRegistryCommand('status', [], s => out.push(s));
     expect(handled).toBeTruthy();
+    // the dispatcher must actually run status and render its table — not merely
+    // recognise the command name.
+    expect(out.join('')).toContain('APP');
   });
 
   it('status has a rich tui view', () => {
