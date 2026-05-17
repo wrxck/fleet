@@ -9,6 +9,11 @@ vi.mock('../core/audit/greenlight.js', () => ({
 }));
 vi.mock('../core/audit/target.js', () => ({ resolveAuditTarget: vi.fn() }));
 vi.mock('../core/audit/cache.js', () => ({ saveAuditRecord: vi.fn() }));
+vi.mock('../core/audit/config.js', () => ({
+  loadAuditConfig: vi.fn(),
+  saveAuditConfig: vi.fn(),
+}));
+vi.mock('../core/audit/suppress.js', () => ({ applySuppressions: vi.fn() }));
 vi.mock('../core/audit/reporters/cli.js', () => ({
   formatReport: vi.fn(() => ['report line']),
 }));
@@ -25,6 +30,8 @@ import {
 } from '../core/audit/greenlight';
 import { resolveAuditTarget } from '../core/audit/target';
 import { saveAuditRecord } from '../core/audit/cache';
+import { loadAuditConfig, saveAuditConfig } from '../core/audit/config';
+import { applySuppressions } from '../core/audit/suppress';
 
 const mockFind = vi.mocked(findGreenlight);
 const mockVersion = vi.mocked(greenlightVersion);
@@ -32,6 +39,9 @@ const mockPreflight = vi.mocked(runPreflight);
 const mockGuidelines = vi.mocked(runGuidelines);
 const mockResolve = vi.mocked(resolveAuditTarget);
 const mockSave = vi.mocked(saveAuditRecord);
+const mockLoadConfig = vi.mocked(loadAuditConfig);
+const mockSaveConfig = vi.mocked(saveAuditConfig);
+const mockSuppress = vi.mocked(applySuppressions);
 
 function makeReport() {
   return {
@@ -48,6 +58,8 @@ beforeEach(() => {
   mockFind.mockReturnValue('greenlight');
   mockResolve.mockReturnValue({ target: 'shiftfaced', projectPath: '/p/mobile' });
   mockPreflight.mockReturnValue(makeReport() as ReturnType<typeof runPreflight>);
+  mockLoadConfig.mockReturnValue({ version: 1, ignore: [] });
+  mockSuppress.mockImplementation((report) => ({ report, suppressed: 0 }));
 });
 
 describe('auditCommand — run', () => {
@@ -100,5 +112,51 @@ describe('auditCommand — doctor', () => {
     });
     await expect(auditCommand(['doctor'])).rejects.toThrow('exit');
     exitSpy.mockRestore();
+  });
+});
+
+describe('auditCommand — ignore', () => {
+  it('adds an ignore rule and saves the config', async () => {
+    await auditCommand([
+      'ignore', 'Placeholder content in user-facing strings',
+      '--reason', 'react native placeholder prop', '--target', 'shiftfaced',
+    ]);
+    expect(mockSaveConfig).toHaveBeenCalled();
+    const saved = mockSaveConfig.mock.calls[0][0];
+    expect(saved.ignore[0]).toMatchObject({
+      title: 'Placeholder content in user-facing strings',
+      target: 'shiftfaced',
+      reason: 'react native placeholder prop',
+    });
+  });
+
+  it('exits when reason is missing', async () => {
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('exit');
+    });
+    await expect(auditCommand(['ignore', 'Some finding'])).rejects.toThrow('exit');
+    exitSpy.mockRestore();
+  });
+});
+
+describe('auditCommand — unignore', () => {
+  it('removes a matching ignore rule and saves the config', async () => {
+    mockLoadConfig.mockReturnValue({
+      version: 1,
+      ignore: [{ title: 'Some finding', reason: 'x', addedAt: '2026-05-17T00:00:00.000Z' }],
+    });
+    await auditCommand(['unignore', 'Some finding']);
+    expect(mockSaveConfig).toHaveBeenCalled();
+    expect(mockSaveConfig.mock.calls[0][0].ignore).toHaveLength(0);
+  });
+});
+
+describe('auditCommand — run with suppressions', () => {
+  it('reports how many findings the ignore rules suppressed', async () => {
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    mockSuppress.mockImplementation((report) => ({ report, suppressed: 2 }));
+    await auditCommand(['shiftfaced']);
+    expect(mockSuppress).toHaveBeenCalled();
+    writeSpy.mockRestore();
   });
 });

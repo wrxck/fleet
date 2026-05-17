@@ -59,3 +59,23 @@ export interface AuditCache {
   version: 1;
   audits: Record<string, AuditRecord>;
 }
+
+// one ignore rule dismissing a known greenlight false positive. matched
+// against a finding by exact title, optionally narrowed to a target and to
+// findings whose file or code contains `contains`. every rule carries a
+// written reason so a suppression is never silent.
+export interface AuditIgnoreRule {
+  // audit target the rule applies to; omit to apply to every target
+  target?: string;
+  // exact greenlight finding title to suppress
+  title: string;
+  // optional substring that must appear in the finding's file or code
+  contains?: string;
+  reason: string;
+  addedAt: string;
+}
+
+export interface AuditConfig {
+  version: 1;
+  ignore: AuditIgnoreRule[];
+}

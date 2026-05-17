@@ -7,6 +7,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { findGreenlight, runPreflight, runGuidelines } from '../core/audit/greenlight';
 import { resolveAuditTarget } from '../core/audit/target';
 import { loadAuditCache, saveAuditRecord } from '../core/audit/cache';
+import { loadAuditConfig, saveAuditConfig } from '../core/audit/config';
+import { applySuppressions } from '../core/audit/suppress';
 import type { AuditRecord } from '../core/audit/types';
 
 function text(msg: string) {
@@ -40,7 +42,10 @@ export function registerAuditTools(server: McpServer): void {
         if (!existsSync(ipa)) return text(`IPA file not found: ${ipa}`);
       }
 
-      const report = runPreflight(projectPath, { ipaPath: ipa });
+      const raw = runPreflight(projectPath, { ipaPath: ipa });
+      const { report, suppressed } = applySuppressions(
+        raw, resolved, loadAuditConfig().ignore,
+      );
       const record: AuditRecord = {
         target: resolved,
         projectPath,
@@ -49,7 +54,7 @@ export function registerAuditTools(server: McpServer): void {
         report,
       };
       saveAuditRecord(record);
-      return text(JSON.stringify(record, null, 2));
+      return text(JSON.stringify({ ...record, suppressed }, null, 2));
     },
   );
 
@@ -69,6 +74,32 @@ export function registerAuditTools(server: McpServer): void {
         return text(JSON.stringify(rec, null, 2));
       }
       return text(JSON.stringify(all, null, 2));
+    },
+  );
+
+  server.tool(
+    'fleet_audit_ignore',
+    'Suppress a confirmed greenlight false positive from future audits. The finding is ' +
+    'matched by its exact title, optionally narrowed to a target and to findings whose file ' +
+    'or code contains a substring. Every rule must carry a reason. Suppressed findings are ' +
+    'dropped and the pass/fail summary is recomputed on subsequent fleet_audit_run calls.',
+    {
+      title: z.string().describe('Exact greenlight finding title to suppress'),
+      reason: z.string().describe('Why this finding is a false positive'),
+      target: z.string().optional().describe('Limit the rule to one audit target'),
+      contains: z.string().optional().describe('Only suppress findings whose file/code contains this substring'),
+    },
+    async ({ title, reason, target, contains }) => {
+      const config = loadAuditConfig();
+      config.ignore.push({
+        ...(target && { target }),
+        title,
+        ...(contains && { contains }),
+        reason,
+        addedAt: new Date().toISOString(),
+      });
+      saveAuditConfig(config);
+      return text(`Ignoring "${title}"${target ? ` for ${target}` : ''}: ${reason}`);
     },
   );
 
