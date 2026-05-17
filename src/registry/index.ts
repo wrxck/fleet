@@ -9,10 +9,11 @@ import { healthCommand } from '../commands/health';
 import { freezeCommand, unfreezeCommand } from '../commands/freeze';
 import { rollbackCommand } from '../commands/rollback';
 import { removeCommand } from '../commands/remove';
+import { initCommand } from '../commands/init';
 
 /** every command definition. commands are added here as they are migrated
  *  onto the registry. */
-const ALL = [addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand];
+const ALL = [addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand, initCommand];
 
 let loaded = false;
 

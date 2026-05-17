@@ -13,7 +13,6 @@ import { deployCommand } from './commands/deploy';
 import { nginxCommand } from './commands/nginx';
 import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
-import { initCommand } from './commands/init';
 import { depsCommand } from './commands/deps';
 import { watchdogCommand } from './commands/watchdog';
 import { installMcpCommand } from './commands/install-mcp';
@@ -184,7 +183,6 @@ export async function run(argv: string[]): Promise<void> {
     case 'nginx': return nginxCommand(rest);
     case 'secrets': return secretsCommand(rest);
     case 'git': return gitCommand(rest);
-    case 'init': return initCommand(rest);
     case 'watchdog': return watchdogCommand(rest);
     case 'install-mcp': return installMcpCommand(rest);
     case 'patch-systemd': return patchSystemdCommand(rest);
