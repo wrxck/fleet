@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// withRegistry wraps load() → mutate → save() under a file lock. the mock
+// invokes the callback against the registry returned by load(), then calls
+// save() with the result — matching the freeze/rollback test pattern.
 vi.mock('../core/registry.js', () => ({
   load: vi.fn(),
   save: vi.fn(),
   findApp: vi.fn(),
   removeApp: vi.fn(),
-  withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
-    const mod = await vi.importMock<typeof import('../core/registry')>('../core/registry.js');
-    const reg = (mod.load as unknown as { (): unknown })();
+  withRegistry: vi.fn(async (fn) => {
+    const reg = (load as unknown as { (): unknown })();
     const next = await fn(reg);
-    (mod.save as unknown as { (r: unknown): void })(next);
+    (save as unknown as { (r: unknown): void })(next);
   }),
 }));
 
@@ -18,63 +20,122 @@ vi.mock('../core/systemd.js', () => ({
   disableService: vi.fn(),
 }));
 
-vi.mock('../ui/output.js', () => ({
-  success: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-}));
-
-vi.mock('../ui/confirm.js', () => ({
-  confirm: vi.fn(),
-}));
-
 import { load, save, findApp, removeApp } from '../core/registry';
 import { stopService, disableService } from '../core/systemd';
-import { success, info } from '../ui/output';
-import { confirm } from '../ui/confirm';
 import { removeCommand } from './remove';
+import { makeMcpContext } from '../registry/context';
+import type { AppEntry, Registry } from '../core/registry';
+
+const mockLoad = vi.mocked(load);
+const mockSave = vi.mocked(save);
+const mockFindApp = vi.mocked(findApp);
+const mockStopService = vi.mocked(stopService);
+const mockDisableService = vi.mocked(disableService);
+const mockRemoveApp = vi.mocked(removeApp);
+
+function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
+  return {
+    name: 'web',
+    displayName: 'Web',
+    composePath: '/apps/web',
+    composeFile: null,
+    serviceName: 'fleet-web',
+    domains: [],
+    port: null,
+    usesSharedDb: false,
+    type: 'service',
+    containers: ['web'],
+    dependsOnDatabases: false,
+    registeredAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeRegistry(app: AppEntry): Registry {
+  return {
+    version: 1,
+    apps: [app],
+    infrastructure: {
+      databases: { serviceName: 'docker-databases', composePath: '/db' },
+      nginx: { configPath: '/etc/nginx' },
+    },
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+  mockStopService.mockReturnValue(true as never);
+  mockDisableService.mockReturnValue(true as never);
 });
 
-describe('removeCommand', () => {
-  const mockApp = { name: 'myapp', serviceName: 'fleet-myapp' };
-  const mockReg = { apps: [mockApp] };
-
-  it('removes an app with -y flag (no confirmation)', async () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
-    vi.mocked(removeApp).mockReturnValue({ apps: [] } as any);
-
-    await removeCommand(['myapp', '-y']);
-
-    expect(stopService).toHaveBeenCalledWith('fleet-myapp');
-    expect(disableService).toHaveBeenCalledWith('fleet-myapp');
-    expect(save).toHaveBeenCalled();
-    expect(success).toHaveBeenCalled();
+describe('removeCommand — metadata', () => {
+  it('has name "remove"', () => {
+    expect(removeCommand.name).toBe('remove');
   });
 
-  it('cancels when user declines confirmation', async () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
-    vi.mocked(confirm).mockResolvedValue(false);
+  it('is marked destructive', () => {
+    expect(removeCommand.destructive).toBeTruthy();
+  });
+});
 
-    await removeCommand(['myapp']);
+describe('removeCommand run()', () => {
+  it('returns { ok: false } for an unknown app and does not stop the service', async () => {
+    const reg = makeRegistry(makeApp());
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(undefined);
 
-    expect(info).toHaveBeenCalledWith('Cancelled');
-    expect(stopService).not.toHaveBeenCalled();
+    const result = await removeCommand.run({ app: 'ghost', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
+    expect(mockStopService).not.toHaveBeenCalled();
   });
 
-  it('exits with error when no app name provided', async () => {
-    await expect(removeCommand([])).rejects.toThrow('exit');
+  it('returns { ok: false, summary: /cancel/ } when confirmation is denied', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await removeCommand.run({ app: 'web', yes: false }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/cancel/i);
+    expect(mockStopService).not.toHaveBeenCalled();
+    expect(mockRemoveApp).not.toHaveBeenCalled();
   });
 
-  it('throws for unknown app', async () => {
-    vi.mocked(load).mockReturnValue({ apps: [] } as any);
-    vi.mocked(findApp).mockReturnValue(undefined as any);
-    await expect(removeCommand(['unknown', '-y'])).rejects.toThrow();
+  it('stops, disables, removes app, and returns { ok: true } with yes: true', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+    mockRemoveApp.mockReturnValue({ ...reg, apps: [] } as never);
+
+    const result = await removeCommand.run({ app: 'web', yes: true }, makeMcpContext(false));
+
+    expect(mockStopService).toHaveBeenCalledWith('fleet-web');
+    expect(mockDisableService).toHaveBeenCalledWith('fleet-web');
+    expect(mockRemoveApp).toHaveBeenCalled();
+    expect(mockSave).toHaveBeenCalled();
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/removed/i);
+    expect(result.data).toEqual({ app: 'web' });
+  });
+
+  it('stops, disables, removes app, and returns { ok: true } when confirmation is granted', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+    mockRemoveApp.mockReturnValue({ ...reg, apps: [] } as never);
+
+    const result = await removeCommand.run({ app: 'web', yes: false }, makeMcpContext(true));
+
+    expect(mockStopService).toHaveBeenCalledWith('fleet-web');
+    expect(mockDisableService).toHaveBeenCalledWith('fleet-web');
+    expect(mockRemoveApp).toHaveBeenCalled();
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/removed/i);
   });
 });
