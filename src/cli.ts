@@ -18,6 +18,7 @@ import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
 import { initCommand } from './commands/init';
 import { depsCommand } from './commands/deps';
+import { auditCommand } from './commands/audit';
 import { watchdogCommand } from './commands/watchdog';
 import { installMcpCommand } from './commands/install-mcp';
 import { patchSystemdCommand } from './commands/patch-systemd';
@@ -54,6 +55,9 @@ Commands:
   deps config         Show/set configuration
   deps ignore <pkg>   Suppress a finding
   deps init           Install cron + MOTD for automated scanning
+  audit [target]      App Store compliance audit of a mobile project (greenlight)
+  audit guidelines    Browse Apple App Store Review Guidelines (list|show|search)
+  audit doctor        Check the greenlight binary is installed
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
@@ -146,6 +150,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'egress': return egressCommand(rest);
     case 'health': return healthCommand(rest);
     case 'deps': return depsCommand(rest);
+    case 'audit': return auditCommand(rest);
     case 'add': return addCommand(rest);
     case 'remove': return removeCommand(rest);
     case 'deploy': return deployCommand(rest);
