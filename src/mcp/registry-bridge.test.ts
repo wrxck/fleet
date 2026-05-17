@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { z } from 'zod';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { collectRegistryTools } from './registry-bridge';
+import { collectRegistryTools, registerRegistryTools } from './registry-bridge';
 import { loadRegistry, _resetLoader } from '../registry/index';
 import { register, defineCommand } from '../registry/registry';
+
+type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
+
+/** captures the handlers passed to server.tool so they can be invoked directly. */
+function fakeServer(): { server: McpServer; handlers: Map<string, ToolHandler> } {
+  const handlers = new Map<string, ToolHandler>();
+  const server = {
+    tool(name: string, _summary: string, _shape: unknown, handler: ToolHandler) {
+      handlers.set(name, handler);
+    },
+  } as unknown as McpServer;
+  return { server, handlers };
+}
 
 describe('mcp registry bridge', () => {
   beforeEach(() => _resetLoader());
@@ -44,5 +58,54 @@ describe('mcp registry bridge', () => {
       async run() { return { ok: true, summary: 'ok', data: null }; },
     }));
     expect(collectRegistryTools().some(t => t.toolName === 'fleet_cli-thing')).toBeFalsy();
+  });
+});
+
+describe('registerRegistryTools handler', () => {
+  beforeEach(() => _resetLoader());
+  afterEach(() => _resetLoader());
+
+  it('surfaces a thrown command as a structured isError result', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'boom',
+      summary: 'throws',
+      args: z.object({}),
+      async run(): Promise<never> { throw new Error('kaboom'); },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+    const result = await handlers.get('fleet_boom')!({}) as { isError: boolean; content: Array<{ text: string }> };
+    expect(result.isError).toBeTruthy();
+    expect(result.content[0].text).toBe('kaboom');
+  });
+
+  it('omits structuredContent for non-object data', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'scalar',
+      summary: 'returns a scalar',
+      args: z.object({}),
+      async run() { return { ok: true, summary: 'done', data: null }; },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+    const result = await handlers.get('fleet_scalar')!({}) as Record<string, unknown>;
+    expect(result).not.toHaveProperty('structuredContent');
+    expect(result.isError).toBeFalsy();
+  });
+
+  it('attaches structuredContent when data is an object', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'objy',
+      summary: 'returns an object',
+      args: z.object({}),
+      async run() { return { ok: true, summary: 'done', data: { count: 2 } }; },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+    const result = await handlers.get('fleet_objy')!({}) as { structuredContent: { count: number } };
+    expect(result.structuredContent).toEqual({ count: 2 });
   });
 });
