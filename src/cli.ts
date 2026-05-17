@@ -58,6 +58,8 @@ Commands:
   audit [target]      App Store compliance audit of a mobile project (greenlight)
   audit guidelines    Browse Apple App Store Review Guidelines (list|show|search)
   audit doctor        Check the greenlight binary is installed
+  audit ignore "<title>" --reason "..."  Suppress a greenlight false positive
+  audit ignores       List audit ignore rules
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
