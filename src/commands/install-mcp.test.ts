@@ -4,7 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { installMcpCommand } from './install-mcp';
 import { makeCliContext } from '../registry/context';
-import type { CommandContext } from '../registry/types';
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
@@ -15,12 +14,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.HOME = '/home/testuser';
 });
-
-/** a context whose log is a spy, so log levels can be asserted. */
-function spyContext(): { ctx: CommandContext; log: ReturnType<typeof vi.fn> } {
-  const log = vi.fn();
-  return { ctx: { ...makeCliContext(), log }, log };
-}
 
 describe('install-mcp CommandDef', () => {
   it('has the correct registry metadata', () => {
