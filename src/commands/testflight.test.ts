@@ -7,12 +7,14 @@ vi.mock('../core/testflight/resolve.js', () => ({
 vi.mock('../core/testflight/credentials.js', () => ({
   resolveAscCredentials: vi.fn(() => ({ keyId: 'k', issuerId: 'i', privateKey: 'p' })),
   hasAscCredentials: vi.fn(),
-  easEnv: vi.fn(),
 }));
-vi.mock('../core/testflight/eas.js', () => ({
-  easVersion: vi.fn(),
-  easBuild: vi.fn(),
-  easSubmit: vi.fn(),
+vi.mock('../core/testflight/workflow.js', () => ({
+  ghVersion: vi.fn(),
+  resolveRepo: vi.fn(),
+  repoSecrets: vi.fn(),
+  dispatchWorkflow: vi.fn(),
+  latestRun: vi.fn(),
+  watchRun: vi.fn(),
 }));
 vi.mock('../core/testflight/asc.js', () => ({
   listBuilds: vi.fn(),
@@ -27,31 +29,53 @@ vi.mock('../ui/output.js', () => ({
 
 import { testflightCommand } from './testflight';
 import { resolveTestflightTarget, appSecretsEnv } from '../core/testflight/resolve';
-import { hasAscCredentials, easEnv } from '../core/testflight/credentials';
-import { easVersion, easBuild, easSubmit } from '../core/testflight/eas';
+import { hasAscCredentials } from '../core/testflight/credentials';
+import {
+  ghVersion, resolveRepo, repoSecrets, dispatchWorkflow, latestRun, watchRun,
+} from '../core/testflight/workflow';
 import { listBuilds, expireBuild, setWhatsNew } from '../core/testflight/asc';
 
 const mockResolve = vi.mocked(resolveTestflightTarget);
 const mockEnv = vi.mocked(appSecretsEnv);
 const mockHasCreds = vi.mocked(hasAscCredentials);
-const mockEasEnv = vi.mocked(easEnv);
-const mockEasVersion = vi.mocked(easVersion);
-const mockEasBuild = vi.mocked(easBuild);
-const mockEasSubmit = vi.mocked(easSubmit);
+const mockGhVersion = vi.mocked(ghVersion);
+const mockResolveRepo = vi.mocked(resolveRepo);
+const mockRepoSecrets = vi.mocked(repoSecrets);
+const mockDispatch = vi.mocked(dispatchWorkflow);
+const mockLatestRun = vi.mocked(latestRun);
+const mockWatchRun = vi.mocked(watchRun);
 const mockListBuilds = vi.mocked(listBuilds);
 const mockExpire = vi.mocked(expireBuild);
 const mockWhatsNew = vi.mocked(setWhatsNew);
 
+function run(databaseId: number) {
+  return {
+    databaseId,
+    status: 'queued',
+    conclusion: null,
+    url: `https://github.com/wrxck/shiftfaced/actions/runs/${databaseId}`,
+    createdAt: '2026-05-17T00:00:00Z',
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockResolve.mockReturnValue({ app: 'shiftfaced', projectPath: '/p/mobile' });
-  mockEnv.mockReturnValue({ ASC_APP_ID: 'asc1', EXPO_TOKEN: 'tok' });
+  mockEnv.mockReturnValue({ ASC_APP_ID: 'asc1' });
   mockHasCreds.mockReturnValue(true);
-  mockEasEnv.mockReturnValue({ EXPO_TOKEN: 'tok' });
-  mockEasVersion.mockReturnValue('eas-cli/18.0.0');
+  mockGhVersion.mockReturnValue('gh version 2.40.0');
+  mockResolveRepo.mockReturnValue('wrxck/shiftfaced');
+  mockRepoSecrets.mockReturnValue([
+    'ASC_API_KEY_ID', 'ASC_API_KEY_ISSUER_ID', 'ASC_API_KEY_B64', 'APPLE_TEAM_ID',
+  ]);
+  mockDispatch.mockReturnValue({ ok: true, message: 'dispatched' });
+  // the first call is the "before" snapshot; every later call resolves the
+  // run the dispatch created — a distinct id, so the poll loop exits at once.
+  mockLatestRun.mockImplementation(() =>
+    mockLatestRun.mock.calls.length <= 1 ? run(1) : run(2),
+  );
+  mockWatchRun.mockReturnValue(0);
   mockListBuilds.mockResolvedValue([]);
-  mockEasBuild.mockReturnValue(0);
-  mockEasSubmit.mockReturnValue(0);
 });
 
 function exitGuard() {
@@ -79,7 +103,7 @@ describe('testflight builds', () => {
   });
 
   it('exits when no ASC app id is available', async () => {
-    mockEnv.mockReturnValue({ EXPO_TOKEN: 'tok' });
+    mockEnv.mockReturnValue({});
     const exit = exitGuard();
     await expect(testflightCommand(['builds', 'shiftfaced'])).rejects.toThrow('exit');
     exit.mockRestore();
@@ -115,24 +139,39 @@ describe('testflight delete', () => {
 });
 
 describe('testflight publish', () => {
-  it('builds then submits when credentials are present', async () => {
-    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  it('dispatches the build workflow', async () => {
     await testflightCommand(['publish', 'shiftfaced']);
-    expect(mockEasBuild).toHaveBeenCalledWith('/p/mobile', 'production', { EXPO_TOKEN: 'tok' });
-    expect(mockEasSubmit).toHaveBeenCalledWith('/p/mobile', 'production', { EXPO_TOKEN: 'tok' });
-    writeSpy.mockRestore();
+    expect(mockDispatch).toHaveBeenCalledWith('wrxck/shiftfaced', 'ios-testflight.yml', undefined);
   });
 
-  it('skips the build with --no-build', async () => {
-    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    await testflightCommand(['publish', 'shiftfaced', '--no-build']);
-    expect(mockEasBuild).not.toHaveBeenCalled();
-    expect(mockEasSubmit).toHaveBeenCalled();
-    writeSpy.mockRestore();
+  it('passes a --ref through to the dispatch', async () => {
+    await testflightCommand(['publish', 'shiftfaced', '--ref', 'develop']);
+    expect(mockDispatch).toHaveBeenCalledWith('wrxck/shiftfaced', 'ios-testflight.yml', 'develop');
   });
 
-  it('exits when EXPO_TOKEN is missing', async () => {
-    mockEasEnv.mockReturnValue({});
+  it('watches the run when --watch is passed', async () => {
+    await testflightCommand(['publish', 'shiftfaced', '--watch']);
+    expect(mockWatchRun).toHaveBeenCalledWith('wrxck/shiftfaced', 2);
+  });
+
+  it('exits when the GitHub CLI is missing', async () => {
+    mockGhVersion.mockReturnValue(null);
+    const exit = exitGuard();
+    await expect(testflightCommand(['publish', 'shiftfaced'])).rejects.toThrow('exit');
+    expect(mockDispatch).not.toHaveBeenCalled();
+    exit.mockRestore();
+  });
+
+  it('exits when the repo cannot be resolved', async () => {
+    mockResolveRepo.mockReturnValue(null);
+    const exit = exitGuard();
+    await expect(testflightCommand(['publish', 'shiftfaced'])).rejects.toThrow('exit');
+    expect(mockDispatch).not.toHaveBeenCalled();
+    exit.mockRestore();
+  });
+
+  it('exits when the dispatch fails', async () => {
+    mockDispatch.mockReturnValue({ ok: false, message: 'no such workflow' });
     const exit = exitGuard();
     await expect(testflightCommand(['publish', 'shiftfaced'])).rejects.toThrow('exit');
     exit.mockRestore();
@@ -142,6 +181,7 @@ describe('testflight publish', () => {
 describe('testflight doctor', () => {
   it('reports readiness without throwing', async () => {
     await testflightCommand(['doctor', 'shiftfaced']);
-    expect(mockEasVersion).toHaveBeenCalled();
+    expect(mockGhVersion).toHaveBeenCalled();
+    expect(mockResolveRepo).toHaveBeenCalled();
   });
 });

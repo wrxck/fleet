@@ -18,14 +18,3 @@ export interface TestflightBuild {
   expired: boolean;
   uploadedDate: string;
 }
-
-// the environment variables eas build / eas submit need, resolved from the
-// app's fleet secrets. keys mirror the placeholders in the mobile eas.json.
-export interface EasEnv {
-  EXPO_TOKEN?: string;
-  APPLE_ID?: string;
-  APPLE_TEAM_ID?: string;
-  ASC_APP_ID?: string;
-  ASC_API_KEY_ID?: string;
-  ASC_API_KEY_ISSUER_ID?: string;
-}

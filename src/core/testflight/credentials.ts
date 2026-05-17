@@ -1,7 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 
 import { FleetError } from '../errors';
-import type { AscCredentials, EasEnv } from './types';
+import type { AscCredentials } from './types';
 
 // resolve app store connect api credentials from an environment map. the
 // private key is supplied either inline-base64 (ASC_API_KEY_B64) or as a path
@@ -40,17 +40,4 @@ export function hasAscCredentials(env: NodeJS.ProcessEnv): boolean {
   } catch {
     return false;
   }
-}
-
-// pick the subset of `env` that eas build / eas submit consume.
-export function easEnv(env: NodeJS.ProcessEnv): EasEnv {
-  const keys: (keyof EasEnv)[] = [
-    'EXPO_TOKEN', 'APPLE_ID', 'APPLE_TEAM_ID',
-    'ASC_APP_ID', 'ASC_API_KEY_ID', 'ASC_API_KEY_ISSUER_ID',
-  ];
-  const out: EasEnv = {};
-  for (const key of keys) {
-    if (env[key]) out[key] = env[key];
-  }
-  return out;
 }
