@@ -13,22 +13,15 @@ vi.mock('../core/docker.js', () => ({
   listContainers: vi.fn(),
 }));
 
-vi.mock('../ui/output.js', () => ({
-  c: { green: '', red: '', yellow: '', dim: '', bold: '', reset: '' },
-  icon: { ok: 'OK', err: 'ERR', warn: 'WARN', info: 'INFO' },
-  heading: vi.fn(),
-  table: vi.fn(),
-  info: vi.fn(),
-}));
-
 import { load } from '../core/registry';
+import type { Registry } from '../core/registry';
 import { systemdAvailable, getMultipleServiceStatuses } from '../core/systemd';
 import { listContainers } from '../core/docker';
 import { getStatusData, statusCommand } from './status';
+import { makeCliContext } from '../registry/context';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 });
 
 describe('getStatusData', () => {
@@ -77,16 +70,28 @@ describe('getStatusData', () => {
   });
 });
 
-describe('statusCommand', () => {
-  it('outputs JSON when --json flag is passed', () => {
-    vi.mocked(load).mockReturnValue({ apps: [] } as any);
+describe('status CommandDef', () => {
+  it('has registry metadata', () => {
+    expect(statusCommand.name).toBe('status');
+    expect(statusCommand.tui).toEqual({ view: 'dashboard' });
+  });
+
+  it('run returns a CommandResult with a table render and structured data', async () => {
+    const emptyRegistry: Registry = {
+      version: 1,
+      apps: [],
+      infrastructure: {
+        databases: { serviceName: 'docker-databases', composePath: '' },
+        nginx: { configPath: '/etc/nginx' },
+      },
+    };
+    vi.mocked(load).mockReturnValue(emptyRegistry);
     vi.mocked(systemdAvailable).mockReturnValue(false);
     vi.mocked(listContainers).mockReturnValue([]);
-
-    statusCommand(['--json']);
-
-    expect(process.stdout.write).toHaveBeenCalled();
-    const output = vi.mocked(process.stdout.write).mock.calls[0][0] as string;
-    expect(() => JSON.parse(output)).not.toThrow();
+    const result = await statusCommand.run({}, makeCliContext());
+    expect(result.ok).toBeTruthy();
+    expect(result.render?.kind).toBe('table');
+    expect(result.data).toHaveProperty('totalApps');
+    expect(result.summary).toMatch(/apps/);
   });
 });

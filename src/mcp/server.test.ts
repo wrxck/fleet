@@ -94,7 +94,6 @@ vi.mock('node:fs', async () => {
   };
 });
 
-vi.mock('../commands/status.js', () => ({ getStatusData: vi.fn() }));
 vi.mock('../core/registry.js', () => ({
   load: vi.fn().mockReturnValue({
     apps: [],
