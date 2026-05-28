@@ -157,12 +157,14 @@ describe('installV2', () => {
 
   it('test 6: unit content changed — unit re-installed', async () => {
     writeFileSync(agentSrc, '#!/usr/bin/env node\nconsole.log("agent");');
+    const vaultPath = '/var/lib/fleet/vault';
 
     // first install
     await installV2({
       agentSourcePath: agentSrc,
       destBinaryPath: destBinary,
       unitFilePath: unitFile,
+      vaultPath,
     });
 
     // tamper with the unit file
@@ -172,6 +174,7 @@ describe('installV2', () => {
       agentSourcePath: agentSrc,
       destBinaryPath: destBinary,
       unitFilePath: unitFile,
+      vaultPath,
     });
 
     expect(result.unitFileInstalled).toBeTruthy();
@@ -179,7 +182,7 @@ describe('installV2', () => {
     expect(result.agentBinaryInstalled).toBeFalsy();
 
     // unit restored to generated content
-    expect(readFileSync(unitFile, 'utf-8')).toBe(generateAgentUnit());
+    expect(readFileSync(unitFile, 'utf-8')).toBe(generateAgentUnit(vaultPath));
   });
 
   it('test 7: daemon-reload failure — throws SecretsError', async () => {
