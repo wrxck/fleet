@@ -1,4 +1,8 @@
-export function generateAgentUnit(): string {
+/** build the templated systemd unit for fleet-secrets-agent@%i.service.
+ *  the vault path comes from the caller — production code passes whatever
+ *  FLEET_VAULT_DIR or the repo-local default resolves to, so this template
+ *  never carries an operator-specific assumption. */
+export function generateAgentUnit(vaultPath: string): string {
   return [
     '[Unit]',
     'Description=Fleet Secrets Agent for %i',
@@ -11,14 +15,14 @@ export function generateAgentUnit(): string {
     'RuntimeDirectory=fleet-secrets',
     'RuntimeDirectoryPreserve=yes',
     'LoadCredentialEncrypted=age-key:/etc/fleet/credentials/%i.cred',
-    'ExecStart=/usr/local/bin/fleet-agent --app %i --vault /home/matt/fleet/vault --socket /run/fleet-secrets/%i.sock',
+    `ExecStart=/usr/local/bin/fleet-agent --app %i --vault ${vaultPath} --socket /run/fleet-secrets/%i.sock`,
     'Restart=on-failure',
     'RestartSec=2',
     '',
     '# hardening',
     'ProtectSystem=strict',
     'ProtectHome=read-only',
-    'ReadOnlyPaths=/home/matt/fleet/vault',
+    `ReadOnlyPaths=${vaultPath}`,
     'PrivateTmp=yes',
     'NoNewPrivileges=yes',
     'ProtectKernelTunables=yes',
