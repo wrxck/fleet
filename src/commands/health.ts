@@ -1,72 +1,44 @@
+import { z } from 'zod';
+
 import { load, findApp } from '../core/registry';
-import { checkHealth, checkAllHealth } from '../core/health';
-import { AppNotFoundError } from '../core/errors';
-import { c, icon, heading, table } from '../ui/output';
+import { checkHealth, checkAllHealth, type HealthResult } from '../core/health';
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
-export function healthCommand(args: string[]): void {
-  const json = args.includes('--json');
-  const appName = args.find(a => !a.startsWith('-'));
-  const reg = load();
-
-  if (appName) {
-    const app = findApp(reg, appName);
-    if (!app) throw new AppNotFoundError(appName);
-    const result = checkHealth(app);
-
-    if (json) {
-      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-      return;
+export const healthCommand = defineCommand({
+  name: 'health',
+  summary: 'Health checks: systemd + container + HTTP',
+  args: z.object({ app: z.string().optional() }),
+  tui: { view: 'health' },
+  async run(args): Promise<CommandResult<HealthResult[]>> {
+    let results: HealthResult[];
+    if (args.app) {
+      const app = findApp(load(), args.app);
+      if (!app) {
+        return { ok: false, summary: `app not found: ${args.app}`, data: [] };
+      }
+      results = [checkHealth(app)];
+    } else {
+      results = checkAllHealth(load().apps);
     }
-
-    heading(`Health: ${app.name}`);
-    const sIcon = result.systemd.ok ? icon.ok : icon.err;
-    process.stdout.write(`  Systemd:    ${sIcon} ${result.systemd.state}\n`);
-
-    for (const ct of result.containers) {
-      const cIcon = ct.running ? icon.ok : icon.err;
-      process.stdout.write(`  Container:  ${cIcon} ${ct.name} (${ct.health})\n`);
-    }
-
-    if (result.http) {
-      const hIcon = result.http.ok ? icon.ok : icon.err;
-      const detail = result.http.ok ? `${result.http.status}` : (result.http.error ?? 'failed');
-      process.stdout.write(`  HTTP:       ${hIcon} ${detail}\n`);
-    }
-
-    const oColor = result.overall === 'healthy' ? c.green
-      : result.overall === 'degraded' ? c.yellow : c.red;
-    process.stdout.write(`  Overall:    ${oColor}${result.overall}${c.reset}\n\n`);
-    return;
-  }
-
-  const results = checkAllHealth(reg.apps);
-
-  if (json) {
-    process.stdout.write(JSON.stringify(results, null, 2) + '\n');
-    return;
-  }
-
-  heading('Health Check');
-
-  const rows = results.map(r => {
-    const oIcon = r.overall === 'healthy' ? icon.ok
-      : r.overall === 'degraded' ? icon.warn : icon.err;
-    const sIcon = r.systemd.ok ? icon.ok : icon.err;
-    const cOk = r.containers.filter(ct => ct.running).length;
-    const cTotal = r.containers.length;
-    const httpStatus = r.http
-      ? (r.http.ok ? `${icon.ok} ${r.http.status}` : `${icon.err} fail`)
-      : `${c.dim}-${c.reset}`;
-
-    return [
-      `${c.bold}${r.app}${c.reset}`,
-      `${sIcon} ${r.systemd.state}`,
-      `${cOk}/${cTotal}`,
-      httpStatus,
-      `${oIcon} ${r.overall}`,
-    ];
-  });
-
-  table(['APP', 'SYSTEMD', 'CONTAINERS', 'HTTP', 'OVERALL'], rows);
-  process.stdout.write('\n');
-}
+    const healthy = results.filter(r => r.overall === 'healthy').length;
+    const degraded = results.filter(r => r.overall === 'degraded').length;
+    const down = results.filter(r => r.overall === 'down').length;
+    return {
+      ok: true,
+      summary: `${results.length} checked | ${healthy} healthy | ${degraded} degraded | ${down} down`,
+      data: results,
+      render: {
+        kind: 'table',
+        columns: ['APP', 'SYSTEMD', 'CONTAINERS', 'HTTP', 'OVERALL'],
+        rows: results.map(r => [
+          r.app,
+          r.systemd.state,
+          `${r.containers.filter(ct => ct.running).length}/${r.containers.length}`,
+          r.http ? (r.http.ok ? String(r.http.status ?? 'ok') : 'fail') : '—',
+          r.overall,
+        ]),
+      },
+    };
+  },
+});

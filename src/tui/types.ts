@@ -5,7 +5,8 @@ export type View =
   | 'secrets'
   | 'secret-edit'
   | 'logs'
-  | 'logs-multi';
+  | 'logs-multi'
+  | 'command-palette';
 
 export type SecretsSubView = 'app-list' | 'secret-list';
 
