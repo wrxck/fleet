@@ -14,6 +14,7 @@ import { nginxCommand } from './commands/nginx';
 import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
 import { depsCommand } from './commands/deps';
+import { auditCommand } from './commands/audit';
 import { watchdogCommand } from './commands/watchdog';
 import { guardCommand } from './commands/guard';
 import { backupCommand } from './commands/backup';
@@ -45,6 +46,11 @@ Commands:
   deps config         Show/set configuration
   deps ignore <pkg>   Suppress a finding
   deps init           Install cron + MOTD for automated scanning
+  audit [target]      App Store compliance audit of a mobile project (greenlight)
+  audit guidelines    Browse Apple App Store Review Guidelines (list|show|search)
+  audit doctor        Check the greenlight binary is installed
+  audit ignore "<title>" --reason "..."  Suppress a greenlight false positive
+  audit ignores       List audit ignore rules
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
@@ -176,6 +182,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'logs': return logsCommand(rest);
     case 'egress': return egressCommand(rest);
     case 'deps': return depsCommand(rest);
+    case 'audit': return auditCommand(rest);
     case 'deploy': return deployCommand(rest);
     case 'nginx': return nginxCommand(rest);
     case 'secrets': return secretsCommand(rest);
