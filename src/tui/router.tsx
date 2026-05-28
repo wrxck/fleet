@@ -18,6 +18,7 @@ import { SecretsView } from './views/SecretsView';
 import { SecretEdit } from './views/SecretEdit';
 import { HealthView } from './views/HealthView';
 import { LogsView } from './views/LogsView';
+import { CommandPalette } from './views/CommandPalette';
 import { isSealed, isInitialized } from '../core/secrets';
 import type { View } from './types';
 
@@ -51,8 +52,9 @@ const HELP_GROUPS = [
   },
 ];
 
-function ViewRouter(): React.JSX.Element {
+export function ViewRouter(): React.JSX.Element {
   const state = React.useContext(AppStateContext);
+  const dispatch = React.useContext(AppDispatchContext);
 
   switch (state.currentView) {
     case 'dashboard':
@@ -67,6 +69,13 @@ function ViewRouter(): React.JSX.Element {
       return <SecretEdit />;
     case 'logs':
       return <LogsView />;
+    case 'command-palette':
+      return (
+        <CommandPalette
+          onClose={() => dispatch({ type: 'GO_BACK' })}
+          onOpenView={view => dispatch({ type: 'NAVIGATE', view: view as View })}
+        />
+      );
     default:
       return <Dashboard />;
   }
@@ -166,23 +175,32 @@ export function App(): React.JSX.Element {
       return true;
     }
 
-    if (input === '?' && state.currentView !== 'secret-edit') {
+    // command-palette and secret-edit capture raw text input — the global
+    // single-key shortcuts must not fire while either is open.
+    const isInputView = state.currentView === 'secret-edit' || state.currentView === 'command-palette';
+
+    if (input === '?' && !isInputView) {
       setShowHelp(true);
       return true;
     }
 
-    if (input === 'q' && state.currentView !== 'secret-edit') {
+    if (input === ':' && !isInputView) {
+      dispatch({ type: 'NAVIGATE', view: 'command-palette' });
+      return true;
+    }
+
+    if (input === 'q' && !isInputView) {
       process.exit(0);
       return true;
     }
 
-    if (input === 'x' && state.currentView !== 'secret-edit') {
+    if (input === 'x' && !isInputView) {
       dispatch({ type: 'TOGGLE_REDACT' });
       return true;
     }
 
     // U → apply pending update. Only fires when one is actually available.
-    if ((input === 'U' || input === 'u') && state.currentView !== 'secret-edit') {
+    if ((input === 'U' || input === 'u') && !isInputView) {
       const info = updateInfoRef.current;
       if (info?.available && !updateInProgressRef.current) {
         setUpdateInProgress(true);
@@ -201,7 +219,7 @@ export function App(): React.JSX.Element {
       }
     }
 
-    if (key.tab) {
+    if (key.tab && state.currentView !== 'command-palette') {
       const topViews: View[] = ['dashboard', 'health', 'secrets', 'logs-multi'];
       const base = topViews.includes(state.currentView)
         ? state.currentView
@@ -210,7 +228,7 @@ export function App(): React.JSX.Element {
       return true;
     }
 
-    if (key.escape && state.previousView) {
+    if (key.escape && state.previousView && state.currentView !== 'command-palette') {
       dispatch({ type: 'GO_BACK' });
       return true;
     }
