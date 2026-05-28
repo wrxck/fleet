@@ -52,6 +52,16 @@ vi.mock('./exec.js', () => ({
   execSafe: vi.fn(() => ({ stdout: '', stderr: '', exitCode: 0, ok: true })),
 }));
 
+// withFileLock acquires a real filesystem lock around <manifest>.lock. the
+// node:fs mock above replaces fleet's direct mkdirSync but proper-lockfile
+// pulls fs through its own import chain, so on CI (where the repo-local
+// vault dir doesn't exist) the lock acquisition fails with ENOENT. mock
+// the wrapper here — these tests already mock everything around it, so
+// the actual locking semantics aren't what we're proving.
+vi.mock('./file-lock.js', () => ({
+  withFileLock: vi.fn(async (_path: string, fn: () => unknown) => fn()),
+}));
+
 import { existsSync, readFileSync, readdirSync, chmodSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
 
 import {

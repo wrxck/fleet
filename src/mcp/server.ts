@@ -6,11 +6,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-import { getStatusData } from '../commands/status';
 import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
-import { startService, stopService, restartService } from '../core/systemd';
+import { restartService } from '../core/systemd';
 import { getContainerLogs, getContainersByCompose } from '../core/docker';
-import { checkHealth, checkAllHealth } from '../core/health';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx';
 import { generateNginxConfig } from '../templates/nginx';
 import { composeBuild } from '../core/docker';
@@ -20,12 +18,13 @@ import { assertAppName, assertServiceName, assertFilePath, assertDomain, assertC
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops';
 import { validateApp, validateAll } from '../core/secrets-validate';
-import { freezeApp, unfreezeApp } from '../commands/freeze';
 import { registerGitTools } from './git-tools';
 import { registerSecretsTools } from './secrets-tools';
+import { registerRegistryTools } from './registry-bridge';
 import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy';
 import { snapshotEgress } from '../core/egress';
 import { registerDepsTools } from './deps-tools';
+import { registerAuditTools } from './audit-tools';
 import { registerTestflightTools } from './testflight-tools';
 
 function requireApp(name: string) {
@@ -48,48 +47,7 @@ export async function startMcpServer(): Promise<void> {
     version: pkg.version,
   });
 
-  server.tool('fleet_status', 'Dashboard data for all apps: systemd state, containers, health', async () => {
-    const data = getStatusData();
-    return text(JSON.stringify(data, null, 2));
-  });
-
-  server.tool('fleet_list', 'List all registered apps with their configuration', async () => {
-    const reg = load();
-    return text(JSON.stringify(reg.apps, null, 2));
-  });
-
-  server.tool(
-    'fleet_start',
-    'Start an app via systemctl',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-      const ok = startService(entry.serviceName);
-      return text(ok ? `Started ${entry.name}` : `Failed to start ${entry.name}`);
-    }
-  );
-
-  server.tool(
-    'fleet_stop',
-    'Stop an app via systemctl',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-      const ok = stopService(entry.serviceName);
-      return text(ok ? `Stopped ${entry.name}` : `Failed to stop ${entry.name}`);
-    }
-  );
-
-  server.tool(
-    'fleet_restart',
-    'Restart an app via systemctl',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-      const ok = restartService(entry.serviceName);
-      return text(ok ? `Restarted ${entry.name}` : `Failed to restart ${entry.name}`);
-    }
-  );
+  registerRegistryTools(server);
 
   server.tool(
     'fleet_logs',
@@ -263,23 +221,6 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
-    'fleet_health',
-    'Run health checks for one or all apps',
-    { app: z.string().optional().describe('App name (omit for all apps)') },
-    async ({ app }) => {
-      const reg = load();
-      if (app) {
-        const entry = findApp(reg, app);
-        if (!entry) throw new AppNotFoundError(app);
-        const result = checkHealth(entry);
-        return text(JSON.stringify(result, null, 2));
-      }
-      const results = checkAllHealth(reg.apps);
-      return text(JSON.stringify(results, null, 2));
-    }
-  );
-
-  server.tool(
     'fleet_deploy',
     'Deploy an app: build and restart',
     { app: z.string().describe('App name') },
@@ -425,68 +366,10 @@ export async function startMcpServer(): Promise<void> {
     }
   );
 
-  server.tool(
-    'fleet_freeze',
-    'Freeze a crash-looping service: stop it, disable it, and mark it frozen in the registry. Requires manual unfreezing.',
-    {
-      app: z.string().describe('App name'),
-      reason: z.string().optional().describe('Reason for freezing'),
-    },
-    async ({ app, reason }) => {
-      await freezeApp(app, reason);
-      return text(`Frozen ${app}${reason ? `: ${reason}` : ''}`);
-    }
-  );
-
-  server.tool(
-    'fleet_unfreeze',
-    'Unfreeze a frozen service: clear frozen state, enable and start the service.',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      await unfreezeApp(app);
-      return text(`Unfrozen ${app} — service enabled and started`);
-    }
-  );
-
-  server.tool(
-    'fleet_rollback',
-    'Roll back an app to its previous image (tagged <repo>:fleet-previous before the last build) and restart the service. Use this when a recent deploy or boot-refresh produced a broken image.',
-    { app: z.string().describe('App name') },
-    async ({ app }) => {
-      const entry = requireApp(app);
-
-      // Resolve current image name via compose config
-      const config = execSafe(
-        'docker',
-        ['compose', ...(entry.composeFile ? ['-f', entry.composeFile] : []), 'config', '--images'],
-        { cwd: entry.composePath, timeout: 15_000 },
-      );
-      if (!config.ok) return text(`Could not resolve image name for ${entry.name}: ${config.stderr}`);
-      const latest = config.stdout.split('\n').filter(Boolean)[0];
-      if (!latest) return text(`Could not resolve image name for ${entry.name}`);
-
-      // Compute previous tag via lastIndexOf (handles registry:port/repo:tag)
-      const lastColon = latest.lastIndexOf(':');
-      const base = lastColon > 0 ? latest.slice(0, lastColon) : latest;
-      const previous = `${base}:fleet-previous`;
-
-      if (!execSafe('docker', ['image', 'inspect', previous], { timeout: 10_000 }).ok) {
-        return text(`No previous image found (${previous}) — nothing to roll back to`);
-      }
-      const tag = execSafe('docker', ['tag', previous, latest], { timeout: 10_000 });
-      if (!tag.ok) return text(`docker tag failed: ${tag.stderr}`);
-
-      const ok = restartService(entry.serviceName);
-      return text(ok
-        ? `Rolled back ${entry.name} to ${previous}`
-        : `Tag flipped but service restart failed for ${entry.serviceName}`,
-      );
-    },
-  );
-
   registerGitTools(server);
   registerSecretsTools(server);
   registerDepsTools(server);
+  registerAuditTools(server);
   registerTestflightTools(server);
 
   const transport = new StdioServerTransport();

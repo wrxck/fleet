@@ -1,7 +1,10 @@
+import { z } from 'zod';
+
 import { load } from '../core/registry';
 import { getMultipleServiceStatuses, systemdAvailable } from '../core/systemd';
 import { listContainers } from '../core/docker';
-import { c, icon, heading, table, info } from '../ui/output';
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
 export interface StatusData {
   apps: Array<{
@@ -65,32 +68,22 @@ export function getStatusData(): StatusData {
   };
 }
 
-export function statusCommand(args: string[]): void {
-  const json = args.includes('--json');
-  const data = getStatusData();
-
-  if (json) {
-    process.stdout.write(JSON.stringify(data, null, 2) + '\n');
-    return;
-  }
-
-  heading('Fleet Dashboard');
-  info(`${data.totalApps} apps | ${c.green}${data.healthy} healthy${c.reset} | ${data.unhealthy > 0 ? c.red : c.dim}${data.unhealthy} unhealthy${c.reset}`);
-
-  const rows = data.apps.map(app => {
-    const healthIcon = app.health === 'healthy' ? icon.ok
-      : app.health === 'frozen' ? icon.info
-      : app.health === 'degraded' ? icon.warn
-      : icon.err;
-    const systemdColor = app.systemd === 'active' ? c.green : c.red;
-    return [
-      `${c.bold}${app.name}${c.reset}`,
-      `${systemdColor}${app.systemd}${c.reset}`,
-      app.containers,
-      `${healthIcon} ${app.health}`,
-    ];
-  });
-
-  table(['APP', 'SYSTEMD', 'CONTAINERS', 'HEALTH'], rows);
-  process.stdout.write('\n');
-}
+export const statusCommand = defineCommand({
+  name: 'status',
+  summary: 'Dashboard: all apps, systemd state, containers, health',
+  args: z.object({}),
+  tui: { view: 'dashboard' },
+  async run(): Promise<CommandResult<StatusData>> {
+    const data = getStatusData();
+    return {
+      ok: true,
+      summary: `${data.totalApps} apps | ${data.healthy} healthy | ${data.unhealthy} unhealthy`,
+      data,
+      render: {
+        kind: 'table',
+        columns: ['APP', 'SYSTEMD', 'CONTAINERS', 'HEALTH'],
+        rows: data.apps.map(a => [a.name, a.systemd, a.containers, a.health]),
+      },
+    };
+  },
+});

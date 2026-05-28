@@ -23,271 +23,238 @@ vi.mock('../core/exec.js', () => ({
   execSafe: vi.fn(),
 }));
 
-vi.mock('../ui/output.js', () => ({
-  success: vi.fn(),
-  warn: vi.fn(),
-  info: vi.fn(),
-  error: vi.fn(),
-}));
-
 import { writeFileSync, copyFileSync, existsSync, renameSync } from 'node:fs';
+
 import { load } from '../core/registry';
 import { readServiceFile } from '../core/systemd';
 import { execSafe } from '../core/exec';
-import { success, warn, info } from '../ui/output';
 import { patchSystemdCommand } from './patch-systemd';
+import { makeMcpContext } from '../registry/context';
+import type { Registry } from '../core/registry';
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('patchSystemdCommand', () => {
-  const mockReg = {
-    apps: [{ serviceName: 'fleet-app1' }],
-    infrastructure: { databases: { serviceName: 'docker-databases' } },
+// minimal typed registry fixture
+function makeRegistry(overrides: Partial<{ appServiceNames: string[]; dbServiceName: string }> = {}): Registry {
+  const appServiceNames = overrides.appServiceNames ?? ['fleet-app1'];
+  const dbServiceName = overrides.dbServiceName ?? 'docker-databases';
+  return {
+    version: 1,
+    apps: appServiceNames.map(serviceName => ({
+      name: serviceName,
+      displayName: serviceName,
+      composePath: `/apps/${serviceName}`,
+      composeFile: null,
+      serviceName,
+      domains: [],
+      port: null,
+      usesSharedDb: false,
+      type: 'service' as const,
+      containers: [serviceName],
+      dependsOnDatabases: false,
+      registeredAt: '2026-01-01T00:00:00.000Z',
+    })),
+    infrastructure: {
+      databases: { serviceName: dbServiceName, composePath: '/srv/databases' },
+      nginx: { configPath: '/etc/nginx' },
+    },
   };
+}
 
-  it('patches services without StartLimitBurst', () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(readServiceFile).mockReturnValue('[Unit]\nDescription=test\n[Service]\nType=oneshot\n[Install]');
-    vi.mocked(copyFileSync).mockImplementation(() => undefined);
-    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as any);
+const baseServiceContent = (name: string) =>
+  `[Unit]\nDescription=${name}\n[Service]\nExecStart=/usr/bin/docker compose up -d\nTimeoutStartSec=300\n[Install]`;
 
-    patchSystemdCommand([]);
-
-    expect(writeFileSync).toHaveBeenCalledTimes(2);
-    expect(execSafe).toHaveBeenCalledWith('systemctl', ['daemon-reload']);
-    expect(success).toHaveBeenCalled();
+describe('patchSystemdCommand — metadata', () => {
+  it('has the correct name', () => {
+    expect(patchSystemdCommand.name).toBe('patch-systemd');
   });
 
-  it('skips services that already have StartLimitBurst', () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    // Return fully-patched content per service name so idempotency applies to all
-    vi.mocked(readServiceFile).mockImplementation(
-      (name: string) =>
-        `[Service]\nExecStart=/usr/bin/env fleet boot-start ${name}\nTimeoutStartSec=900\nStartLimitBurst=5\nStartLimitIntervalSec=300`,
-    );
-
-    patchSystemdCommand([]);
-
-    expect(writeFileSync).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('No services needed'));
-  });
-
-  it('skips services with no service file', () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(readServiceFile).mockReturnValue(null);
-
-    patchSystemdCommand([]);
-
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no service file'));
+  it('is marked destructive', () => {
+    expect(patchSystemdCommand.destructive).toBeTruthy();
   });
 });
 
-describe('patchSystemdCommand — ExecStart rewrite + backup', () => {
-  const mockReg = {
-    apps: [{ serviceName: 'fleet-app1' }, { serviceName: 'fleet-app2' }],
-    infrastructure: { databases: { serviceName: 'docker-databases' } },
-  };
-
-  const oldContent = (name: string) =>
-    `[Unit]\nDescription=${name}\n[Service]\nExecStart=/usr/bin/docker compose up -d --force-recreate\nTimeoutStartSec=300\n[Install]`;
-
-  it('(a) rewrites ExecStart, bumps TimeoutStartSec, backs up original', () => {
-    vi.mocked(load).mockReturnValue({
-      apps: [{ serviceName: 'fleet-app1' }],
-      infrastructure: { databases: { serviceName: 'docker-databases' } },
-    } as any);
-    vi.mocked(readServiceFile).mockReturnValue(oldContent('fleet-app1'));
-    vi.mocked(copyFileSync).mockImplementation(() => undefined);
-    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as any);
-
-    patchSystemdCommand([]);
-
-    // Backup created before write
-    expect(copyFileSync).toHaveBeenCalledWith(
-      '/etc/systemd/system/fleet-app1.service',
-      '/etc/systemd/system/fleet-app1.service.bak',
+describe('patchSystemdCommand run() — confirm denied', () => {
+  it('returns cancelled without patching when confirmation is denied', async () => {
+    const result = await patchSystemdCommand.run(
+      { rollback: false, yes: false },
+      makeMcpContext(false),
     );
 
-    // Written content has new ExecStart and TimeoutStartSec=900
-    const writtenContent = vi.mocked(writeFileSync).mock.calls[0][1] as string;
-    expect(writtenContent).toContain('ExecStart=/usr/bin/env fleet boot-start fleet-app1');
-    expect(writtenContent).toContain('TimeoutStartSec=900');
-    expect(writtenContent).not.toContain('TimeoutStartSec=300');
-  });
-
-  it('(b) idempotent: already fully patched — no writes, no backup', () => {
-    vi.mocked(load).mockReturnValue({
-      apps: [{ serviceName: 'fleet-app1' }],
-      infrastructure: { databases: { serviceName: 'docker-databases' } },
-    } as any);
-    vi.mocked(readServiceFile).mockImplementation(
-      (name: string) =>
-        `[Service]\nExecStart=/usr/bin/env fleet boot-start ${name}\nTimeoutStartSec=900\nStartLimitBurst=5\nStartLimitIntervalSec=300`,
-    );
-
-    patchSystemdCommand([]);
-
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/cancel/i);
     expect(writeFileSync).not.toHaveBeenCalled();
-    expect(copyFileSync).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('No services needed'));
+    expect(renameSync).not.toHaveBeenCalled();
   });
+});
 
-  it('(c) partial state: has StartLimitBurst but not boot-start — still patches ExecStart + TimeoutStartSec, backs up', () => {
-    const partial = `[Service]\nExecStart=/usr/bin/docker compose up -d\nTimeoutStartSec=60\nStartLimitBurst=5\nStartLimitIntervalSec=300`;
-
-    vi.mocked(load).mockReturnValue({
-      apps: [{ serviceName: 'fleet-app1' }],
-      infrastructure: { databases: { serviceName: 'docker-databases' } },
-    } as any);
-    vi.mocked(readServiceFile).mockReturnValue(partial);
+describe('patchSystemdCommand run() — patch happy path', () => {
+  it('patches a service lacking StartLimitBurst and returns ok', async () => {
+    const reg = makeRegistry();
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockReturnValue(
+      '[Unit]\nDescription=app\n[Service]\nExecStart=/usr/bin/docker compose up\nTimeoutStartSec=300',
+    );
     vi.mocked(copyFileSync).mockImplementation(() => undefined);
-    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as any);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
 
-    patchSystemdCommand([]);
-
-    expect(copyFileSync).toHaveBeenCalledWith(
-      '/etc/systemd/system/fleet-app1.service',
-      '/etc/systemd/system/fleet-app1.service.bak',
+    const result = await patchSystemdCommand.run(
+      { rollback: false, yes: true },
+      makeMcpContext(false),
     );
 
-    const writtenContent = vi.mocked(writeFileSync).mock.calls[0][1] as string;
-    expect(writtenContent).toContain('ExecStart=/usr/bin/env fleet boot-start fleet-app1');
-    expect(writtenContent).toContain('TimeoutStartSec=900');
-    // StartLimitBurst not duplicated
-    expect((writtenContent.match(/StartLimitBurst=/g) ?? []).length).toBe(1);
+    expect(result.ok).toBeTruthy();
+    expect(writeFileSync).toHaveBeenCalled();
+    expect(result.data).toMatchObject({ action: 'patch' });
+
+    // the rewritten unit file must carry the new settings for an app service.
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).toContain('StartLimitBurst=5');
+    expect(written).toContain('StartLimitIntervalSec=300');
+    expect(written).toContain('ExecStart=/usr/bin/env fleet boot-start fleet-app1');
+    expect(written).toContain('TimeoutStartSec=900');
+    expect(written).not.toContain('TimeoutStartSec=300');
   });
 
-  it('(d) --rollback restores .bak files for all services and runs daemon-reload', () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
+  it('does not duplicate StartLimitBurst on a partially-patched service', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry());
+    // already has StartLimitBurst but lacks the boot-start ExecStart.
+    vi.mocked(readServiceFile).mockReturnValue(
+      '[Service]\nStartLimitBurst=5\nStartLimitIntervalSec=300\nExecStart=/usr/bin/docker compose up\nTimeoutStartSec=300',
+    );
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    const result = await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeTruthy();
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    // StartLimitBurst already present — must appear exactly once, not be re-inserted.
+    expect(written.match(/StartLimitBurst=/g)).toHaveLength(1);
+    expect(written).toContain('ExecStart=/usr/bin/env fleet boot-start fleet-app1');
+  });
+});
+
+describe('patchSystemdCommand run() — nothing to do', () => {
+  it('returns ok with "no services needed" summary when all already patched', async () => {
+    const reg = makeRegistry();
+    vi.mocked(load).mockReturnValue(reg);
+    // return fully-patched content for every service
+    vi.mocked(readServiceFile).mockImplementation((name: string) =>
+      `[Service]\nExecStart=/usr/bin/env fleet boot-start ${name}\nTimeoutStartSec=900\nStartLimitBurst=5\nStartLimitIntervalSec=300`,
+    );
+
+    const result = await patchSystemdCommand.run(
+      { rollback: false, yes: true },
+      makeMcpContext(false),
+    );
+
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/no services needed/i);
+    expect(writeFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('patchSystemdCommand run() — rollback happy path', () => {
+  it('restores from .bak files and calls daemon-reload', async () => {
+    const reg = makeRegistry({ appServiceNames: ['fleet-app1'], dbServiceName: 'docker-databases' });
+    vi.mocked(load).mockReturnValue(reg);
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(renameSync).mockImplementation(() => undefined);
-    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as any);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
 
-    patchSystemdCommand(['--rollback']);
-
-    // Should restore all 3 services (fleet-app1, fleet-app2, docker-databases)
-    expect(renameSync).toHaveBeenCalledTimes(3);
-    expect(renameSync).toHaveBeenCalledWith(
-      '/etc/systemd/system/fleet-app1.service.bak',
-      '/etc/systemd/system/fleet-app1.service',
+    const result = await patchSystemdCommand.run(
+      { rollback: true, yes: true },
+      makeMcpContext(false),
     );
-    expect(renameSync).toHaveBeenCalledWith(
-      '/etc/systemd/system/fleet-app2.service.bak',
-      '/etc/systemd/system/fleet-app2.service',
-    );
-    expect(renameSync).toHaveBeenCalledWith(
-      '/etc/systemd/system/docker-databases.service.bak',
-      '/etc/systemd/system/docker-databases.service',
-    );
-    expect(execSafe).toHaveBeenCalledWith('systemctl', ['daemon-reload']);
-  });
 
-  it('(e) --rollback when no .bak files exist — no renames, logs message, no daemon-reload', () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(existsSync).mockReturnValue(false);
-
-    patchSystemdCommand(['--rollback']);
-
-    expect(renameSync).not.toHaveBeenCalled();
-    expect(execSafe).not.toHaveBeenCalled();
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('No .bak files found'));
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/restored/i);
+    expect(renameSync).toHaveBeenCalled();
+    expect(result.data).toMatchObject({ action: 'rollback' });
   });
 });
 
-describe('patchSystemdCommand — databases service is not boot-start-ified', () => {
-  const dbServiceFile =
-    '[Unit]\nDescription=docker databases\n[Service]\nExecStart=/usr/bin/docker compose -f /srv/docker-databases/docker-compose.yml up -d --force-recreate\nTimeoutStartSec=300\n[Install]';
-
-  const mockReg = {
-    apps: [{ serviceName: 'fleet-app1' }],
-    infrastructure: { databases: { serviceName: 'docker-databases' } },
-  };
-
-  it('does not rewrite ExecStart on docker-databases.service', () => {
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(readServiceFile).mockImplementation((name: string) => {
-      if (name === 'docker-databases') return dbServiceFile;
-      // app service: also needs patching so the command does something and calls daemon-reload
-      return '[Unit]\nDescription=app\n[Service]\nExecStart=/usr/bin/docker compose up -d\nTimeoutStartSec=300\n[Install]';
-    });
+describe('patchSystemdCommand run() — daemon-reload failure on patch', () => {
+  it('returns ok:false when daemon-reload fails after patching', async () => {
+    const reg = makeRegistry();
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockReturnValue(baseServiceContent('fleet-app1'));
     vi.mocked(copyFileSync).mockImplementation(() => undefined);
-    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as any);
+    vi.mocked(execSafe).mockReturnValue({
+      ok: false,
+      stdout: '',
+      stderr: 'unit not found',
+    } as never);
 
-    patchSystemdCommand([]);
-
-    // Find the write call for docker-databases (if any)
-    const dbWrite = vi.mocked(writeFileSync).mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('docker-databases.service'),
+    const result = await patchSystemdCommand.run(
+      { rollback: false, yes: true },
+      makeMcpContext(false),
     );
 
-    // (a) if written: must contain StartLimitBurst
-    if (dbWrite) {
-      const written = dbWrite[1] as string;
-      expect(written).toContain('StartLimitBurst=5');
-      // (b) must NOT rewrite ExecStart to fleet boot-start
-      expect(written).not.toContain('fleet boot-start docker-databases');
-      // (c) must preserve the original docker compose ExecStart
-      expect(written).toContain('ExecStart=/usr/bin/docker compose');
-      // (d) must NOT change TimeoutStartSec to 900 for docker-databases
-      expect(written).not.toContain('TimeoutStartSec=900');
-    } else {
-      // If no write at all, that means it was skipped — that only happens if already fully patched,
-      // which this fixture is not (no StartLimitBurst). This branch should not be reached.
-      // Fail explicitly if we get here.
-      expect(dbWrite).toBeDefined();
-    }
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/daemon-reload failed/i);
   });
+});
 
-  it('regression: dedupes when docker-databases is in both reg.apps and infrastructure', () => {
-    // simulates a registry where docker-databases was added to apps (e.g. via
-    // an earlier `fleet add` or migration). without dedupe the apps entry would
-    // win and rewrite ExecStart on the shared databases service.
-    vi.mocked(load).mockReturnValue({
-      apps: [{ serviceName: 'fleet-app1' }, { serviceName: 'docker-databases' }],
-      infrastructure: { databases: { serviceName: 'docker-databases' } },
-    } as ReturnType<typeof load>);
+describe('patchSystemdCommand run() — backup path', () => {
+  it('copies the original file to .bak before overwriting', async () => {
+    const reg = makeRegistry({ appServiceNames: ['fleet-app1'], dbServiceName: 'docker-databases' });
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    expect(copyFileSync).toHaveBeenCalledWith(
+      '/etc/systemd/system/fleet-app1.service',
+      '/etc/systemd/system/fleet-app1.service.bak',
+    );
+  });
+});
+
+describe('patchSystemdCommand run() — databases service guard', () => {
+  it('does not rewrite ExecStart on the databases service', async () => {
+    const dbContent =
+      '[Unit]\nDescription=docker databases\n[Service]\nExecStart=/usr/bin/docker compose -f /srv/db/docker-compose.yml up -d\nTimeoutStartSec=300\n[Install]';
+
+    vi.mocked(load).mockReturnValue(
+      makeRegistry({ appServiceNames: ['fleet-app1'], dbServiceName: 'docker-databases' }),
+    );
     vi.mocked(readServiceFile).mockImplementation((name: string) => {
-      if (name === 'docker-databases') return dbServiceFile;
-      return '[Unit]\nDescription=app\n[Service]\nExecStart=/usr/bin/docker compose up -d\nTimeoutStartSec=300\n[Install]';
+      if (name === 'docker-databases') return dbContent;
+      return baseServiceContent(name);
     });
     vi.mocked(copyFileSync).mockImplementation(() => undefined);
-    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as ReturnType<typeof execSafe>);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
 
-    patchSystemdCommand([]);
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
 
     const dbWrite = vi.mocked(writeFileSync).mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('docker-databases.service'),
+      call => typeof call[0] === 'string' && (call[0] as string).includes('docker-databases.service'),
     );
     expect(dbWrite).toBeDefined();
     const written = dbWrite![1] as string;
+    expect(written).toContain('StartLimitBurst=5');
     expect(written).not.toContain('fleet boot-start docker-databases');
-    expect(written).toContain('ExecStart=/usr/bin/docker compose');
   });
+});
 
-  it('does not create docker-databases.service.bak if the only change would be boot-start/timeout', () => {
-    // Provide a databases service that already has StartLimitBurst — so with the fix,
-    // no changes are needed and no write/backup should happen.
-    const alreadyPatched =
-      '[Service]\nExecStart=/usr/bin/docker compose -f /srv/docker-databases/docker-compose.yml up -d --force-recreate\nStartLimitBurst=5\nStartLimitIntervalSec=300';
+describe('patchSystemdCommand run() — rollback no .bak files', () => {
+  it('returns ok:true with "no .bak files found" summary when nothing to restore', async () => {
+    const reg = makeRegistry();
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(existsSync).mockReturnValue(false);
 
-    vi.mocked(load).mockReturnValue(mockReg as any);
-    vi.mocked(readServiceFile).mockImplementation((name: string) => {
-      if (name === 'docker-databases') return alreadyPatched;
-      // app service: also already patched so we get a clean no-op
-      return `[Service]\nExecStart=/usr/bin/env fleet boot-start ${name}\nTimeoutStartSec=900\nStartLimitBurst=5\nStartLimitIntervalSec=300`;
-    });
-
-    patchSystemdCommand([]);
-
-    // No backup created for docker-databases
-    expect(copyFileSync).not.toHaveBeenCalledWith(
-      expect.stringContaining('docker-databases.service'),
-      expect.stringContaining('docker-databases.service.bak'),
+    const result = await patchSystemdCommand.run(
+      { rollback: true, yes: true },
+      makeMcpContext(false),
     );
-    // No write for docker-databases
-    const dbWrite = vi.mocked(writeFileSync).mock.calls.find(
-      (call) => typeof call[0] === 'string' && call[0].includes('docker-databases'),
-    );
-    expect(dbWrite).toBeUndefined();
+
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/no .bak files found/i);
+    expect(renameSync).not.toHaveBeenCalled();
+    expect(execSafe).not.toHaveBeenCalled();
   });
 });

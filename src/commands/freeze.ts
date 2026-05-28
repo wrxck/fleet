@@ -1,7 +1,10 @@
+import { z } from 'zod';
+
 import { findApp, withRegistry } from '../core/registry';
 import { stopService, disableService, enableService, startService } from '../core/systemd';
 import { AppNotFoundError } from '../core/errors';
-import { success, error } from '../ui/output';
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
 export async function freezeApp(appName: string, reason?: string): Promise<void> {
   await withRegistry(reg => {
@@ -46,35 +49,42 @@ export async function unfreezeApp(appName: string): Promise<void> {
   }
 }
 
-export async function freezeCommand(args: string[]): Promise<void> {
-  const appName = args[0];
-  if (!appName) {
-    error('Usage: fleet freeze <app> [reason]');
-    process.exit(1);
-  }
-  const reason = args.slice(1).join(' ') || undefined;
+export const freezeCommand = defineCommand({
+  name: 'freeze',
+  summary: 'Freeze a crash-looping service (stop + disable)',
+  args: z.object({ app: z.string(), reason: z.string().optional(), yes: z.boolean().default(false) }),
+  destructive: true,
+  async run(args, ctx): Promise<CommandResult<{ app: string }>> {
+    if (!args.yes && !(await ctx.confirm(`Freeze ${args.app}? This stops and disables the service.`))) {
+      return { ok: false, summary: 'cancelled', data: { app: args.app } };
+    }
+    try {
+      await freezeApp(args.app, args.reason);
+    } catch (err) {
+      return { ok: false, summary: err instanceof Error ? err.message : String(err), data: { app: args.app } };
+    }
+    return {
+      ok: true,
+      summary: `froze ${args.app}${args.reason ? `: ${args.reason}` : ''}`,
+      data: { app: args.app },
+    };
+  },
+});
 
-  try {
-    await freezeApp(appName, reason);
-    success(`Frozen ${appName}${reason ? `: ${reason}` : ''}`);
-  } catch (err) {
-    error((err as Error).message);
-    process.exit(1);
-  }
-}
-
-export async function unfreezeCommand(args: string[]): Promise<void> {
-  const appName = args[0];
-  if (!appName) {
-    error('Usage: fleet unfreeze <app>');
-    process.exit(1);
-  }
-
-  try {
-    await unfreezeApp(appName);
-    success(`Unfrozen ${appName} — service enabled and started`);
-  } catch (err) {
-    error((err as Error).message);
-    process.exit(1);
-  }
-}
+export const unfreezeCommand = defineCommand({
+  name: 'unfreeze',
+  summary: 'Unfreeze and restart a frozen service',
+  args: z.object({ app: z.string(), yes: z.boolean().default(false) }),
+  destructive: true,
+  async run(args, ctx): Promise<CommandResult<{ app: string }>> {
+    if (!args.yes && !(await ctx.confirm(`Unfreeze ${args.app}? This re-enables and starts the service.`))) {
+      return { ok: false, summary: 'cancelled', data: { app: args.app } };
+    }
+    try {
+      await unfreezeApp(args.app);
+    } catch (err) {
+      return { ok: false, summary: err instanceof Error ? err.message : String(err), data: { app: args.app } };
+    }
+    return { ok: true, summary: `unfroze ${args.app} — service enabled and started`, data: { app: args.app } };
+  },
+});
