@@ -5,6 +5,10 @@ export type ParseResult =
   | { help: false; ok: true; values: Record<string, unknown> }
   | { help: false; ok: false; error: string };
 
+/** single-dash short flags, mapped to the long-form (schema) field they set.
+ *  short flags only ever set a boolean field true. */
+const SHORT_FLAGS: Record<string, string> = { y: 'yes' };
+
 /** true when a schema field (unwrapping optional/default) is a boolean. */
 function isBooleanField(schema: z.ZodTypeAny): boolean {
   let s: z.ZodTypeAny = schema;
@@ -46,6 +50,13 @@ export function parseArgs(schema: z.ZodObject<z.ZodRawShape>, argv: string[]): P
       }
       values[body] = next;
       i++;
+    } else if (/^-[A-Za-z]$/.test(token)) {
+      // single-dash short flag (e.g. -y) — resolve via the alias table
+      const long = SHORT_FLAGS[token.slice(1)];
+      if (long === undefined || !(long in shape)) {
+        return { help: false, ok: false, error: `unknown flag: ${token}` };
+      }
+      values[long] = true;
     } else {
       positionals.push(token);
     }

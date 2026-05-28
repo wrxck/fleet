@@ -5,20 +5,18 @@ vi.mock('node:fs', async () => {
   return { ...actual, existsSync: vi.fn() };
 });
 
-vi.mock('../core/registry.js', () => ({
-  load: vi.fn(),
-  save: vi.fn(),
-  addApp: vi.fn(),
-  // addCommand now uses withRegistry; for tests, run the mutator inline
-  // against the mocked registry and forward to mocked save() so the existing
-  // toHaveBeenCalled assertions keep working.
-  withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
-    const mod = await vi.importMock<typeof import('../core/registry')>('../core/registry.js');
-    const reg = (mod.load as unknown as { (): unknown })();
-    const next = await fn(reg);
-    (mod.save as unknown as { (r: unknown): void })(next);
-  }),
-}));
+vi.mock('../core/registry.js', async () => {
+  const actual = await vi.importActual<typeof import('../core/registry')>('../core/registry.js');
+  return {
+    ...actual,
+    addApp: vi.fn(),
+    withRegistry: vi.fn(async (fn: (r: unknown) => unknown | Promise<unknown>) => {
+      const mod = await vi.importMock<typeof import('../core/registry')>('../core/registry.js');
+      const reg = (mod.load as unknown as { (): unknown })();
+      await fn(reg);
+    }),
+  };
+});
 
 vi.mock('../core/docker.js', () => ({
   getContainersByCompose: vi.fn(),
@@ -34,140 +32,163 @@ vi.mock('../templates/systemd.js', () => ({
   generateServiceFile: vi.fn(),
 }));
 
-vi.mock('../ui/output.js', () => ({
-  success: vi.fn(),
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-}));
-
-vi.mock('../ui/confirm.js', () => ({
-  confirm: vi.fn(),
+vi.mock('../core/validate.js', () => ({
+  assertComposeFile: vi.fn(),
 }));
 
 import { existsSync } from 'node:fs';
-import { addCommand } from './add';
-import { load, save, addApp } from '../core/registry';
+
+import { addApp, withRegistry } from '../core/registry';
 import { getContainersByCompose } from '../core/docker';
 import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
 import { generateServiceFile } from '../templates/systemd';
-import { confirm } from '../ui/confirm';
+import { makeMcpContext } from '../registry/context';
+import { addCommand } from './add';
 
 const mockExistsSync = vi.mocked(existsSync);
-const mockLoad = vi.mocked(load);
-const mockSave = vi.mocked(save);
 const mockAddApp = vi.mocked(addApp);
 const mockGetContainers = vi.mocked(getContainersByCompose);
 const mockReadServiceFile = vi.mocked(readServiceFile);
 const mockInstallServiceFile = vi.mocked(installServiceFile);
 const mockEnableService = vi.mocked(enableService);
 const mockGenerateServiceFile = vi.mocked(generateServiceFile);
-const mockConfirm = vi.mocked(confirm);
-
-function makeRegistry() {
-  return {
-    version: 1,
-    apps: [],
-    infrastructure: {
-      databases: { serviceName: 'docker-databases', composePath: '/db' },
-      nginx: { configPath: '/etc/nginx' },
-    },
-  };
-}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockLoad.mockReturnValue(makeRegistry());
-  mockAddApp.mockImplementation((_reg, app) => ({ ...makeRegistry(), apps: [app] }));
   mockGetContainers.mockReturnValue(['myapp']);
   mockReadServiceFile.mockReturnValue(null);
   mockGenerateServiceFile.mockReturnValue('[Unit]\nDescription=test');
-  mockConfirm.mockResolvedValue(true);
   mockExistsSync.mockImplementation((p: unknown) => {
     const path = String(p);
     return path === '/apps/myapp' || path.endsWith('docker-compose.yml');
   });
 });
 
-describe('addCommand — argument validation', () => {
-  it('exits when no app-dir given', async () => {
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
-    await expect(addCommand([])).rejects.toThrow('exit');
-    exitSpy.mockRestore();
+describe('addCommand — metadata', () => {
+  it('has the correct name', () => {
+    expect(addCommand.name).toBe('add');
   });
 
-  it('throws FleetError when directory does not exist', async () => {
+  it('is not marked destructive', () => {
+    expect(addCommand.destructive).toBeFalsy();
+  });
+});
+
+describe('addCommand — directory not found', () => {
+  it('returns { ok: false } with a not-found summary when dir does not exist', async () => {
     mockExistsSync.mockReturnValue(false);
-    await expect(addCommand(['/nonexistent/path'])).rejects.toThrow('Directory not found');
+    const result = await addCommand.run(
+      { dir: '/nonexistent/path', 'dry-run': false, yes: false },
+      makeMcpContext(false),
+    );
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
+    expect(result.data).toBeNull();
   });
+});
 
-  it('throws FleetError when no docker-compose.yml found', async () => {
+describe('addCommand — no docker-compose found', () => {
+  it('returns { ok: false } when directory exists but has no docker-compose', async () => {
     mockExistsSync.mockImplementation((p: unknown) => {
-      const path = String(p);
-      return path === '/apps/myapp';
+      // dir exists, but no docker-compose anywhere
+      return String(p) === '/apps/myapp';
     });
-    await expect(addCommand(['/apps/myapp'])).rejects.toThrow('No docker-compose.yml');
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: false },
+      makeMcpContext(false),
+    );
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/docker-compose/i);
+    expect(result.data).toBeNull();
   });
 });
 
 describe('addCommand — dry run', () => {
-  it('does not save registry in dry run', async () => {
-    await addCommand(['/apps/myapp', '--dry-run']);
-    expect(mockSave).not.toHaveBeenCalled();
+  it('returns { ok: true } with the assembled app but does NOT call addApp or installServiceFile', async () => {
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': true, yes: true },
+      makeMcpContext(true),
+    );
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/dry run/i);
+    expect(result.data).toBeTruthy();
+    expect((result.data as { name: string }).name).toBe('myapp');
+    expect(mockAddApp).not.toHaveBeenCalled();
+    expect(mockInstallServiceFile).not.toHaveBeenCalled();
   });
 
-  it('writes app JSON to stdout in dry run', async () => {
-    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    await addCommand(['/apps/myapp', '--dry-run']);
-    expect(writeSpy).toHaveBeenCalledWith(expect.stringContaining('"name"'));
-    writeSpy.mockRestore();
+  it('includes a keyValue render model in the dry-run result', async () => {
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': true, yes: false },
+      makeMcpContext(false),
+    );
+    expect(result.render?.kind).toBe('keyValue');
   });
 });
 
-describe('addCommand — service creation', () => {
-  it('creates service when none exists and user confirms', async () => {
-    await addCommand(['/apps/myapp', '-y']);
+describe('addCommand — service-file confirm denied', () => {
+  it('does not install service file when confirm is denied but still registers the app', async () => {
+    // no existing service, confirm denied
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: false },
+      makeMcpContext(false),
+    );
+    expect(mockInstallServiceFile).not.toHaveBeenCalled();
+    expect(mockAddApp).toHaveBeenCalled();
+    expect(result.ok).toBeTruthy();
+  });
+});
+
+describe('addCommand — happy path with yes: true', () => {
+  it('installs the service file, enables it, and calls addApp', async () => {
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: true },
+      makeMcpContext(false),
+    );
     expect(mockInstallServiceFile).toHaveBeenCalled();
     expect(mockEnableService).toHaveBeenCalled();
+    expect(mockAddApp).toHaveBeenCalled();
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/registered/i);
   });
 
-  it('skips service creation when service already exists', async () => {
+  it('skips service install when service file already exists', async () => {
     mockReadServiceFile.mockReturnValue('[Unit]\nDescription=existing');
-    await addCommand(['/apps/myapp', '-y']);
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: true },
+      makeMcpContext(false),
+    );
     expect(mockInstallServiceFile).not.toHaveBeenCalled();
+    expect(mockAddApp).toHaveBeenCalled();
+    expect(result.ok).toBeTruthy();
   });
 
-  it('skips service creation when user declines confirm', async () => {
-    mockConfirm.mockResolvedValue(false);
-    await addCommand(['/apps/myapp']);
-    expect(mockInstallServiceFile).not.toHaveBeenCalled();
-  });
-
-  it('saves registry after successful add', async () => {
-    await addCommand(['/apps/myapp', '-y']);
-    expect(mockSave).toHaveBeenCalled();
-  });
-});
-
-describe('addCommand — security: input validation', () => {
-  it('handles directory not existing for path traversal attempt', async () => {
-    mockExistsSync.mockReturnValue(false);
-    await expect(addCommand(['../../etc/passwd'])).rejects.toThrow('Directory not found');
-  });
-
-  it('sanitizes app name from directory basename to alphanumeric-dash only', async () => {
+  it('sanitises the app name to alphanumeric-dash only', async () => {
     mockExistsSync.mockImplementation((p: unknown) => {
       const path = String(p);
       return path.includes('my_app') || path.endsWith('docker-compose.yml');
     });
-    let capturedApp: { name: string } | undefined;
-    mockAddApp.mockImplementation((_r, app) => { capturedApp = app as { name: string }; return makeRegistry(); });
-    await addCommand(['/apps/my_app', '-y']);
-    expect(capturedApp?.name).toMatch(/^[a-z0-9-]+$/);
+    let capturedName: string | undefined;
+    mockAddApp.mockImplementation((_reg, app) => {
+      capturedName = (app as { name: string }).name;
+      return _reg as never;
+    });
+    await addCommand.run(
+      { dir: '/apps/my_app', 'dry-run': false, yes: true },
+      makeMcpContext(false),
+    );
+    expect(capturedName).toMatch(/^[a-z0-9-]+$/);
   });
+});
 
-  it('does not call installServiceFile in dry run even when confirming', async () => {
-    await addCommand(['/apps/myapp', '--dry-run', '-y']);
-    expect(mockInstallServiceFile).not.toHaveBeenCalled();
+describe('addCommand — confirm via ctx.confirm', () => {
+  it('installs service file when ctx.confirm resolves true (and yes: false)', async () => {
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: false },
+      makeMcpContext(true),
+    );
+    expect(mockInstallServiceFile).toHaveBeenCalled();
+    expect(mockEnableService).toHaveBeenCalled();
+    expect(result.ok).toBeTruthy();
   });
 });

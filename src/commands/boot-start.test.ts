@@ -1,124 +1,91 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as registry from '../core/registry';
-import * as refreshModule from '../core/boot-refresh';
-import * as docker from '../core/docker';
+
+vi.mock('../core/registry', async () => {
+  const actual = await vi.importActual<typeof import('../core/registry')>('../core/registry');
+  return { ...actual, load: vi.fn(), findApp: vi.fn() };
+});
+vi.mock('../core/boot-refresh', () => ({ refresh: vi.fn() }));
+vi.mock('../core/docker', () => ({ composeUp: vi.fn() }));
+
+import { load, findApp } from '../core/registry';
+import { refresh } from '../core/boot-refresh';
+import { composeUp } from '../core/docker';
 import { bootStartCommand } from './boot-start';
+import { makeCliContext } from '../registry/context';
+import type { CommandContext } from '../registry/types';
 
-vi.mock('../core/registry.js');
-vi.mock('../core/boot-refresh.js');
-vi.mock('../core/docker.js');
+beforeEach(() => vi.clearAllMocks());
 
-const baseApp = {
-  name: 'x',
-  displayName: 'x',
-  composePath: '/tmp/x',
-  composeFile: null,
-  serviceName: 'x',
-  domains: [],
-  port: null,
-  usesSharedDb: false,
-  type: 'service' as const,
-  containers: [],
-  dependsOnDatabases: false,
-  registeredAt: '',
-};
-
-function stubRegistry() {
-  vi.mocked(registry.load).mockReturnValue({
-    version: 1,
-    apps: [baseApp],
-    infrastructure: {
-      databases: { serviceName: '', composePath: '' },
-      nginx: { configPath: '' },
-    },
-  });
-  // findApp is also from registry.js — mock it to look up by name
-  vi.mocked(registry.findApp).mockImplementation((reg, name) =>
-    reg.apps.find(a => a.name === name || a.serviceName === name)
-  );
+/** a context whose log is a spy, so log levels can be asserted. */
+function spyContext(): { ctx: CommandContext; log: ReturnType<typeof vi.fn> } {
+  const log = vi.fn();
+  return { ctx: { ...makeCliContext(), log }, log };
 }
 
-describe('bootStartCommand', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('exits 1 when no app arg given', async () => {
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(bootStartCommand([])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
+describe('boot-start CommandDef', () => {
+  it('has the correct registry metadata', () => {
+    expect(bootStartCommand.name).toBe('boot-start');
+    expect(bootStartCommand.cliOnly).toBeTruthy();
   });
 
-  it('exits 1 when app not found in registry', async () => {
-    vi.mocked(registry.load).mockReturnValue({
-      version: 1, apps: [],
-      infrastructure: { databases: { serviceName: '', composePath: '' }, nginx: { configPath: '' } },
-    });
-    vi.mocked(registry.findApp).mockReturnValue(undefined);
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(bootStartCommand(['ghost'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
+  it('returns ok: false when app is not found in registry', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue(undefined);
+    const result = await bootStartCommand.run({ app: 'ghost' }, makeCliContext());
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
+    expect(vi.mocked(composeUp)).not.toHaveBeenCalled();
   });
 
-  it('calls compose up even when refresh returns failed-safe', async () => {
-    stubRegistry();
-    vi.mocked(refreshModule.refresh).mockResolvedValue({ kind: 'failed-safe', step: 'fetch', detail: 'no network' });
-    vi.mocked(docker.composeUp).mockReturnValue(true);
-    await bootStartCommand(['x']);
-    expect(docker.composeUp).toHaveBeenCalledWith('/tmp/x', null);
+  it('returns ok: true when refresh returns no-change and composeUp succeeds', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockResolvedValue({ kind: 'no-change', head: 'abc' } as never);
+    vi.mocked(composeUp).mockReturnValue(true);
+    const result = await bootStartCommand.run({ app: 'web' }, makeCliContext());
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/up/i);
   });
 
-  it('calls compose up even when refresh throws (safety net)', async () => {
-    stubRegistry();
-    vi.mocked(refreshModule.refresh).mockRejectedValue(new Error('boom'));
-    vi.mocked(docker.composeUp).mockReturnValue(true);
-    await bootStartCommand(['x']);
-    expect(docker.composeUp).toHaveBeenCalled();
+  it('returns ok: false when composeUp fails (refresh ok)', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockResolvedValue({ kind: 'no-change', head: 'abc' } as never);
+    vi.mocked(composeUp).mockReturnValue(false);
+    const result = await bootStartCommand.run({ app: 'web' }, makeCliContext());
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/compose up failed/i);
   });
 
-  it('calls compose up when refresh returns refreshed', async () => {
-    stubRegistry();
-    vi.mocked(refreshModule.refresh).mockResolvedValue({ kind: 'refreshed', head: 'abc', built: true });
-    vi.mocked(docker.composeUp).mockReturnValue(true);
-    await bootStartCommand(['x']);
-    expect(docker.composeUp).toHaveBeenCalledWith('/tmp/x', null);
+  it('still runs composeUp and returns ok: true when refresh rejects (fail-safe)', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockRejectedValue(new Error('boom') as never);
+    vi.mocked(composeUp).mockReturnValue(true);
+    const result = await bootStartCommand.run({ app: 'web' }, makeCliContext());
+    expect(result.ok).toBeTruthy();
+    expect(vi.mocked(composeUp)).toHaveBeenCalled();
   });
 
-  it('calls compose up when refresh returns skipped', async () => {
-    stubRegistry();
-    vi.mocked(refreshModule.refresh).mockResolvedValue({ kind: 'skipped', reason: 'kill-switch' });
-    vi.mocked(docker.composeUp).mockReturnValue(true);
-    await bootStartCommand(['x']);
-    expect(docker.composeUp).toHaveBeenCalledWith('/tmp/x', null);
+  it('still runs composeUp when refresh returns failed-safe, logging it at warn', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockResolvedValue({ kind: 'failed-safe', step: 'fetch', detail: 'no network' } as never);
+    vi.mocked(composeUp).mockReturnValue(true);
+    const { ctx, log } = spyContext();
+    const result = await bootStartCommand.run({ app: 'web' }, ctx);
+    expect(result.ok).toBeTruthy();
+    expect(vi.mocked(composeUp)).toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ level: 'warn' }));
   });
 
-  it('calls compose up when refresh returns no-change', async () => {
-    stubRegistry();
-    vi.mocked(refreshModule.refresh).mockResolvedValue({ kind: 'no-change', head: 'abc' });
-    vi.mocked(docker.composeUp).mockReturnValue(true);
-    await bootStartCommand(['x']);
-    expect(docker.composeUp).toHaveBeenCalledWith('/tmp/x', null);
-  });
-
-  it('exits 1 when compose up fails', async () => {
-    stubRegistry();
-    vi.mocked(refreshModule.refresh).mockResolvedValue({ kind: 'no-change', head: 'abc' });
-    vi.mocked(docker.composeUp).mockReturnValue(false);
-    const exit = vi.spyOn(process, 'exit').mockImplementation((() => { throw new Error('exit'); }) as never);
-    await expect(bootStartCommand(['x'])).rejects.toThrow('exit');
-    expect(exit).toHaveBeenCalledWith(1);
-  });
-
-  it('passes composeFile when app has one', async () => {
-    vi.mocked(registry.load).mockReturnValue({
-      version: 1,
-      apps: [{ ...baseApp, composeFile: 'docker-compose.prod.yml' }],
-      infrastructure: { databases: { serviceName: '', composePath: '' }, nginx: { configPath: '' } },
-    });
-    vi.mocked(registry.findApp).mockImplementation((reg, name) =>
-      reg.apps.find(a => a.name === name)
-    );
-    vi.mocked(refreshModule.refresh).mockResolvedValue({ kind: 'no-change', head: 'abc' });
-    vi.mocked(docker.composeUp).mockReturnValue(true);
-    await bootStartCommand(['x']);
-    expect(docker.composeUp).toHaveBeenCalledWith('/tmp/x', 'docker-compose.prod.yml');
+  it('logs a refreshed result at info level', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', composePath: '/srv/web', composeFile: null } as never);
+    vi.mocked(refresh).mockResolvedValue({ kind: 'refreshed', head: 'abc', built: true } as never);
+    vi.mocked(composeUp).mockReturnValue(true);
+    const { ctx, log } = spyContext();
+    await bootStartCommand.run({ app: 'web' }, ctx);
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ level: 'info' }));
   });
 });
