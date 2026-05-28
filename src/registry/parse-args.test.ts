@@ -72,4 +72,35 @@ describe('parseArgs', () => {
       throw new Error('expected ok parse');
     }
   });
+
+  it('resolves the -y short flag to the yes field without consuming a positional', () => {
+    const schema = z.object({ app: z.string(), yes: z.boolean().default(false) });
+    const r = parseArgs(schema, ['-y', 'web']);
+    if (!r.help && r.ok) {
+      expect(r.values).toEqual({ app: 'web', yes: true });
+    } else {
+      throw new Error('expected ok parse');
+    }
+  });
+
+  it('rejects a short flag with no matching schema field', () => {
+    const r = parseArgs(z.object({ app: z.string() }), ['web', '-y']);
+    if (!r.help) {
+      expect(r.ok).toBeFalsy();
+      if (!r.ok) expect(r.error).toMatch(/unknown flag: -y/);
+    } else {
+      throw new Error('expected non-help result');
+    }
+  });
+
+  it('rejects an unrecognised short flag', () => {
+    const schema = z.object({ app: z.string(), yes: z.boolean().default(false) });
+    const r = parseArgs(schema, ['web', '-z']);
+    if (!r.help) {
+      expect(r.ok).toBeFalsy();
+      if (!r.ok) expect(r.error).toMatch(/unknown flag: -z/);
+    } else {
+      throw new Error('expected non-help result');
+    }
+  });
 });

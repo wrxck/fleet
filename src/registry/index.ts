@@ -1,9 +1,22 @@
 import { register, _resetRegistry } from './registry';
+import { addCommand } from '../commands/add';
+import { listCommand } from '../commands/list';
 import { statusCommand } from '../commands/status';
+import { startCommand } from '../commands/start';
+import { stopCommand } from '../commands/stop';
+import { restartCommand } from '../commands/restart';
+import { healthCommand } from '../commands/health';
+import { freezeCommand, unfreezeCommand } from '../commands/freeze';
+import { rollbackCommand } from '../commands/rollback';
+import { removeCommand } from '../commands/remove';
+import { initCommand } from '../commands/init';
+import { patchSystemdCommand } from '../commands/patch-systemd';
+import { bootStartCommand } from '../commands/boot-start';
+import { installMcpCommand } from '../commands/install-mcp';
 
 /** every command definition. commands are added here as they are migrated
  *  onto the registry. */
-const ALL = [statusCommand];
+const ALL = [addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand, initCommand, patchSystemdCommand, bootStartCommand, installMcpCommand];
 
 let loaded = false;
 

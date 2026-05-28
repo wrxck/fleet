@@ -63,3 +63,39 @@ describe('phase 1 parity — status', () => {
     expect(getCommand('status')?.tui).toEqual({ view: 'dashboard' });
   });
 });
+
+describe('phase 2 parity', () => {
+  const registryCommands = [
+    'list', 'start', 'stop', 'restart', 'health', 'freeze', 'unfreeze',
+    'rollback', 'add', 'remove', 'init', 'patch-systemd',
+  ];
+
+  it('every migrated command is in the registry', () => {
+    loadRegistry();
+    for (const name of registryCommands) {
+      expect(getCommand(name), name).toBeDefined();
+    }
+  });
+
+  it('every non-cliOnly migrated command is exposed as an mcp tool', () => {
+    const tools = collectRegistryTools();
+    for (const name of registryCommands) {
+      const tool = 'fleet_' + name.replace(/:/g, '_');
+      expect(tools.some(t => t.toolName === tool), tool).toBeTruthy();
+    }
+  });
+
+  it('cliOnly commands are registered but excluded from mcp', () => {
+    loadRegistry();
+    expect(getCommand('boot-start')?.cliOnly).toBeTruthy();
+    expect(getCommand('install-mcp')?.cliOnly).toBeTruthy();
+    const tools = collectRegistryTools();
+    expect(tools.some(t => t.toolName === 'fleet_boot-start')).toBeFalsy();
+    expect(tools.some(t => t.toolName === 'fleet_install-mcp')).toBeFalsy();
+  });
+
+  it('health carries its rich tui view', () => {
+    loadRegistry();
+    expect(getCommand('health')?.tui).toEqual({ view: 'health' });
+  });
+});
