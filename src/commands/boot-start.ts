@@ -1,56 +1,47 @@
+import { z } from 'zod';
+
 import { load, findApp } from '../core/registry';
 import { refresh } from '../core/boot-refresh';
 import { composeUp } from '../core/docker';
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
-function log(msg: string): void {
-  process.stdout.write(`[boot-start] ${msg}\n`);
-}
-
-function logErr(msg: string): void {
-  process.stderr.write(`[boot-start] ${msg}\n`);
-}
-
-export async function bootStartCommand(args: string[]): Promise<void> {
-  const appName = args[0];
-  if (!appName) {
-    logErr('Usage: fleet boot-start <app>');
-    process.exit(1);
-  }
-
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (!app) {
-    logErr(`app not found: ${appName}`);
-    process.exit(1);
-  }
-
-  // Refresh is best-effort. Any error — sync or async — is caught here and logged,
-  // then compose up ALWAYS runs. This is the fail-safe contract for boot.
-  try {
-    const result = await refresh(app);
-    switch (result.kind) {
-      case 'refreshed':
-        log(`refreshed ${app.name} head=${result.head} built=${result.built}`);
-        break;
-      case 'no-change':
-        log(`no-change ${app.name} head=${result.head}`);
-        break;
-      case 'skipped':
-        log(`skipped ${app.name} reason=${result.reason}`);
-        break;
-      case 'failed-safe':
-        log(`failed-safe ${app.name} step=${result.step} detail=${result.detail}`);
-        break;
+export const bootStartCommand = defineCommand({
+  name: 'boot-start',
+  summary: 'Start an app respecting boot-order dependencies',
+  args: z.object({ app: z.string() }),
+  cliOnly: true,
+  async run(args, ctx): Promise<CommandResult<{ app: string }>> {
+    const app = findApp(load(), args.app);
+    if (!app) {
+      return { ok: false, summary: `app not found: ${args.app}`, data: { app: args.app } };
     }
-  } catch (err) {
-    log(`failed-safe ${app.name} step=outer-catch detail=${err instanceof Error ? err.message : String(err)}`);
-  }
 
-  // compose up — the only step whose exit code matters
-  const ok = composeUp(app.composePath, app.composeFile);
-  if (!ok) {
-    logErr(`compose up failed for ${app.name}`);
-    process.exit(1);
-  }
-  log(`up ${app.name}`);
-}
+    // refresh is best-effort — any error (sync or async) is logged and compose
+    // up always runs. this is the fail-safe contract for boot.
+    try {
+      const result = await refresh(app);
+      switch (result.kind) {
+        case 'refreshed':
+          ctx.log({ level: 'info', message: `refreshed ${app.name} head=${result.head} built=${result.built}` });
+          break;
+        case 'no-change':
+          ctx.log({ level: 'info', message: `no-change ${app.name} head=${result.head}` });
+          break;
+        case 'skipped':
+          ctx.log({ level: 'info', message: `skipped ${app.name} reason=${result.reason}` });
+          break;
+        case 'failed-safe':
+          ctx.log({ level: 'warn', message: `failed-safe ${app.name} step=${result.step} detail=${result.detail}` });
+          break;
+      }
+    } catch (err) {
+      ctx.log({ level: 'warn', message: `failed-safe ${app.name} step=outer-catch detail=${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    if (!composeUp(app.composePath, app.composeFile)) {
+      return { ok: false, summary: `compose up failed for ${app.name}`, data: { app: app.name } };
+    }
+    return { ok: true, summary: `up ${app.name}`, data: { app: app.name } };
+  },
+});

@@ -9,6 +9,13 @@ import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair.js'
 import { listSnapshots, restoreSnapshot, snapshotApp } from './secrets-v2-snapshot.js';
 import type { Snapshot, SnapshotInput } from './secrets-v2-snapshot.js';
 import { loadManifest, saveManifest, VAULT_DIR } from './secrets.js';
+
+/** vault dir resolution. mirrors secrets-v2-cleanup.ts and
+ *  secrets-v2-install.ts — env override takes precedence so the generated
+ *  systemd unit never carries an operator-specific hardcoded path. */
+function resolveVaultDir(): string {
+  return process.env.FLEET_VAULT_DIR ?? VAULT_DIR;
+}
 import { findApp, load } from './registry.js';
 import type { AppEntry } from './registry.js';
 import { execSafe } from './exec.js';
@@ -191,7 +198,7 @@ export async function migrateAppToV2(opts: MigrateOpts): Promise<MigrateResult> 
 
   // step 4
   try {
-    const unitContent = generateAgentUnit();
+    const unitContent = generateAgentUnit(resolveVaultDir());
     const existing = existsSync(AGENT_UNIT_PATH) ? readFileSync(AGENT_UNIT_PATH, 'utf-8') : null;
     if (existing !== unitContent) {
       writeFileSync(AGENT_UNIT_PATH, unitContent, { mode: 0o644 });

@@ -1,61 +1,48 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../core/registry.js', () => ({
-  load: vi.fn(),
-  findApp: vi.fn(),
-}));
-
-vi.mock('../core/systemd.js', () => ({
-  startService: vi.fn(),
-}));
-
-vi.mock('../ui/output.js', () => ({
-  success: vi.fn(),
-  error: vi.fn(),
-}));
+vi.mock('../core/registry', async () => {
+  const actual = await vi.importActual<typeof import('../core/registry')>('../core/registry');
+  return { ...actual, load: vi.fn(), findApp: vi.fn() };
+});
+vi.mock('../core/systemd', () => ({ startService: vi.fn() }));
 
 import { load, findApp } from '../core/registry';
 import { startService } from '../core/systemd';
-import { success, error } from '../ui/output';
 import { startCommand } from './start';
+import { makeCliContext } from '../registry/context';
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
-});
+beforeEach(() => vi.clearAllMocks());
 
-describe('startCommand', () => {
-  const mockApp = { name: 'myapp', serviceName: 'fleet-myapp' };
+describe('start CommandDef', () => {
+  it('has registry metadata', () => {
+    expect(startCommand.name).toBe('start');
+  });
 
-  it('starts the service for a valid app', () => {
-    vi.mocked(load).mockReturnValue({ apps: [mockApp] } as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
+  it('starts a resolved app', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', serviceName: 'fleet-web' } as never);
     vi.mocked(startService).mockReturnValue(true);
-
-    startCommand(['myapp']);
-
-    expect(startService).toHaveBeenCalledWith('fleet-myapp');
-    expect(success).toHaveBeenCalledWith('Started myapp');
+    const result = await startCommand.run({ app: 'web' }, makeCliContext());
+    expect(result.ok).toBeTruthy();
+    expect(vi.mocked(startService)).toHaveBeenCalledWith('fleet-web');
+    expect(result.summary).toMatch(/web/);
   });
 
-  it('exits with error when service fails to start', () => {
-    vi.mocked(load).mockReturnValue({ apps: [mockApp] } as any);
-    vi.mocked(findApp).mockReturnValue(mockApp as any);
+  it('returns an expected failure for an unknown app', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue(undefined);
+    const result = await startCommand.run({ app: 'nope' }, makeCliContext());
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
+    expect(vi.mocked(startService)).not.toHaveBeenCalled();
+  });
+
+  it('returns an expected failure when the service op fails', async () => {
+    vi.mocked(load).mockReturnValue({} as never);
+    vi.mocked(findApp).mockReturnValue({ name: 'web', serviceName: 'fleet-web' } as never);
     vi.mocked(startService).mockReturnValue(false);
-
-    expect(() => startCommand(['myapp'])).toThrow('exit');
-    expect(error).toHaveBeenCalledWith('Failed to start myapp');
-  });
-
-  it('exits with error when no app name provided', () => {
-    expect(() => startCommand([])).toThrow('exit');
-    expect(error).toHaveBeenCalledWith('Usage: fleet start <app>');
-  });
-
-  it('throws AppNotFoundError for unknown app', () => {
-    vi.mocked(load).mockReturnValue({ apps: [] } as any);
-    vi.mocked(findApp).mockReturnValue(undefined as any);
-
-    expect(() => startCommand(['unknown'])).toThrow();
+    const result = await startCommand.run({ app: 'web' }, makeCliContext());
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/failed/i);
   });
 });

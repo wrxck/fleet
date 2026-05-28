@@ -32,7 +32,7 @@ vi.mock('../ui/output.js', () => ({
 }));
 
 vi.mock('./add.js', () => ({
-  addCommand: vi.fn(),
+  addCommand: { run: vi.fn() },
 }));
 
 vi.mock('../core/exec.js', () => {
@@ -68,7 +68,7 @@ const mockComposeBuild = vi.mocked(composeBuild);
 const mockStartService = vi.mocked(startService);
 const mockRestartService = vi.mocked(restartService);
 const mockGetServiceStatus = vi.mocked(getServiceStatus);
-const mockAddCommand = vi.mocked(addCommand);
+const mockAddCommandRun = vi.mocked(addCommand.run);
 const mockExecSafe = vi.mocked(execSafe);
 const mockExecGit = vi.mocked(execGit);
 const mockGetProjectRoot = vi.mocked(getProjectRoot);
@@ -111,7 +111,7 @@ beforeEach(() => {
   mockStartService.mockReturnValue(true);
   mockRestartService.mockReturnValue(true);
   mockGetServiceStatus.mockReturnValue({ state: 'inactive', active: false });
-  mockAddCommand.mockResolvedValue(undefined);
+  mockAddCommandRun.mockResolvedValue({ ok: true, summary: 'registered', data: null });
   mockGetProjectRoot.mockReturnValue('/apps/myapp');
   mockExecSafe.mockReturnValue({ ok: true, stdout: 'abc1234', stderr: '', exitCode: 0 });
   mockRecordBuiltCommit.mockReturnValue(undefined);
@@ -136,12 +136,14 @@ describe('deployCommand — app not registered', () => {
       .mockReturnValueOnce(makeRegistry([]))
       .mockReturnValueOnce(makeRegistry([makeApp()]));
     await deployCommand(['/apps/myapp', '-y']);
-    expect(mockAddCommand).toHaveBeenCalled();
+    expect(mockAddCommandRun).toHaveBeenCalled();
   });
 
-  it('throws if add fails to register app', async () => {
+  it('throws if the app is still not in the registry after add runs', async () => {
+    // deploy re-reads the registry rather than trusting add's result; if the
+    // app is absent on the re-read it fails loud regardless of add's outcome.
     mockLoad.mockReturnValue(makeRegistry([]));
-    mockAddCommand.mockResolvedValue(undefined);
+    mockAddCommandRun.mockResolvedValue({ ok: true, summary: 'registered', data: null });
     await expect(deployCommand(['/apps/myapp', '-y'])).rejects.toThrow('Failed to register app');
   });
 });
