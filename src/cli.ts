@@ -15,6 +15,7 @@ import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
 import { depsCommand } from './commands/deps';
 import { auditCommand } from './commands/audit';
+import { testflightCommand } from './commands/testflight';
 import { watchdogCommand } from './commands/watchdog';
 import { guardCommand } from './commands/guard';
 import { backupCommand } from './commands/backup';
@@ -51,6 +52,11 @@ Commands:
   audit doctor        Check the greenlight binary is installed
   audit ignore "<title>" --reason "..."  Suppress a greenlight false positive
   audit ignores       List audit ignore rules
+  testflight publish <app>     Dispatch the macOS build workflow to TestFlight
+  testflight builds <app>      List TestFlight builds
+  testflight update <app> --build <id> --whats-new "..."  Set test notes
+  testflight delete <app> --build <id>   Expire a TestFlight build
+  testflight doctor <app>      Check gh + App Store Connect credentials
   add <app-dir>       Register existing app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
@@ -169,6 +175,7 @@ export async function run(argv: string[]): Promise<void> {
   const ROOT_COMMANDS = new Set([
     'start', 'stop', 'restart', 'deploy', 'freeze', 'unfreeze',
     'nginx', 'secrets', 'patch-systemd', 'init', 'watchdog', 'backup',
+    'testflight',
   ]);
 
   if (ROOT_COMMANDS.has(command) && process.getuid && process.getuid() !== 0) {
@@ -183,6 +190,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'egress': return egressCommand(rest);
     case 'deps': return depsCommand(rest);
     case 'audit': return auditCommand(rest);
+    case 'testflight': return testflightCommand(rest);
     case 'deploy': return deployCommand(rest);
     case 'nginx': return nginxCommand(rest);
     case 'secrets': return secretsCommand(rest);
