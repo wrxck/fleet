@@ -18,6 +18,8 @@ import { assertAppName, assertServiceName, assertFilePath, assertDomain, assertC
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops';
 import { validateApp, validateAll } from '../core/secrets-validate';
+import { guarded } from './guarded-server';
+import type { Guard } from './guard';
 import { registerGitTools } from './git-tools';
 import { registerSecretsTools } from './secrets-tools';
 import { registerRegistryTools } from './registry-bridge';
@@ -38,14 +40,17 @@ function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
 }
 
-export async function startMcpServer(): Promise<void> {
+export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
   const __dirname = dirname(fileURLToPath(import.meta.url));
   const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
-  const server = new McpServer({
+  const base = new McpServer({
     name: 'fleet',
     version: pkg.version,
   });
+  // when a guard is supplied (daemon path) every tool call is authorised and
+  // audited; the stdio path passes no guard and behaves exactly as before.
+  const server = opts.guard ? guarded(base, opts.guard) : base;
 
   registerRegistryTools(server);
 
@@ -372,6 +377,13 @@ export async function startMcpServer(): Promise<void> {
   registerAuditTools(server);
   registerTestflightTools(server);
 
+  return base;
+}
+
+// legacy stdio entrypoint (`fleet mcp`): runs in-process as the caller, unguarded,
+// exactly as before — privileged ops still fail on their own file permissions.
+export async function startMcpServer(): Promise<void> {
+  const base = buildFleetServer();
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await base.connect(transport);
 }
