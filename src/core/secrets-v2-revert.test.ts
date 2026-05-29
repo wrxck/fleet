@@ -46,7 +46,7 @@ const ok = (stdout = ''): ExecResult => ({ ok: true, stdout, stderr: '', exitCod
 const MOCK_APP_ENTRY = {
   name: 'myapp',
   displayName: 'My App',
-  composePath: '/home/matt/myapp',
+  composePath: '/srv/test-app',
   composeFile: 'docker-compose.yml',
   serviceName: 'myapp',
   domains: [],
@@ -85,7 +85,7 @@ function setupHappyPath() {
       myapp: {
         type: 'env' as const,
         encryptedFile: 'myapp.env.age',
-        sourceFile: '/home/matt/myapp/.env',
+        sourceFile: '/srv/test-app/.env',
         lastSealedAt: '2026-01-01T00:00:00.000Z',
         keyCount: 3,
         mode: 'socket' as const,
@@ -144,7 +144,7 @@ describe('revertAppFromV2 - app not in v2 mode', () => {
         myapp: {
           type: 'env' as const,
           encryptedFile: 'myapp.env.age',
-          sourceFile: '/home/matt/myapp/.env',
+          sourceFile: '/srv/test-app/.env',
           lastSealedAt: '2026-01-01T00:00:00.000Z',
           keyCount: 3,
           mode: 'unseal' as const,

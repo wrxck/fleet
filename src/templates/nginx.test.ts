@@ -184,3 +184,52 @@ describe('config completeness', () => {
     }
   });
 });
+
+describe('generateNginxConfig — defensive validation', () => {
+  it('rejects a domain containing a semicolon (directive injection)', () => {
+    expect(() => generateNginxConfig(makeOpts({
+      domain: 'example.com; return 444',
+    }))).toThrow();
+  });
+
+  it('rejects a domain containing whitespace', () => {
+    expect(() => generateNginxConfig(makeOpts({
+      domain: 'example.com }',
+    }))).toThrow();
+  });
+
+  it('rejects a domain containing a newline', () => {
+    expect(() => generateNginxConfig(makeOpts({
+      domain: 'example.com\nadd_header X-Inject foo',
+    }))).toThrow();
+  });
+
+  it('rejects a port below 1', () => {
+    expect(() => generateNginxConfig(makeOpts({ port: 0 }))).toThrow();
+  });
+
+  it('rejects a port above 65535', () => {
+    expect(() => generateNginxConfig(makeOpts({ port: 70000 }))).toThrow();
+  });
+
+  it('rejects a non-integer port', () => {
+    expect(() => generateNginxConfig(makeOpts({ port: 3000.5 }))).toThrow();
+  });
+
+  it('rejects a port passed as a string at runtime', () => {
+    expect(() => generateNginxConfig(makeOpts({ port: '3000' as unknown as number }))).toThrow();
+  });
+
+  it('rejects an apiPrefix containing a newline', () => {
+    expect(() => generateNginxConfig(makeOpts({
+      type: 'spa',
+      apiPrefix: '/api\nadd_header X-Inject foo',
+    }))).toThrow();
+  });
+
+  it('accepts the documented inputs unchanged', () => {
+    expect(() => generateNginxConfig(makeOpts({
+      domain: 'myapp.example.com', port: 8080, type: 'spa', apiPrefix: '/api',
+    }))).not.toThrow();
+  });
+});

@@ -7,7 +7,12 @@ import { assertAppName, assertFilePath } from './validate';
 import { withFileLock } from './file-lock';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const VAULT_DIR = join(__dirname, '..', '..', 'vault');
+// vault dir resolves from FLEET_VAULT_DIR if set; otherwise falls back to
+// the repo-local vault dir for dev. captures at module load — tests that
+// want to override need to set the env var before importing. matches the
+// pattern used in secrets-v2-cleanup.ts.
+export const VAULT_DIR = process.env.FLEET_VAULT_DIR
+  ?? join(__dirname, '..', '..', 'vault');
 export const KEY_PATH = '/etc/fleet/age.key';
 export const RUNTIME_DIR = '/run/fleet-secrets';
 export const MANIFEST_PATH = join(VAULT_DIR, 'manifest.json');
