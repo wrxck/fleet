@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { snapshotApp, restoreSnapshot, listSnapshots, type SnapshotInput } from './secrets-v2-snapshot.js';
+import { snapshotApp, restoreSnapshot, listSnapshots, type SnapshotInput } from './secrets-v2-snapshot';
 
 let TMP: string;
 

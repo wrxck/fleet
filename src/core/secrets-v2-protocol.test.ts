@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol.js';
+import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol';
 
 describe('parseRequest', () => {
   it('parses GET /secrets', () => {

@@ -1,14 +1,14 @@
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { addAgentDependency } from '../templates/app-unit-edit.js';
-import { generateAgentUnit } from '../templates/agent-unit.js';
-import { migrateComposeToV2 } from '../templates/compose-edit.js';
-import { credentialPathFor, encryptCredential, removeCredential } from './secrets-v2-creds.js';
-import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair.js';
-import { listSnapshots, restoreSnapshot, snapshotApp } from './secrets-v2-snapshot.js';
-import type { Snapshot, SnapshotInput } from './secrets-v2-snapshot.js';
-import { loadManifest, saveManifest, VAULT_DIR } from './secrets.js';
+import { addAgentDependency } from '../templates/app-unit-edit';
+import { generateAgentUnit } from '../templates/agent-unit';
+import { migrateComposeToV2 } from '../templates/compose-edit';
+import { credentialPathFor, encryptCredential, removeCredential } from './secrets-v2-creds';
+import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair';
+import { listSnapshots, restoreSnapshot, snapshotApp } from './secrets-v2-snapshot';
+import type { Snapshot, SnapshotInput } from './secrets-v2-snapshot';
+import { loadManifest, saveManifest, VAULT_DIR } from './secrets';
 
 /** vault dir resolution. mirrors secrets-v2-cleanup.ts and
  *  secrets-v2-install.ts — env override takes precedence so the generated
@@ -16,11 +16,11 @@ import { loadManifest, saveManifest, VAULT_DIR } from './secrets.js';
 function resolveVaultDir(): string {
   return process.env.FLEET_VAULT_DIR ?? VAULT_DIR;
 }
-import { findApp, load } from './registry.js';
-import type { AppEntry } from './registry.js';
-import { execSafe } from './exec.js';
-import { SecretsError } from './errors.js';
-import { validateApp } from './secrets-validate.js';
+import { findApp, load } from './registry';
+import type { AppEntry } from './registry';
+import { execSafe } from './exec';
+import { SecretsError } from './errors';
+import { validateApp } from './secrets-validate';
 
 export interface MigrateOpts {
   app: string;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { main } from '../core/secrets-v2.js';
+import { main } from '../core/secrets-v2';
 
 main(process.argv.slice(2)).catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
