@@ -91,7 +91,11 @@ Commands:
   init                Auto-discover all existing apps
   watchdog            Health check all services, alert on failure
   install-mcp         Install fleet as Claude Code MCP server
-  mcp                 Start as MCP server
+  mcp                 Start the stdio MCP server (runs as the calling user)
+  mcp install         Install the privilege-separated root MCP daemon (root)
+  mcp connect         Proxy stdio to the root daemon's socket (for MCP clients)
+  mcp doctor          Check the root daemon: group, unit, socket perms, policy
+  mcp uninstall       Remove the root MCP daemon and its unit (root)
   patch-systemd       Add StartLimitBurst/StartLimitIntervalSec to all service files
   boot-start <app>    Start app respecting boot-order dependencies
   freeze <app>        Freeze a crash-looping service (stop + disable)
@@ -205,7 +209,24 @@ export async function run(argv: string[]): Promise<void> {
     case 'watchdog': return watchdogCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
-    case 'mcp': return startMcpServer();
+    case 'mcp': {
+      const mcpSub = rest[0];
+      if (mcpSub === 'connect') {
+        const { mcpConnect } = await import('./mcp/connect');
+        return mcpConnect();
+      }
+      if (mcpSub === 'daemon') {
+        const { startMcpDaemon } = await import('./mcp/daemon');
+        await startMcpDaemon();
+        return;
+      }
+      if (mcpSub && mcpSub !== 'serve') {
+        const { mcpManageCommand } = await import('./commands/mcp');
+        return mcpManageCommand(rest);
+      }
+      // bare `fleet mcp` (or `fleet mcp serve`): legacy stdio server, unchanged.
+      return startMcpServer();
+    }
     case 'tui':
     case 'dashboard': {
       const { launchTui } = await import('./tui/app');
