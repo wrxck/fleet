@@ -29,8 +29,9 @@ vi.mock('../ui/output.js', () => ({
 
 import { load, save, findApp } from '../core/registry';
 import { stopService, startService, enableService, disableService } from '../core/systemd';
-import { freezeApp, unfreezeApp } from './freeze';
+import { freezeApp, unfreezeApp, freezeCommand, unfreezeCommand } from './freeze';
 import { AppNotFoundError } from '../core/errors';
+import { makeMcpContext } from '../registry/context';
 import type { AppEntry, Registry } from '../core/registry';
 
 const mockLoad = vi.mocked(load);
@@ -155,5 +156,157 @@ describe('unfreezeApp', () => {
     mockFindApp.mockReturnValue(app);
 
     await expect(unfreezeApp('myapp')).rejects.toThrow(/not frozen/);
+  });
+});
+
+// CommandDef tests
+
+describe('freezeCommand — metadata', () => {
+  it('has the correct name', () => {
+    expect(freezeCommand.name).toBe('freeze');
+  });
+
+  it('is marked destructive', () => {
+    expect(freezeCommand.destructive).toBeTruthy();
+  });
+});
+
+describe('unfreezeCommand — metadata', () => {
+  it('has the correct name', () => {
+    expect(unfreezeCommand.name).toBe('unfreeze');
+  });
+
+  it('is marked destructive', () => {
+    expect(unfreezeCommand.destructive).toBeTruthy();
+  });
+});
+
+describe('freezeCommand run()', () => {
+  it('returns cancelled when confirmation is denied', async () => {
+    const result = await freezeCommand.run({ app: 'myapp', yes: false }, makeMcpContext(false));
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/cancel/i);
+    expect(mockStopService).not.toHaveBeenCalled();
+  });
+
+  it('skips confirmation when yes: true and freezes the app', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await freezeCommand.run({ app: 'myapp', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeTruthy();
+    expect(result.data).toEqual({ app: 'myapp' });
+    expect(mockStopService).toHaveBeenCalledWith('myapp');
+    expect(mockDisableService).toHaveBeenCalledWith('myapp');
+  });
+
+  it('includes the reason in the summary when provided', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await freezeCommand.run({ app: 'myapp', reason: 'oom loop', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/oom loop/);
+  });
+
+  it('freezes when confirmation is granted', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await freezeCommand.run({ app: 'myapp', yes: false }, makeMcpContext(true));
+
+    expect(result.ok).toBeTruthy();
+    expect(mockStopService).toHaveBeenCalled();
+  });
+
+  it('returns { ok: false } for an unknown app', async () => {
+    const reg = makeRegistry(makeApp());
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(undefined);
+
+    const result = await freezeCommand.run({ app: 'nope', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
+    expect(mockStopService).not.toHaveBeenCalled();
+  });
+
+  it('returns { ok: false } when the app is already frozen', async () => {
+    const app = makeApp({ frozenAt: '2026-01-01T00:00:00.000Z' });
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await freezeCommand.run({ app: 'myapp', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/already frozen/i);
+  });
+});
+
+describe('unfreezeCommand run()', () => {
+  it('returns cancelled when confirmation is denied', async () => {
+    const result = await unfreezeCommand.run({ app: 'myapp', yes: false }, makeMcpContext(false));
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/cancel/i);
+    expect(mockEnableService).not.toHaveBeenCalled();
+  });
+
+  it('skips confirmation when yes: true and unfreezes the app', async () => {
+    const app = makeApp({ frozenAt: '2026-01-01T00:00:00.000Z', frozenReason: 'crash loop' });
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await unfreezeCommand.run({ app: 'myapp', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeTruthy();
+    expect(result.data).toEqual({ app: 'myapp' });
+    expect(mockEnableService).toHaveBeenCalledWith('myapp');
+    expect(mockStartService).toHaveBeenCalledWith('myapp');
+  });
+
+  it('unfreezes when confirmation is granted', async () => {
+    const app = makeApp({ frozenAt: '2026-01-01T00:00:00.000Z' });
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await unfreezeCommand.run({ app: 'myapp', yes: false }, makeMcpContext(true));
+
+    expect(result.ok).toBeTruthy();
+    expect(mockEnableService).toHaveBeenCalled();
+  });
+
+  it('returns { ok: false } for an unknown app', async () => {
+    const reg = makeRegistry(makeApp());
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(undefined);
+
+    const result = await unfreezeCommand.run({ app: 'nope', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not found/i);
+    expect(mockEnableService).not.toHaveBeenCalled();
+  });
+
+  it('returns { ok: false } when the app is not frozen', async () => {
+    const app = makeApp();
+    const reg = makeRegistry(app);
+    mockLoad.mockReturnValue(reg);
+    mockFindApp.mockReturnValue(app);
+
+    const result = await unfreezeCommand.run({ app: 'myapp', yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeFalsy();
+    expect(result.summary).toMatch(/not frozen/i);
   });
 });

@@ -7,6 +7,7 @@ import { startService, restartService, getServiceStatus } from '../core/systemd'
 import { FleetError } from '../core/errors';
 import { success, error, info, warn, heading } from '../ui/output';
 import { addCommand } from './add';
+import { makeCliContext } from '../registry/context';
 import { execGit } from '../core/exec';
 import { getProjectRoot } from '../core/git';
 import { recordBuiltCommit } from '../core/boot-refresh';
@@ -33,7 +34,7 @@ export async function deployCommand(args: string[]): Promise<void> {
 
   if (!app) {
     info('App not registered, running add first...');
-    await addCommand([...args]);
+    await addCommand.run({ dir: fullPath, 'dry-run': dryRun, yes }, makeCliContext());
     reg = load();
     app = reg.apps.find(a => a.composePath.startsWith(fullPath));
     if (!app) throw new FleetError('Failed to register app');
