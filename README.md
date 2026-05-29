@@ -395,6 +395,8 @@ Migration is non-breaking: bare `fleet mcp` keeps working exactly as before, so 
 { "mcpServers": { "fleet": { "command": "fleet", "args": ["mcp", "connect"] } } }
 ```
 
+For a hardened setup, run the daemon from a **standalone global install** (`sudo npm i -g @matthesketh/fleet`) rather than a git checkout. `fleet mcp install` and `fleet mcp doctor` warn when the daemon would run from a checkout, because root git activity in that tree can leave root-owned `.git` objects that block the owner's commits; a standalone install has no `.git` to corrupt and can't be rewritten by an unprivileged user.
+
 Same-user caveat: because the client runs as your user, anything else running as that user (in `fleet-guard`) can also reach the socket — the guard limits this to the audited tool surface with destructive actions off by default, but it is not a defence against a full compromise of that account.
 
 ## fleet-bot

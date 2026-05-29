@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 
 import { error, info, success, warn, heading } from '../ui/output';
 import { execSafe } from '../core/exec';
-import { generateMcpService, MCP_SERVICE_PATH } from '../templates/mcp-units';
+import { generateMcpService, resolveDaemonEntry, MCP_SERVICE_PATH } from '../templates/mcp-units';
 import { DEFAULT_POLICY, POLICY_PATH, AUDIT_PATH } from '../mcp/guard';
 import { socketPath, GUARD_GROUP } from '../mcp/socket-path';
 
@@ -92,6 +92,12 @@ function install(args: string[]): void {
 
   writeFileSync(MCP_SERVICE_PATH, generateMcpService());
   info(`installed ${MCP_SERVICE_PATH}`);
+  const { entry, fromCheckout } = resolveDaemonEntry();
+  if (fromCheckout) {
+    warn(`daemon runs from a git checkout: ${entry}`);
+    warn('root git activity there can leave root-owned .git objects that block your commits.');
+    warn('for a standalone install: sudo npm i -g @matthesketh/fleet, then re-run: sudo fleet mcp install');
+  }
   run('systemctl', ['daemon-reload']);
   run('systemctl', ['enable', '--now', 'fleet-mcp.service']);
   success('fleet-mcp.service started');
@@ -146,6 +152,9 @@ function doctor(): void {
   checks.push(['socket', sockOk, sockOk ? fmtMode(path) : `missing (${path})`]);
 
   checks.push(['policy', existsSync(POLICY_PATH), existsSync(POLICY_PATH) ? POLICY_PATH : 'using built-in defaults']);
+
+  const { entry, fromCheckout } = resolveDaemonEntry();
+  checks.push(['daemon entry', !fromCheckout, fromCheckout ? `${entry} (git checkout — see install warning)` : entry]);
 
   for (const [name, ok, detail] of checks) {
     (ok ? success : warn)(`${name.padEnd(18)} ${detail}`);
