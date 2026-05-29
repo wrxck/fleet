@@ -96,10 +96,13 @@ function UpdateBanner({ info, inProgress }: { info: UpdateInfo | null; inProgres
   }
   const ahead = info!.behind;
   const subject = info!.latestSubject ? ` — ${info!.latestSubject}` : '';
+  // channel label only surfaces on prerelease so the stable case stays
+  // visually identical to what operators have seen for several releases.
+  const channelLabel = info!.channel === 'prerelease' ? ' (prerelease)' : '';
   return (
     <Box paddingX={1}>
       <Box borderStyle="round" borderColor="cyan" paddingX={1}>
-        <Text color="cyan">↑ Update available: {ahead} commit{ahead === 1 ? '' : 's'} ahead{subject}. Press </Text>
+        <Text color="cyan">↑ Update available{channelLabel}: {ahead} commit{ahead === 1 ? '' : 's'} ahead{subject}. Press </Text>
         <Text color="cyan" bold>U</Text>
         <Text color="cyan"> to install.</Text>
       </Box>
@@ -207,7 +210,10 @@ export function App(): React.JSX.Element {
         applyUpdate().then(result => {
           setUpdateInProgress(false);
           if (result.ok) {
-            setUpdateInfo({ available: false, behind: 0, latestSubject: '', branch: info.branch });
+            setUpdateInfo({
+              available: false, behind: 0, latestSubject: '',
+              branch: info.branch, remoteBranch: info.remoteBranch, channel: info.channel,
+            });
           }
           // Result reported via UpdateBanner below.
           (App as any).__lastUpdateOutput = result.output;
