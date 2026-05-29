@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { rmSync } from 'node:fs';
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { LATEST_PROTOCOL_VERSION } from '@modelcontextprotocol/sdk/types.js';
 
 import { handleConnection } from './daemon';
 import { Guard, DEFAULT_POLICY, type AuditEntry } from './guard';
@@ -48,9 +49,11 @@ describe('daemon connection (integration)', () => {
 
     const init = await rpc({
       jsonrpc: '2.0', id: 1, method: 'initialize',
-      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '0' } },
-    }) as never as { result: { serverInfo: { name: string } } };
+      params: { protocolVersion: LATEST_PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: 't', version: '0' } },
+    }) as never as { result: { serverInfo: { name: string }; protocolVersion: string } };
     expect(init.result.serverInfo.name).toBe('fleet');
+    // the daemon must negotiate the latest protocol the sdk supports, not an older one.
+    expect(init.result.protocolVersion).toBe(LATEST_PROTOCOL_VERSION);
 
     send({ jsonrpc: '2.0', method: 'notifications/initialized' });
 
