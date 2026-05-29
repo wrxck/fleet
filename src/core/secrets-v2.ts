@@ -2,9 +2,9 @@ import { createServer as netCreateServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { existsSync, unlinkSync, chmodSync } from 'node:fs';
 
-import { execSafe } from './exec.js';
-import { SecretsError } from './errors.js';
-import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol.js';
+import { execSafe } from './exec';
+import { SecretsError } from './errors';
+import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol';
 
 export const IDLE_TIMEOUT_MS = 30_000;
 

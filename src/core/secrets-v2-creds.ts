@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, chmodSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { execSafe } from './exec.js';
-import { SecretsError } from './errors.js';
+import { execSafe } from './exec';
+import { SecretsError } from './errors';
 
 export const CRED_DIR = '/etc/fleet/credentials';
 

@@ -5,10 +5,10 @@ import { createConnection } from 'node:net';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { execSafe } from './exec.js';
-import type { ExecResult } from './exec.js';
-import { SecretsError } from './errors.js';
-import { decryptVaultBlob, createServer as createAgentServer, type AgentDeps, _resetRateLimit, IDLE_TIMEOUT_MS, parseArgs, main } from './secrets-v2.js';
+import { execSafe } from './exec';
+import type { ExecResult } from './exec';
+import { SecretsError } from './errors';
+import { decryptVaultBlob, createServer as createAgentServer, type AgentDeps, _resetRateLimit, IDLE_TIMEOUT_MS, parseArgs, main } from './secrets-v2';
 
 // partial mock: spread real node:fs but stub existsSync; real impl exposed as __realExistsSync
 vi.mock('node:fs', async (importOriginal) => {

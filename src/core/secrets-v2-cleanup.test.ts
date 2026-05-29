@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { cleanupV2Backups } from './secrets-v2-cleanup.js';
+import { cleanupV2Backups } from './secrets-v2-cleanup';
 
 let TMP: string;
 
