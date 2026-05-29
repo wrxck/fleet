@@ -120,14 +120,16 @@ describe('registry safety', () => {
     expect(JSON.parse(bakContent).apps[0].name).toBe('original-bak');
   });
 
-  // Concurrency smoke test: previously a CLI invocation and a cron unseal /
+  // concurrency smoke test: previously a cli invocation and a cron unseal /
   // bot mutation could each load() the registry, mutate locally, and save() —
-  // the second save would overwrite the first one's app. With withRegistry,
+  // the second save would overwrite the first one's app. with withRegistry,
   // the load/mutate/save runs under an inter-process file lock so the two
   // mutations serialise instead of stomping each other.
   //
-  // Skipped on CI where lockfile mtime precision can be flaky; runs locally.
-  (process.env.CI ? it.skip : it)('serialises concurrent withRegistry mutations', async () => {
+  // runs on ci too — the lockfile uses proper-lockfile with 5 retries / 50ms
+  // min / 500ms max backoff, which has been enough to ride out the lock
+  // mtime precision flake the suite used to skip for.
+  it('serialises concurrent withRegistry mutations', async () => {
     // Seed an empty registry on disk so both withRegistry calls see the same
     // baseline before they race.
     save(makeEmptyRegistry());
