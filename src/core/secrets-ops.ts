@@ -186,6 +186,11 @@ export async function setSecret(
   });
 }
 
+/** read a single secret value. deliberately does NOT hold the manifest
+ *  lock — a concurrent setSecret/seal does an atomic file rename, so the
+ *  worst-case race here is reading the immediate-pre-rotation vault blob.
+ *  audit logging happens at the command layer so programmatic reads
+ *  (background sync, validation) don't pollute the audit trail. */
 export function getSecret(app: string, key: string): string | null {
   const plaintext = decryptApp(app);
   const manifest = loadManifest();

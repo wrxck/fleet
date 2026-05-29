@@ -62,20 +62,34 @@ function parseCookies(header: string | undefined): Record<string, string> {
   return out;
 }
 
+const MAX_BODY_BYTES = 1_000_000;
+
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise(resolve => {
     const chunks: Buffer[] = [];
     let size = 0;
+    let aborted = false;
     req.on('data', c => {
+      if (aborted) return;
       size += c.length;
-      if (size <= 1_000_000) chunks.push(c);
+      if (size > MAX_BODY_BYTES) {
+        // cut the slow-loris off at the wire — keeping `req.on('data')`
+        // running for gigabytes just to drop chunks past the cap pins
+        // the handler open and gives the attacker a free socket.
+        aborted = true;
+        req.destroy();
+        resolve(undefined);
+        return;
+      }
+      chunks.push(c);
     });
     req.on('end', () => {
+      if (aborted) return;
       if (chunks.length === 0) { resolve(undefined); return; }
       try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf-8'))); }
       catch { resolve(undefined); }
     });
-    req.on('error', () => resolve(undefined));
+    req.on('error', () => { if (!aborted) resolve(undefined); });
   });
 }
 
@@ -152,9 +166,15 @@ function sendResponse(httpRes: ServerResponse, apiRes: ApiResponse): void {
   }
   // stream: pipe `restic dump` straight to the response
   const child = dumpFileSpawn(apiRes.app, apiRes.snap, apiRes.path);
+  // strip CR / LF / NUL / other control chars in addition to quotes —
+  // filenames live inside restic-tracked content, so the operator can
+  // restore a path whose basename contains \r\n and inject arbitrary
+  // response headers if we only quote-strip.
+  // eslint-disable-next-line no-control-regex
+  const safeFilename = apiRes.filename.replace(/[\r\n\x00-\x1F"\\]/g, '');
   httpRes.writeHead(apiRes.status, {
     'Content-Type': apiRes.contentType,
-    'Content-Disposition': `${apiRes.disposition}; filename="${apiRes.filename.replace(/"/g, '')}"`,
+    'Content-Disposition': `${apiRes.disposition}; filename="${safeFilename}"`,
   });
   child.stdout.pipe(httpRes);
   child.stderr.on('data', () => { /* swallowed; non-zero close handled below */ });
