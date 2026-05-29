@@ -2,15 +2,15 @@ import * as fs from 'node:fs';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { snapshotApp, restoreSnapshot } from './secrets-v2-snapshot.js';
-import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair.js';
-import { encryptCredential } from './secrets-v2-creds.js';
-import { migrateComposeToV2 } from '../templates/compose-edit.js';
-import { addAgentDependency } from '../templates/app-unit-edit.js';
-import { saveManifest, loadManifest } from './secrets.js';
-import { findApp, load } from './registry.js';
-import { execSafe } from './exec.js';
-import { migrateAppToV2 } from './secrets-v2-migrate.js';
+import { snapshotApp, restoreSnapshot } from './secrets-v2-snapshot';
+import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair';
+import { encryptCredential } from './secrets-v2-creds';
+import { migrateComposeToV2 } from '../templates/compose-edit';
+import { addAgentDependency } from '../templates/app-unit-edit';
+import { saveManifest, loadManifest } from './secrets';
+import { findApp, load } from './registry';
+import { execSafe } from './exec';
+import { migrateAppToV2 } from './secrets-v2-migrate';
 
 vi.mock('./secrets-v2-snapshot.js', () => ({
   snapshotApp: vi.fn(),
@@ -96,7 +96,7 @@ export const MOCK_SNAP = {
   manifestEntry: MOCK_MANIFEST.apps.myapp,
 };
 
-import type { ExecResult } from './exec.js';
+import type { ExecResult } from './exec';
 const ok = (stdout = ''): ExecResult => ({ ok: true, stdout, stderr: '', exitCode: 0 });
 
 export function setupHappyPath() {
