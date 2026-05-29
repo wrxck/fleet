@@ -2,6 +2,17 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.11.0 — 2026-05-29
+
+### Fixes
+
+- fix(test): tolerate empty git tag list on shallow ci clones
+
+### Other
+
+- chore(release): 1.11.0 — gap-closing feature pass
+- docs(readme): refresh + self-update channel selection
+
 ## v1.10.1 — 2026-05-29
 
 ### Other

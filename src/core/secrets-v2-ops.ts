@@ -1,9 +1,9 @@
 import { existsSync, statSync } from 'node:fs';
 import { createConnection } from 'node:net';
 
-import { credentialPathFor } from './secrets-v2-creds.js';
-import { execSafe } from './exec.js';
-import { loadManifest } from './secrets.js';
+import { credentialPathFor } from './secrets-v2-creds';
+import { execSafe } from './exec';
+import { loadManifest } from './secrets';
 
 export interface V2AppStatus {
   name: string;

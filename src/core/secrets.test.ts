@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import type { ManifestEntry } from './secrets.js';
+import type { ManifestEntry } from './secrets';
 
 const KEY_PATH = '/etc/fleet/age.key';
 

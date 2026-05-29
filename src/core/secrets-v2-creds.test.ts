@@ -19,15 +19,15 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-import { execSafe } from './exec.js';
-import type { ExecResult } from './exec.js';
+import { execSafe } from './exec';
+import type { ExecResult } from './exec';
 import {
   CRED_DIR,
   credentialPathFor,
   encryptCredential,
   credentialExists,
   removeCredential,
-} from './secrets-v2-creds.js';
+} from './secrets-v2-creds';
 
 const ok = (): ExecResult => ({ ok: true, stdout: '', stderr: '', exitCode: 0 });
 const fail = (stderr: string): ExecResult => ({ ok: false, stdout: '', stderr, exitCode: 1 });

@@ -1,5 +1,5 @@
-import { execSafe } from './exec.js';
-import { SecretsError } from './errors.js';
+import { execSafe } from './exec';
+import { SecretsError } from './errors';
 
 export interface Keypair {
   publicKey: string;

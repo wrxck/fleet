@@ -6,7 +6,7 @@ import { createConnection } from 'node:net';
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
-import { main } from './secrets-v2.js';
+import { main } from './secrets-v2';
 
 const SKIP = process.env.FLEET_INTEGRATION !== '1';
 
