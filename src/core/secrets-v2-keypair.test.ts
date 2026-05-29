@@ -4,9 +4,9 @@ vi.mock('./exec.js', () => ({
   execSafe: vi.fn(),
 }));
 
-import { execSafe } from './exec.js';
-import type { ExecResult } from './exec.js';
-import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair.js';
+import { execSafe } from './exec';
+import type { ExecResult } from './exec';
+import { generateKeypair, reencryptForRecipient } from './secrets-v2-keypair';
 
 const ok = (stdout: string): ExecResult => ({ ok: true, stdout, stderr: '', exitCode: 0 });
 const fail = (stderr: string): ExecResult => ({ ok: false, stdout: '', stderr, exitCode: 1 });

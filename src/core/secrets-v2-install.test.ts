@@ -7,9 +7,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // tests 7 and 8 need a mock for execSafe; tests 1-6 also mock exec
 // because systemctl is not available in the test environment.
 
-import { installV2 } from './secrets-v2-install.js';
-import { SecretsError } from './errors.js';
-import { generateAgentUnit } from '../templates/agent-unit.js';
+import { installV2 } from './secrets-v2-install';
+import { SecretsError } from './errors';
+import { generateAgentUnit } from '../templates/agent-unit';
 
 vi.mock('./exec.js', () => ({
   execSafe: vi.fn(() => ({ ok: true, stdout: '', stderr: '', exitCode: 0 })),

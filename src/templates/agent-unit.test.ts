@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { generateAgentUnit } from './agent-unit.js';
+import { generateAgentUnit } from './agent-unit';
 
 const VAULT = '/var/lib/fleet/vault';
 
