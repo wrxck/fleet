@@ -2,9 +2,9 @@ import { existsSync, readFileSync, writeFileSync, copyFileSync, chmodSync } from
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { execSafe } from './exec.js';
-import { SecretsError } from './errors.js';
-import { generateAgentUnit } from '../templates/agent-unit.js';
+import { execSafe } from './exec';
+import { SecretsError } from './errors';
+import { generateAgentUnit } from '../templates/agent-unit';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_AGENT_SOURCE = join(__dirname, '..', 'bin', 'fleet-agent.js');

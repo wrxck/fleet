@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { addAgentDependency, removeAgentDependency } from './app-unit-edit.js';
+import { addAgentDependency, removeAgentDependency } from './app-unit-edit';
 
 // A realistic systemd unit fixture matching what fleet generates
 const FIXTURE = `[Unit]
