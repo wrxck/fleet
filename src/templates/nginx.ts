@@ -1,3 +1,5 @@
+import { assertDomain, assertHealthPath } from '../core/validate';
+
 interface NginxOpts {
   domain: string;
   port: number;
@@ -6,6 +8,15 @@ interface NginxOpts {
 }
 
 export function generateNginxConfig(opts: NginxOpts): string {
+  // defence-in-depth: callers are expected to validate already, but a
+  // missed call must not produce a config that injects directives via
+  // ${domain} (server_name interpolation) or ${port} (proxy_pass).
+  // mirrors the assertComposeFile pattern in src/templates/systemd.ts.
+  assertDomain(opts.domain);
+  if (!Number.isInteger(opts.port) || opts.port < 1 || opts.port > 65535) {
+    throw new Error(`invalid port: ${opts.port}`);
+  }
+  if (opts.apiPrefix !== undefined) assertHealthPath(opts.apiPrefix);
   const { domain, port, type } = opts;
   const apiPrefix = opts.apiPrefix ?? '/api';
 

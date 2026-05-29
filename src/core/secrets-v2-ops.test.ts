@@ -29,7 +29,7 @@ const SOCKET_MANIFEST = {
     myapp: {
       type: 'env' as const,
       encryptedFile: 'myapp.env.age',
-      sourceFile: '/home/matt/myapp/.env',
+      sourceFile: '/srv/test-app/.env',
       lastSealedAt: '2026-01-01T00:00:00.000Z',
       keyCount: 3,
       mode: 'socket' as const,
@@ -116,7 +116,7 @@ describe('detectV2Drift - mode is not socket', () => {
         myapp: {
           type: 'env' as const,
           encryptedFile: 'myapp.env.age',
-          sourceFile: '/home/matt/myapp/.env',
+          sourceFile: '/srv/test-app/.env',
           lastSealedAt: '2026-01-01T00:00:00.000Z',
           keyCount: 3,
           mode: 'unseal' as const,

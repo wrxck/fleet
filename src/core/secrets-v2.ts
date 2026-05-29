@@ -87,6 +87,11 @@ export function createServer(deps: AgentDeps): Server {
       server.once('error', onError);
       server.listen(path, () => {
         server.off('error', onError);
+        // 0o660 (not 0o600) is deliberate: the systemd unit runs the agent
+        // as DynamicUser, and the consumer container bind-mounts this
+        // socket and connects as a separate uid sharing the systemd-
+        // allocated group. tightening to 0o600 would break that. if the
+        // consumer pattern ever changes, drop to 0o600.
         try {
           chmodSync(path, 0o660);
         } catch (err) {
