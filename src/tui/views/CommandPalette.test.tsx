@@ -27,7 +27,10 @@ describe('CommandPalette', () => {
       </InputDispatcher>,
     );
     await flush();
-    expect(lastFrame() ?? '').toContain('status');
+    // assert against the first alphabetical command — the palette caps
+    // visible items at 12 so commands later in the list (status, stop,
+    // whoami, ...) may scroll off when the registry grows.
+    expect(lastFrame() ?? '').toContain('add');
   });
 
   it('hides non-matching commands when a query is typed', async () => {
@@ -37,8 +40,8 @@ describe('CommandPalette', () => {
       </InputDispatcher>,
     );
     await flush();
-    // sanity: status is visible before filtering
-    expect(lastFrame() ?? '').toContain('status');
+    // sanity: at least the first command is visible before filtering
+    expect(lastFrame() ?? '').toContain('add');
 
     // type a query that matches nothing
     stdin.write('z');

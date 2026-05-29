@@ -63,11 +63,29 @@ export function overridePath(app: AppEntry): string {
   return join(app.composePath, '.fleet', 'logging.override.yml');
 }
 
+/** ensure the app repo's .gitignore covers .fleet/ so the auto-generated
+ *  override file doesn't get committed accidentally. no-op when there's no
+ *  .gitignore (operator may be using a different vcs or none at all) and
+ *  idempotent — never appends a duplicate entry. */
+export function ensureFleetGitignored(composePath: string): void {
+  const giPath = join(composePath, '.gitignore');
+  if (!existsSync(giPath)) return;
+  const current = readFileSync(giPath, 'utf-8');
+  // accept any of: .fleet, .fleet/, /.fleet, /.fleet/ — operators write all
+  // four forms.
+  if (/^\s*\/?\.fleet\/?\s*$/m.test(current)) return;
+  const append = current.endsWith('\n') ? '' : '\n';
+  writeFileSync(giPath, `${current}${append}\n# auto-added by fleet logs setup\n.fleet/\n`);
+}
+
 export function writeComposeOverride(app: AppEntry, policy: LogPolicy): string {
   const path = overridePath(app);
   const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(path, buildComposeOverride(app, policy));
+  // the override lands inside the operator's app repo. add .fleet/ to the
+  // app's .gitignore (if there is one) so it doesn't get committed.
+  ensureFleetGitignored(app.composePath);
   return path;
 }
 
