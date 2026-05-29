@@ -71,6 +71,47 @@ describe('browser-api auth', () => {
     const res = handle(req({ headers: { 'x-fleet-backup': '1', origin: 'https://evil.example' } }), ctx());
     expect(res.status).toBe(403);
   });
+
+  // regression: endsWith(domain) used to accept https://evil-fleet.test
+  it('rejects an Origin whose host is a suffix-suffix of the domain', () => {
+    const res = handle(req({
+      headers: { 'x-fleet-backup': '1', origin: 'https://evil-fleet.test' },
+    }), ctx());
+    expect(res.status).toBe(403);
+  });
+
+  it('rejects an unparseable Origin', () => {
+    const res = handle(req({
+      headers: { 'x-fleet-backup': '1', origin: 'not-a-url' },
+    }), ctx());
+    expect(res.status).toBe(403);
+  });
+
+  it('allows a missing Origin on a GET (read methods)', () => {
+    const res = handle(authReq({
+      method: 'GET', path: '/api/apps',
+      headers: { 'x-fleet-backup': '1' },
+    }), ctx());
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a missing Origin on a POST (write methods)', () => {
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      headers: { 'x-fleet-backup': '1' },
+      body: { app: 'demo', snap: 'abc12345', path: '/x' },
+    }), ctx());
+    expect(res.status).toBe(403);
+  });
+
+  it('accepts a same-origin POST', () => {
+    const res = handle(authReq({
+      method: 'POST', path: '/api/restore',
+      headers: { 'x-fleet-backup': '1', origin: 'https://fleet.test' },
+      body: { app: 'demo', snap: 'abc12345', path: '/x' },
+    }), ctx());
+    expect(res.status).toBe(200);
+  });
 });
 
 function authReq(over: Partial<ApiRequest> = {}): ApiRequest {
