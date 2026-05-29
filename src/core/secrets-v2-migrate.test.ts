@@ -63,7 +63,7 @@ vi.mock('node:fs', async (importOriginal) => {
 export const MOCK_APP_ENTRY = {
   name: 'myapp',
   displayName: 'My App',
-  composePath: '/home/matt/myapp',
+  composePath: '/srv/test-app',
   composeFile: 'docker-compose.yml',
   serviceName: 'myapp',
   domains: [],
@@ -81,7 +81,7 @@ export const MOCK_MANIFEST = {
     myapp: {
       type: 'env' as const,
       encryptedFile: 'myapp.env.age',
-      sourceFile: '/home/matt/myapp/.env',
+      sourceFile: '/srv/test-app/.env',
       lastSealedAt: '2026-01-01T00:00:00.000Z',
       keyCount: 3,
       mode: 'unseal' as const,

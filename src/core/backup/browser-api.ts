@@ -73,12 +73,31 @@ function hasSession(req: ApiRequest, ctx: ApiContext): boolean {
   return verifySession(cookie, ctx.sessionSecret, ctx.now()) !== null;
 }
 
-/** /api/* must carry the csrf header and, if an origin is present, a same-origin one. */
+/** /api/* must carry the csrf header, and write methods must carry an
+ *  Origin header whose host matches our domain exactly.
+ *
+ *  the custom `x-fleet-backup: 1` header is the primary barrier — modern
+ *  browsers can't set it cross-origin without preflight, which a same-
+ *  origin policy denies for any host that isn't our own. the Origin check
+ *  is belt-and-braces, and matters specifically for POST / DELETE so the
+ *  endsWith bug (where `evil-${domain}` would have been accepted) is
+ *  closed and a missing Origin on a mutating request is rejected. read
+ *  methods accept a missing Origin so health checks / curl probes keep
+ *  working without the operator having to set an Origin manually. */
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
 function csrfOk(req: ApiRequest, domain: string): boolean {
   if (req.headers['x-fleet-backup'] !== '1') return false;
   const origin = req.headers['origin'];
-  if (origin && !origin.endsWith(domain)) return false;
-  return true;
+  const isWrite = !READ_METHODS.has(req.method.toUpperCase());
+  if (!origin) return !isWrite;
+  let host: string;
+  try {
+    host = new URL(origin).host;
+  } catch {
+    return false;
+  }
+  return host === domain;
 }
 
 export function handle(req: ApiRequest, ctx: ApiContext): ApiResponse {
