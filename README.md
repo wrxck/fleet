@@ -98,6 +98,14 @@ Requires Node.js 20+, Docker Compose v2, systemd, nginx, and [age](https://githu
 
 **Interactive dashboard** -- Run bare `fleet` to launch a full-screen TUI with real-time status.
 
+**Host preflight** -- `fleet doctor` checks every external requirement the rest of the tool assumes (`age`, `docker compose v2`, `systemd ≥ 240`, `node ≥ 20`), plus the registry, vault, operator config and orphaned-app detection. Run on any fresh server.
+
+**Self-update from the CLI** -- `fleet update [--check] [--channel prerelease]` is the non-TUI counterpart to the dashboard banner. Cron-able, ssh-friendly.
+
+**Operator config** -- `fleet config show / get <field> / set <field> <value>` and the one-liner `fleet whoami` keep `data/operator.json` (username + home + domain + github org) editable from the CLI.
+
+**Shell completions** -- `fleet completions bash | zsh | fish` emits a completion script driven from the command registry, so it stays accurate as the migration finishes.
+
 See the [CLI reference](https://fleet.hesketh.pro/cli/) for the complete command list.
 
 ## Secrets Flow
@@ -422,10 +430,13 @@ Set `FLEET_INTEGRATION=1` to opt into integration tests that hit real systemd / 
 git clone https://github.com/wrxck/fleet.git
 cd fleet
 npm install
-npm test          # vitest
-npm run build     # compile TypeScript to dist/
-npm run dev       # run with tsx (no build needed)
+npm test                 # vitest
+npm run build            # compile TypeScript to dist/
+npm run dev              # run with tsx (no build needed)
+npm run changelog        # regenerate CHANGELOG.md from git tags
 ```
+
+See [CHANGELOG.md](./CHANGELOG.md) for the release history (auto-generated from tags; the GitHub releases page has extra context). The `npm run changelog` script regenerates it after a tag bump.
 
 ## License
 

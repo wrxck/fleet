@@ -90,7 +90,83 @@ describe('readContainerLogs', () => {
   it('truncates and reports', () => {
     vi.mocked(execSafe).mockReturnValueOnce({ ok: true, stdout: 'x'.repeat(500_000), stderr: '' });
     const out = readContainerLogs('m', { maxBytes: 100 });
-    expect(out.truncated).toBe(true);
+    expect(out.truncated).toBeTruthy();
     expect(out.text.length).toBe(100);
+  });
+});
+
+describe('ensureFleetGitignored', () => {
+  // these tests touch real filesystem under a tmpdir — vi.mock('node:fs') is
+  // not used in this file, so writes / reads land on disk and we clean up.
+
+  it('no-ops when .gitignore is missing', async () => {
+    const { mkdtempSync, existsSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { ensureFleetGitignored } = await import('./logs-policy');
+
+    const dir = mkdtempSync(join(tmpdir(), 'fleet-gi-'));
+    try {
+      ensureFleetGitignored(dir);
+      expect(existsSync(join(dir, '.gitignore'))).toBeFalsy();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('appends .fleet/ when missing', async () => {
+    const { mkdtempSync, writeFileSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { ensureFleetGitignored } = await import('./logs-policy');
+
+    const dir = mkdtempSync(join(tmpdir(), 'fleet-gi-'));
+    try {
+      writeFileSync(join(dir, '.gitignore'), 'node_modules/\ndist/\n');
+      ensureFleetGitignored(dir);
+      const after = readFileSync(join(dir, '.gitignore'), 'utf-8');
+      expect(after).toMatch(/\.fleet\//);
+      expect(after).toMatch(/auto-added by fleet logs setup/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is idempotent — does not append a duplicate entry', async () => {
+    const { mkdtempSync, writeFileSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { ensureFleetGitignored } = await import('./logs-policy');
+
+    const dir = mkdtempSync(join(tmpdir(), 'fleet-gi-'));
+    try {
+      writeFileSync(join(dir, '.gitignore'), 'node_modules/\n.fleet/\n');
+      ensureFleetGitignored(dir);
+      ensureFleetGitignored(dir);
+      const after = readFileSync(join(dir, '.gitignore'), 'utf-8');
+      const matches = after.match(/\.fleet\//g) ?? [];
+      expect(matches.length).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts existing entries in any common form (.fleet, /.fleet, .fleet/, /.fleet/)', async () => {
+    const { mkdtempSync, writeFileSync, readFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { ensureFleetGitignored } = await import('./logs-policy');
+
+    for (const variant of ['.fleet', '/.fleet', '.fleet/', '/.fleet/']) {
+      const dir = mkdtempSync(join(tmpdir(), 'fleet-gi-'));
+      try {
+        writeFileSync(join(dir, '.gitignore'), `${variant}\n`);
+        ensureFleetGitignored(dir);
+        const after = readFileSync(join(dir, '.gitignore'), 'utf-8');
+        expect(after).not.toMatch(/auto-added/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
   });
 });
