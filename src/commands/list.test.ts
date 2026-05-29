@@ -1,49 +1,46 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../core/registry.js', () => ({
-  load: vi.fn(),
-}));
+vi.mock('../core/registry', () => ({ load: vi.fn() }));
 
-vi.mock('../ui/output.js', () => ({
-  c: { bold: '', reset: '' },
-  heading: vi.fn(),
-  table: vi.fn(),
-}));
-
+import type { Registry, AppEntry } from '../core/registry';
 import { load } from '../core/registry';
-import { heading, table } from '../ui/output';
 import { listCommand } from './list';
+import { makeCliContext } from '../registry/context';
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-});
+function app(name: string): AppEntry {
+  return {
+    name, displayName: name, composePath: `/srv/${name}`, composeFile: null,
+    serviceName: `fleet-${name}`, domains: [], port: null, usesSharedDb: false,
+    type: 'service', containers: [], dependsOnDatabases: false, registeredAt: '2026-01-01',
+  };
+}
+function registry(apps: AppEntry[]): Registry {
+  return {
+    version: 1, apps,
+    infrastructure: { databases: { serviceName: 'docker-databases', composePath: '' }, nginx: { configPath: '/etc/nginx' } },
+  };
+}
 
-describe('listCommand', () => {
-  const apps = [
-    { name: 'app1', serviceName: 'fleet-app1', port: 3000, type: 'proxy', domains: ['app1.example.com'] },
-    { name: 'app2', serviceName: 'fleet-app2', port: null, type: 'service', domains: [] },
-  ];
+beforeEach(() => vi.clearAllMocks());
 
-  it('displays a table of registered apps', () => {
-    vi.mocked(load).mockReturnValue({ apps } as any);
-    listCommand([]);
-    expect(heading).toHaveBeenCalled();
-    expect(table).toHaveBeenCalled();
+describe('list CommandDef', () => {
+  it('has registry metadata', () => {
+    expect(listCommand.name).toBe('list');
   });
 
-  it('outputs JSON when --json flag is passed', () => {
-    vi.mocked(load).mockReturnValue({ apps } as any);
-    listCommand(['--json']);
-    const output = vi.mocked(process.stdout.write).mock.calls[0][0] as string;
-    const parsed = JSON.parse(output);
-    expect(parsed).toHaveLength(2);
-    expect(parsed[0].name).toBe('app1');
+  it('run returns a table of registered apps', async () => {
+    vi.mocked(load).mockReturnValue(registry([app('web'), app('api')]));
+    const result = await listCommand.run({}, makeCliContext());
+    expect(result.ok).toBeTruthy();
+    expect(result.render?.kind).toBe('table');
+    expect(result.data).toHaveLength(2);
+    expect(result.summary).toMatch(/2/);
   });
 
-  it('handles empty registry', () => {
-    vi.mocked(load).mockReturnValue({ apps: [] } as any);
-    listCommand([]);
-    expect(table).toHaveBeenCalledWith(expect.any(Array), []);
+  it('run reports an empty registry without failing', async () => {
+    vi.mocked(load).mockReturnValue(registry([]));
+    const result = await listCommand.run({}, makeCliContext());
+    expect(result.ok).toBeTruthy();
+    expect(result.data).toHaveLength(0);
   });
 });

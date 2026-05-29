@@ -1,68 +1,63 @@
 import { existsSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 
+import { z } from 'zod';
+
 import { addApp, withRegistry } from '../core/registry';
 import { getContainersByCompose } from '../core/docker';
 import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
 import { generateServiceFile } from '../templates/systemd';
-import { FleetError } from '../core/errors';
 import { assertComposeFile } from '../core/validate';
-import { success, info, error, warn } from '../ui/output';
-import { confirm } from '../ui/confirm';
+import { defineCommand } from '../registry/registry';
 import type { AppEntry } from '../core/registry';
+import type { CommandResult } from '../registry/types';
 
-export async function addCommand(args: string[]): Promise<void> {
-  const dryRun = args.includes('--dry-run');
-  const yes = args.includes('-y') || args.includes('--yes');
-  const appDir = args.find(a => !a.startsWith('-'));
+export const addCommand = defineCommand({
+  name: 'add',
+  summary: 'Register an existing app',
+  args: z.object({
+    dir: z.string(),
+    'dry-run': z.boolean().default(false),
+    yes: z.boolean().default(false),
+  }),
+  async run(args, ctx): Promise<CommandResult<AppEntry | null>> {
+    const fullPath = resolve(args.dir);
 
-  if (!appDir) {
-    error('Usage: fleet add <app-dir>');
-    process.exit(1);
-  }
+    if (!existsSync(fullPath)) {
+      return { ok: false, summary: `directory not found: ${fullPath}`, data: null };
+    }
 
-  const fullPath = resolve(appDir);
-  if (!existsSync(fullPath)) {
-    throw new FleetError(`Directory not found: ${fullPath}`);
-  }
+    const composePath = findComposePath(fullPath);
+    if (!composePath.path) {
+      return { ok: false, summary: `no docker-compose.yml found in ${fullPath} or ${fullPath}/server`, data: null };
+    }
 
-  const composePath = findComposePath(fullPath);
-  if (!composePath.path) {
-    throw new FleetError(`No docker-compose.yml found in ${fullPath} or ${fullPath}/server`);
-  }
+    const name = basename(fullPath).toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const hasService = readServiceFile(name) !== null;
 
-  const name = basename(fullPath).toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  const existingService = readServiceFile(name);
-  const hasService = existingService !== null;
+    ctx.log({ level: 'info', message: `registering ${name} from ${fullPath}` });
 
-  info(`Registering ${name} from ${fullPath}`);
-  info(`Compose path: ${composePath.path}`);
-  info(`Compose file: ${composePath.file ?? 'default'}`);
+    const containers = getContainersByCompose(composePath.path, composePath.file);
+    const app: AppEntry = {
+      name,
+      displayName: name,
+      composePath: composePath.path,
+      composeFile: composePath.file,
+      serviceName: name,
+      domains: [],
+      port: null,
+      usesSharedDb: false,
+      type: 'service',
+      containers: containers.length > 0 ? containers : [name],
+      dependsOnDatabases: false,
+      registeredAt: new Date().toISOString(),
+    };
 
-  const containers = getContainersByCompose(composePath.path, composePath.file);
-  info(`Found containers: ${containers.join(', ') || 'none running'}`);
+    const dryRun = args['dry-run'];
 
-  const app: AppEntry = {
-    name,
-    displayName: name,
-    composePath: composePath.path,
-    composeFile: composePath.file,
-    serviceName: name,
-    domains: [],
-    port: null,
-    usesSharedDb: false,
-    type: 'service',
-    containers: containers.length > 0 ? containers : [name],
-    dependsOnDatabases: false,
-    registeredAt: new Date().toISOString(),
-  };
-
-  if (!hasService) {
-    info('No systemd service file found');
-    if (!dryRun && (yes || await confirm('Create systemd service file?'))) {
-      // Defence-in-depth: keep this even though findComposePath currently only
-      // returns null. If it ever evolves to read a filename from user input,
-      // the systemd ExecStart interpolation must not see an unvalidated value.
+    if (!hasService && !dryRun && (args.yes || (await ctx.confirm('Create systemd service file?')))) {
+      // defence-in-depth: validate the compose filename before interpolating
+      // it into the generated systemd unit.
       if (composePath.file) assertComposeFile(composePath.file);
       const content = generateServiceFile({
         serviceName: name,
@@ -73,21 +68,30 @@ export async function addCommand(args: string[]): Promise<void> {
       });
       installServiceFile(name, content);
       enableService(name);
-      success(`Created and enabled ${name}.service`);
+      ctx.log({ level: 'info', message: `created and enabled ${name}.service` });
     }
-  } else {
-    info('Existing systemd service file found');
-  }
 
-  if (dryRun) {
-    warn('Dry run - no changes saved');
-    process.stdout.write(JSON.stringify(app, null, 2) + '\n');
-    return;
-  }
+    if (dryRun) {
+      return {
+        ok: true,
+        summary: `dry run — ${name} not registered`,
+        data: app,
+        render: {
+          kind: 'keyValue',
+          pairs: [
+            ['name', app.name],
+            ['composePath', app.composePath],
+            ['composeFile', app.composeFile ?? '(default)'],
+            ['containers', app.containers.join(', ')],
+          ],
+        },
+      };
+    }
 
-  await withRegistry(reg => addApp(reg, app));
-  success(`Registered ${name}`);
-}
+    await withRegistry(reg => addApp(reg, app));
+    return { ok: true, summary: `registered ${name}`, data: app };
+  },
+});
 
 function findComposePath(dir: string): { path: string; file: string | null } {
   if (existsSync(`${dir}/docker-compose.yml`)) {

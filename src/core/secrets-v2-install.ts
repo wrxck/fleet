@@ -11,6 +11,13 @@ const DEFAULT_AGENT_SOURCE = join(__dirname, '..', 'bin', 'fleet-agent.js');
 const DEFAULT_BINARY_DEST = '/usr/local/bin/fleet-agent';
 const DEFAULT_UNIT_PATH = '/etc/systemd/system/fleet-secrets-agent@.service';
 
+/** vault dir resolution. mirrors secrets-v2-cleanup.ts — env override
+ *  takes precedence so tests and bespoke deploys both work without
+ *  hardcoding an operator-specific path into the systemd unit. */
+function resolveVaultDir(): string {
+  return process.env.FLEET_VAULT_DIR ?? join(__dirname, '..', '..', 'vault');
+}
+
 export interface InstallResult {
   agentBinaryInstalled: boolean;
   unitFileInstalled: boolean;
@@ -23,10 +30,12 @@ export async function installV2(opts: {
   agentSourcePath?: string;
   destBinaryPath?: string;
   unitFilePath?: string;
+  vaultPath?: string;
 } = {}): Promise<InstallResult> {
   const sourcePath = opts.agentSourcePath ?? DEFAULT_AGENT_SOURCE;
   const destPath = opts.destBinaryPath ?? DEFAULT_BINARY_DEST;
   const unitPath = opts.unitFilePath ?? DEFAULT_UNIT_PATH;
+  const vaultPath = opts.vaultPath ?? resolveVaultDir();
   const dryRun = opts.dryRun ?? false;
 
   if (!existsSync(sourcePath)) {
@@ -58,7 +67,7 @@ export async function installV2(opts: {
   }
 
   // install unit file if changed (text-equal comparison)
-  const unitContent = generateAgentUnit();
+  const unitContent = generateAgentUnit(vaultPath);
   let needUnitWrite = !existsSync(unitPath);
   if (!needUnitWrite) {
     const existing = readFileSync(unitPath, 'utf-8');

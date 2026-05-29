@@ -1,15 +1,22 @@
 import { copyFileSync, existsSync, renameSync, writeFileSync } from 'node:fs';
 
+import { z } from 'zod';
+
 import { load } from '../core/registry';
 import { readServiceFile } from '../core/systemd';
 import { execSafe } from '../core/exec';
-import { success, warn, info, error } from '../ui/output';
+import { defineCommand } from '../registry/registry';
+import type { CommandContext, CommandResult } from '../registry/types';
 
 const SERVICE_DIR = '/etc/systemd/system';
 
-export function patchSystemdCommand(args: string[]): void {
-  if (args.includes('--rollback')) return rollback();
+interface PatchSystemdData {
+  action: 'patch' | 'rollback';
+  changed: number;
+  skipped: number;
+}
 
+function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
   const reg = load();
   const dbServiceName = reg.infrastructure.databases.serviceName;
   const appServiceNames = reg.apps.map(a => a.serviceName);
@@ -25,7 +32,7 @@ export function patchSystemdCommand(args: string[]): void {
   targetMap.set(dbServiceName, { name: dbServiceName, rewriteExecStart: false });
   const targets = Array.from(targetMap.values());
 
-  info(`Patching ${targets.length} service(s)...`);
+  ctx.log({ level: 'info', message: `patching ${targets.length} service(s)...` });
   let patched = 0;
   let skipped = 0;
 
@@ -34,7 +41,7 @@ export function patchSystemdCommand(args: string[]): void {
     const content = readServiceFile(name);
 
     if (content === null) {
-      warn(`${name}: no service file found, skipping`);
+      ctx.log({ level: 'warn', message: `${name}: no service file found, skipping` });
       skipped++;
       continue;
     }
@@ -42,7 +49,7 @@ export function patchSystemdCommand(args: string[]): void {
     let updated = content;
     let changed = false;
 
-    // Existing behavior: add StartLimitBurst if missing (applies to ALL services including databases)
+    // existing behaviour: add StartLimitBurst if missing (applies to ALL services including databases)
     if (!updated.includes('StartLimitBurst=')) {
       updated = updated.replace(
         /(\[Service\])/,
@@ -59,7 +66,7 @@ export function patchSystemdCommand(args: string[]): void {
         changed = true;
       }
 
-      // Ensure TimeoutStartSec=900
+      // ensure TimeoutStartSec=900
       if (!updated.includes('TimeoutStartSec=900')) {
         if (/^TimeoutStartSec=\d+/m.test(updated)) {
           updated = updated.replace(/^TimeoutStartSec=\d+.*$/m, 'TimeoutStartSec=900');
@@ -71,42 +78,54 @@ export function patchSystemdCommand(args: string[]): void {
     }
 
     if (!changed) {
-      info(`${name}: already patched, skipping`);
+      ctx.log({ level: 'info', message: `${name}: already patched, skipping` });
       skipped++;
       continue;
     }
 
-    // Backup original before overwrite
+    // backup original before overwrite
     try {
       copyFileSync(path, `${path}.bak`);
     } catch (err) {
-      warn(
-        `${name}: failed to create .bak (${err instanceof Error ? err.message : String(err)}); skipping for safety`,
-      );
+      ctx.log({
+        level: 'warn',
+        message: `${name}: failed to create .bak (${err instanceof Error ? err.message : String(err)}); skipping for safety`,
+      });
       skipped++;
       continue;
     }
 
     writeFileSync(path, updated);
-    success(`${name}: patched`);
+    ctx.log({ level: 'info', message: `${name}: patched` });
     patched++;
   }
 
   if (patched === 0) {
-    info('No services needed patching');
-    return;
+    return {
+      ok: true,
+      summary: 'no services needed patching',
+      data: { action: 'patch', changed: 0, skipped },
+    };
   }
 
-  info('Running systemctl daemon-reload...');
+  ctx.log({ level: 'info', message: 'running systemctl daemon-reload...' });
   const result = execSafe('systemctl', ['daemon-reload']);
-  if (result.ok) {
-    success(`Done — patched ${patched} service(s), skipped ${skipped}`);
-  } else {
-    warn(`daemon-reload failed: ${result.stderr}`);
+  if (!result.ok) {
+    return {
+      ok: false,
+      summary: `patched ${patched} service(s) but daemon-reload failed: ${result.stderr}`,
+      data: { action: 'patch', changed: patched, skipped },
+    };
   }
+
+  return {
+    ok: true,
+    summary: `patched ${patched} service(s), skipped ${skipped}`,
+    data: { action: 'patch', changed: patched, skipped },
+  };
 }
 
-function rollback(): void {
+function runRollback(ctx: CommandContext): CommandResult<PatchSystemdData> {
   const reg = load();
   const serviceNames = [
     ...reg.apps.map(a => a.serviceName),
@@ -127,25 +146,55 @@ function rollback(): void {
 
     try {
       renameSync(bak, path);
-      success(`${name}: restored from .bak`);
+      ctx.log({ level: 'info', message: `${name}: restored from .bak` });
       restored++;
     } catch (err) {
-      error(
-        `${name}: failed to restore: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      ctx.log({
+        level: 'error',
+        message: `${name}: failed to restore: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
   }
 
   if (restored === 0) {
-    info('No .bak files found to restore');
-    return;
+    return {
+      ok: true,
+      summary: 'no .bak files found to restore',
+      data: { action: 'rollback', changed: 0, skipped: missing },
+    };
   }
 
-  info('Running systemctl daemon-reload...');
+  ctx.log({ level: 'info', message: 'running systemctl daemon-reload...' });
   const result = execSafe('systemctl', ['daemon-reload']);
-  if (result.ok) {
-    success(`Done — restored ${restored}, missing ${missing}`);
-  } else {
-    warn(`daemon-reload failed: ${result.stderr}`);
+  if (!result.ok) {
+    return {
+      ok: false,
+      summary: `restored ${restored} but daemon-reload failed: ${result.stderr}`,
+      data: { action: 'rollback', changed: restored, skipped: missing },
+    };
   }
+
+  return {
+    ok: true,
+    summary: `restored ${restored}, missing ${missing}`,
+    data: { action: 'rollback', changed: restored, skipped: missing },
+  };
 }
+
+export const patchSystemdCommand = defineCommand({
+  name: 'patch-systemd',
+  summary: 'Add StartLimit settings to all service files',
+  args: z.object({ rollback: z.boolean().default(false), yes: z.boolean().default(false) }),
+  destructive: true,
+  async run(args, ctx): Promise<CommandResult<PatchSystemdData>> {
+    const verb = args.rollback ? 'roll back' : 'patch';
+    if (!args.yes && !(await ctx.confirm(`${verb} all fleet systemd unit files?`))) {
+      return {
+        ok: false,
+        summary: 'cancelled',
+        data: { action: args.rollback ? 'rollback' : 'patch', changed: 0, skipped: 0 },
+      };
+    }
+    return args.rollback ? runRollback(ctx) : runPatch(ctx);
+  },
+});

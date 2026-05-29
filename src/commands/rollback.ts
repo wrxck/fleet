@@ -1,14 +1,10 @@
+import { z } from 'zod';
+
 import { load, findApp } from '../core/registry';
 import { execSafe } from '../core/exec';
 import { restartService } from '../core/systemd';
-
-function log(msg: string): void {
-  process.stdout.write(`[rollback] ${msg}\n`);
-}
-
-function logErr(msg: string): void {
-  process.stderr.write(`[rollback] ${msg}\n`);
-}
+import { defineCommand } from '../registry/registry';
+import type { CommandResult } from '../registry/types';
 
 function resolveImageName(composePath: string, composeFile: string | null): string | null {
   const args = ['compose', ...(composeFile ? ['-f', composeFile] : []), 'config', '--images'];
@@ -23,44 +19,34 @@ function splitImageBase(image: string): string {
   return image.slice(0, lastColon);
 }
 
-export async function rollbackCommand(args: string[]): Promise<void> {
-  const appName = args[0];
-  if (!appName) {
-    logErr('Usage: fleet rollback <app>');
-    process.exit(1);
-  }
-
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (!app) {
-    logErr(`app not found: ${appName}`);
-    process.exit(1);
-  }
-
-  const image = resolveImageName(app.composePath, app.composeFile);
-  if (!image) {
-    logErr(`could not resolve image name for ${app.name}`);
-    process.exit(1);
-  }
-  const base = splitImageBase(image);
-  const previous = `${base}:fleet-previous`;
-  const latest = image;
-
-  if (!execSafe('docker', ['image', 'inspect', previous], { timeout: 10_000 }).ok) {
-    logErr(`no previous image found (${previous}) — nothing to roll back to`);
-    process.exit(1);
-  }
-
-  const tag = execSafe('docker', ['tag', previous, latest], { timeout: 10_000 });
-  if (!tag.ok) {
-    logErr(`docker tag failed: ${tag.stderr || `exit ${tag.exitCode}`}`);
-    process.exit(1);
-  }
-
-  const ok = restartService(app.serviceName);
-  if (!ok) {
-    logErr(`tag restored but service restart failed for ${app.serviceName}`);
-    process.exit(1);
-  }
-  log(`rolled back ${app.name} to ${previous}`);
-}
+export const rollbackCommand = defineCommand({
+  name: 'rollback',
+  summary: 'Roll back app to previous image',
+  args: z.object({ app: z.string(), yes: z.boolean().default(false) }),
+  destructive: true,
+  async run(args, ctx): Promise<CommandResult<{ app: string; image: string }>> {
+    const app = findApp(load(), args.app);
+    if (!app) {
+      return { ok: false, summary: `app not found: ${args.app}`, data: { app: args.app, image: '' } };
+    }
+    const image = resolveImageName(app.composePath, app.composeFile);
+    if (!image) {
+      return { ok: false, summary: `could not resolve image name for ${app.name}`, data: { app: app.name, image: '' } };
+    }
+    const previous = `${splitImageBase(image)}:fleet-previous`;
+    if (!execSafe('docker', ['image', 'inspect', previous], { timeout: 10_000 }).ok) {
+      return { ok: false, summary: `no previous image found (${previous}) — nothing to roll back to`, data: { app: app.name, image: '' } };
+    }
+    if (!(args.yes || (await ctx.confirm(`Roll back ${app.name} to ${previous} and restart?`)))) {
+      return { ok: false, summary: 'cancelled', data: { app: app.name, image: previous } };
+    }
+    const tag = execSafe('docker', ['tag', previous, image], { timeout: 10_000 });
+    if (!tag.ok) {
+      return { ok: false, summary: `docker tag failed: ${tag.stderr || `exit ${tag.exitCode}`}`, data: { app: app.name, image: previous } };
+    }
+    if (!restartService(app.serviceName)) {
+      return { ok: false, summary: `tag restored but service restart failed for ${app.serviceName}`, data: { app: app.name, image: previous } };
+    }
+    return { ok: true, summary: `rolled back ${app.name} to ${previous}`, data: { app: app.name, image: previous } };
+  },
+});
