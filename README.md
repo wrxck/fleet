@@ -28,32 +28,43 @@ graph TD
     TUI["TUI Dashboard"]
     MCP["MCP Server"]
     BOT["fleet-bot (Go)"]
+    Explorer["Backup Explorer<br/>(browser)"]
 
     CLI --> Core
     TUI --> Core
     MCP --> Core
-    BOT -->|"via MCP"| Core
+    BOT -->|"MCP + exec"| Core
+    Explorer --> BackupCore["Backup core"]
 
-    subgraph Core["Core Modules"]
+    subgraph Core["Core modules"]
         Registry["Registry"]
         Docker["Docker Compose"]
         Systemd["systemd"]
         Nginx["nginx"]
-        Secrets["Secrets Vault"]
-        Health["Health Checks"]
+        Secrets["Secrets vault"]
+        Agent["Secrets agent v2<br/>(per-app socket)"]
+        Health["Health checks"]
         Git["Git / GitHub"]
-        Deps["Dependency Monitor"]
+        Deps["Dependency monitor"]
+        Routines["Routines<br/>(scheduled tasks)"]
+        BackupCore
+        Guard["Cloudflare guard"]
+        Mobile["Mobile (TestFlight + audit)"]
     end
 
     Docker --> Containers["Containers"]
-    Systemd --> Services["systemd Services"]
-    Nginx --> Proxy["Reverse Proxy"]
+    Systemd --> Services["systemd services"]
+    Nginx --> Proxy["Reverse proxy"]
     Secrets --> Vault["vault/*.age"]
     Secrets --> Runtime["/run/fleet-secrets"]
+    Agent --> Containers
     Health --> Alerts["Telegram / iMessage"]
+    BackupCore --> Restic["restic + age<br/>(off-host)"]
 ```
 
-Each Docker Compose app is registered with its compose path, domains, port, and container names. Fleet generates systemd units so apps start on boot in the correct order. Secrets are encrypted at rest with [age](https://github.com/FiloSottile/age) and decrypted to a tmpfs on boot.
+Each Docker Compose app is registered with its compose path, domains, port, and container names. Fleet generates systemd units so apps start on boot in the correct order. Secrets are encrypted at rest with [age](https://github.com/FiloSottile/age) and either decrypted to a tmpfs on boot (v1) or served per-app over a Unix socket by the secrets agent (v2).
+
+Operator-specific identity (GitHub org, home dir, domain, username) lives in `data/operator.json` — gitignored, instance-local. Copy `data/operator.example.json` to seed it on a fresh install.
 
 ## Install
 
@@ -76,6 +87,14 @@ Requires Node.js 20+, Docker Compose v2, systemd, nginx, and [age](https://githu
 **Dependency scanning** -- Detects outdated packages, CVEs (via OSV), Docker image updates, and runtime EOL across all registered apps.
 
 **Git workflows** -- Onboard apps to GitHub, manage branches, PRs, and releases from the CLI.
+
+**Off-host backups** -- `fleet backup` runs restic against an append-only REST backend with age-encrypted dumps for databases. Includes `schedule` for systemd-timer-driven recurring backups, `verify` / `integrity` for repository checks, and `serve` for a browser-based restore explorer.
+
+**Routines** -- `fleet routines` is a TUI for signal-based scheduled tasks (each routine has a target repo, a trigger condition, and a runner — claude-cli, shell, or mcp). `fleet routine-run --id <id>` is the headless entrypoint for systemd-timer units.
+
+**Mobile pipelines** -- `fleet testflight` dispatches the macOS build workflow and publishes to TestFlight; `fleet audit` runs an App Store Review Guidelines audit via greenlight.
+
+**Cloudflare guard** -- `fleet guard` installs a watchdog layer (cf-snapshot, dns-drift-watch, cert-expiry-watch, cf-audit-monitor) that detects unauthorised dashboard changes and DNS drift on protected zones.
 
 **Interactive dashboard** -- Run bare `fleet` to launch a full-screen TUI with real-time status.
 
@@ -101,6 +120,16 @@ graph LR
 ```
 
 Secrets are imported or set individually, encrypted with age, and stored in the vault. On boot (or manually), they are decrypted to a tmpfs mount that Docker containers reference. Sealing writes runtime changes back to the vault. Drift detection compares vault vs runtime to catch unsaved changes.
+
+### Per-app secrets agent (v2, opt-in)
+
+The v1 model decrypts every app's secrets to `/run/fleet-secrets/<app>/`, which means any process on the host can read the tmpfs file. v2 replaces that with a per-app systemd-templated socket service:
+
+- Each app gets its own age keypair; the vault is encrypted to (admin + per-app) recipients.
+- `fleet-secrets-agent@<app>.service` runs under `DynamicUser=yes`, loads the per-app key via `LoadCredentialEncrypted`, and serves the decrypted env over a Unix socket at `/run/fleet-secrets/<app>.sock`.
+- Consumers (the container) fetch secrets via HTTP/1.1 over the socket. The [`@matthesketh/fleet-secrets-client`](https://www.npmjs.com/package/@matthesketh/fleet-secrets-client) package wraps that protocol for Node apps.
+- `fleet secrets migrate-v2 <app>` orchestrates the move: snapshot, generate per-app keypair, re-encrypt to the new recipient set, edit the compose file + app unit, swap, and auto-rollback on any failure.
+- `fleet secrets revert-v2 <app>` rolls back from a snapshot if you need to drop back to v1.
 
 ### Per-secret rotation (v1.6)
 
@@ -166,6 +195,107 @@ v1 is **observe-only** — it never blocks packets, so zero risk of breaking app
 
 `enforce` mode (actual default-deny via nftables) is deferred to a future phase — by design, it requires the operator to explicitly promote a shadow-clean app, never auto-promotes.
 
+## Backups (off-host)
+
+```
+fleet backup init                          # initialise the restic repository
+fleet backup register <app> [--paths …]    # tell fleet which paths and dbs to capture
+fleet backup register-all                  # bulk-register every known app
+fleet backup snapshot <app> [--tag …]      # take an on-demand snapshot
+fleet backup snapshot-all                  # one snapshot per registered app
+fleet backup list [<app>]                  # list snapshots, latest first
+fleet backup restore <app> --snap <id> --target <dir>
+fleet backup prune                         # apply retention policy
+fleet backup verify                        # restic check (data integrity)
+fleet backup integrity                     # repository integrity report
+fleet backup schedule <app> --cron "..."   # install a fleet-backup@<app>.timer unit
+fleet backup schedule-all                  # bulk-install timers from registered apps
+fleet backup unschedule <app>              # remove the timer
+fleet backup status [<app>]                # last-snapshot age, sizes, append-only state
+fleet backup serve --port <n>              # browser-based restore explorer (see below)
+fleet backup test                          # end-to-end snapshot+restore smoke
+```
+
+Snapshots go to a restic backend mounted with `append-only` mode so a compromised host can't delete history. Database dumps stream straight into the snapshot via `dumpFileSpawn`, never landing on disk in plaintext. Backups are encrypted twice — restic at rest, plus per-app age encryption inside the snapshot for anything classified as sensitive.
+
+### Restore explorer
+
+`fleet backup serve --port 7300` starts a localhost-bound HTTP service designed to live behind nginx. It serves:
+
+- a read-only status dashboard at `/backups` showing the latest snapshot per app and any retention lag
+- a tree explorer at `/backups/explore` for browsing snapshot contents
+- a per-file streaming endpoint that pipes `restic dump` straight to the browser
+- a one-click restore into a fresh timestamped staging dir under `/var/restore`
+
+Authentication is **TOTP only** — paste the secret into your authenticator app on setup (`fleet backup setup-totp`). Sessions are signed cookies (`fleet_backup_session`), `Secure; HttpOnly; SameSite=Strict; Path=/backups`. Sensitive paths (`.env`, age keys, private SSH keys) are classified server-side and refuse view/download regardless of who's logged in.
+
+CSRF posture: every `/api/*` request must carry `x-fleet-backup: 1` (a custom header browsers can't set cross-origin without preflight), and write methods (POST / DELETE) must additionally carry an `Origin` header whose host matches the deployment domain exactly. Read methods tolerate a missing `Origin` so curl probes still work.
+
+## Routines
+
+`fleet routines` is a TUI for signal-based scheduled tasks. Each routine has:
+
+- a **target repo** the routine operates against
+- a **trigger condition** (signals: open issues count, failing checks, branch ahead of remote, custom git-clean signal, scheduled, manual)
+- a **runner**: `claude-cli` (drives a Claude Code session), `shell` (just runs a script), or `mcp-call` (invokes one MCP tool)
+- a **schema** that validates inputs before the runner sees them
+
+Routines run from a systemd-timer-driven service called `fleet-routine@<id>.timer` — fleet ships the templates and `fleet routine-run --id <id>` is the headless entrypoint that timer fires. The TUI shows a signals grid (which routines are gated on what), a routine list, and per-routine run history.
+
+```
+fleet routines                                   # interactive TUI
+fleet routine-run --id <id> [--target <repo>] [--trigger scheduled] [--json]
+```
+
+The claude-cli runner serialises through a `proper-lockfile` mutex so two routines targeting the same repo can't race each other, and respects an abort signal so a `systemctl stop` cleans up mid-run rather than orphaning a child process.
+
+## Mobile pipelines
+
+For iOS/macOS apps, fleet drives both the build pipeline and the App Store compliance check.
+
+### TestFlight publishing
+
+```
+fleet testflight publish <app>              # dispatch the macOS build workflow to TestFlight
+fleet testflight builds <app>               # list TestFlight builds for the app
+fleet testflight update <app> --build <id> --whats-new "..."
+fleet testflight delete <app> --build <id>  # expire a TestFlight build
+fleet testflight doctor <app>               # check gh + App Store Connect credentials
+```
+
+The publish flow goes through a GitHub Actions macOS runner — fleet dispatches the workflow with the app's bundle ID and version, then polls until the build appears in App Store Connect. Auth uses an API key (issuer + key ID + p8) loaded via a fleet-managed secret.
+
+### App Store compliance audit
+
+```
+fleet audit [target]                        # run greenlight against a mobile project
+fleet audit guidelines                      # browse App Store Review Guidelines (list/show/search)
+fleet audit doctor                          # check the greenlight binary is installed
+fleet audit ignore "<title>" --reason "..." # suppress a greenlight false positive
+fleet audit ignores                         # list audit ignore rules
+```
+
+Greenlight runs a corpus of App Store Review Guideline checks against the project source. Findings classified as "confirmed false positive" are suppressed via the ignore list so the next run is noise-free; everything else fails the audit. Useful as a pre-flight before each TestFlight publish.
+
+## Cloudflare guard
+
+`fleet guard` installs a watchdog layer that detects unauthorised dashboard changes and DNS drift on protected Cloudflare zones.
+
+```
+sudo fleet guard install                    # install scripts + cron + log rotation
+fleet guard status                          # show what's protected and the last check time
+fleet guard approve <change-id>             # acknowledge a flagged change as intentional
+fleet guard reject <change-id>              # treat a flagged change as compromise
+```
+
+Components installed under `/usr/local/sbin`:
+
+- **`cf-snapshot`** — periodic snapshot of the Cloudflare zone configuration (DNS, page rules, WAF settings) to `/var/lib/cf-snapshots/`
+- **`cf-audit-monitor`** — diffs the latest snapshot against the previous and surfaces unauthorised changes for operator approval
+- **`dns-drift-watch`** — detects when DNS records drift from the snapshot (cron, alerts via the same channels as `fleet watchdog`)
+- **`cert-expiry-watch`** — flags certs approaching expiry across all protected hosts
+- **`fleet-guard` / `fleet-guard-execute`** — the orchestrator + executor pair, run as the `fleet-guard` system user with no shell
+
 ## Deployment Flow
 
 ```mermaid
@@ -224,7 +354,7 @@ Any app with `lastBuiltCommit` unset will trigger a full rebuild the first time 
 
 ## MCP Server
 
-Fleet exposes 36 tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for AI-assisted server management. Run `fleet mcp` to start the stdio server, or install it into Claude Code:
+Fleet exposes 50+ tools via the [Model Context Protocol](https://modelcontextprotocol.io/) for AI-assisted server management — the static surface (server.ts + git / secrets / deps / audit / testflight tool families) plus every migrated registry command exposed through the registry bridge. Run `fleet mcp` to start the stdio server, or install it into Claude Code:
 
 ```bash
 sudo fleet install-mcp
@@ -240,19 +370,48 @@ See the [bot documentation](https://fleet.hesketh.pro/bot/setup/) for setup inst
 
 ## Self-update
 
-When `fleet`'s TUI launches it does a non-blocking `git fetch` against `origin/develop`. If the local repo is behind, a banner appears under the header:
+When `fleet`'s TUI launches it does a non-blocking `git fetch` against the configured update channel and compares HEAD to that remote branch. If the local repo is behind, a banner appears under the header:
 
 ```
 ↑ Update available: 3 commits ahead — feat: ... Press U to install.
 ```
 
-Pressing `U` runs `git pull --ff-only` then `npm run build` (refused if the working tree is dirty). The new binary is live for the next `fleet …` invocation. Recheck happens every 30 minutes for long-running TUI sessions.
+Pressing `U` runs `git pull --ff-only origin <channel-branch>` then `npm run build` (refused if the working tree is dirty). The new binary is live for the next `fleet …` invocation. Recheck happens every 30 minutes for long-running TUI sessions.
+
+**Channels**
+
+| channel | tracks | who it's for |
+|---|---|---|
+| `stable` (default) | `origin/main` — tagged releases only | everyone |
+| `prerelease` | `origin/develop` — work in flight, may break | operators willing to canary |
+
+Opt into prerelease for the current process:
+
+```bash
+FLEET_UPDATE_CHANNEL=prerelease fleet
+```
+
+Or persist it (e.g. in `~/.bashrc` or the systemd unit's `Environment=`):
+
+```bash
+export FLEET_UPDATE_CHANNEL=prerelease
+```
+
+When the banner is on the prerelease channel it labels itself `↑ Update available (prerelease): …` so you can tell at a glance.
+
+**Escape hatch — track an arbitrary branch**
+
+For forks or release branches, `FLEET_UPDATE_BRANCH=<name>` overrides the channel entirely:
+
+```bash
+FLEET_UPDATE_BRANCH=release/2026.q3 fleet
+```
 
 ## Testing
 
 ```bash
-npm test                     # unit + mocked tests (1106 passing)
-FLEET_INTEGRATION=1 npm test # also runs boot-refresh integration tests (1156 passing, 0 skipped)
+npm test                     # unit + mocked tests (~1720 passing)
+FLEET_INTEGRATION=1 npm test # also runs boot-refresh + secrets-v2 integration tests
 ```
 
 Set `FLEET_INTEGRATION=1` to opt into integration tests that hit real systemd / docker. Skipped by default in CI.
