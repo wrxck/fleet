@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { migrateComposeToV2, revertComposeFromV2 } from './compose-edit.js';
+import { migrateComposeToV2, revertComposeFromV2 } from './compose-edit';
 
 describe('migrateComposeToV2', () => {
   it('adds bind-mount and env var, removes env_file (string form)', () => {
