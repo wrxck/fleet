@@ -13,10 +13,19 @@ import { initCommand } from '../commands/init';
 import { patchSystemdCommand } from '../commands/patch-systemd';
 import { bootStartCommand } from '../commands/boot-start';
 import { installMcpCommand } from '../commands/install-mcp';
+import { updateCommand } from '../commands/update';
+import { doctorCommand } from '../commands/doctor';
+import { configCommand, whoamiCommand } from '../commands/config';
+import { completionsCommand } from '../commands/completions';
 
 /** every command definition. commands are added here as they are migrated
  *  onto the registry. */
-const ALL = [addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand, healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand, initCommand, patchSystemdCommand, bootStartCommand, installMcpCommand];
+const ALL = [
+  addCommand, statusCommand, listCommand, startCommand, stopCommand, restartCommand,
+  healthCommand, freezeCommand, unfreezeCommand, rollbackCommand, removeCommand,
+  initCommand, patchSystemdCommand, bootStartCommand, installMcpCommand,
+  updateCommand, doctorCommand, configCommand, whoamiCommand, completionsCommand,
+];
 
 let loaded = false;
 

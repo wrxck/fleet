@@ -99,6 +99,13 @@ Commands:
   unfreeze <app>      Unfreeze and restart a frozen service
   guard <subcommand>  Cloudflare protection layer (install/status/approve/reject/...)
   backup <subcommand> Encrypted off-host backups via restic + age (init/snapshot/list/restore/...)
+  update [--check] [--channel stable|prerelease] [--branch <name>]
+                      Self-update fleet (check / apply, channel selectable)
+  doctor              Preflight: host requirements, registry, vault, operator config, orphans
+  config [show|get|set] [<field>] [<value>]
+                      Show or update the operator identity (data/operator.json)
+  whoami              Print operator identity in one line
+  completions <shell> Emit shell completion script (bash | zsh | fish)
 
 Global flags:
   --json              Output as JSON
