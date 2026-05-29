@@ -5,7 +5,7 @@ import * as path from 'node:path';
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { detectV2Drift, getV2Status } from './secrets-v2-ops.js';
+import { detectV2Drift, getV2Status } from './secrets-v2-ops';
 
 vi.mock('./secrets.js', () => ({ loadManifest: vi.fn() }));
 vi.mock('./secrets-v2-creds.js', () => ({
@@ -17,9 +17,9 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...real, existsSync: vi.fn(real.existsSync), statSync: vi.fn(real.statSync) };
 });
 
-import { loadManifest } from './secrets.js';
-import { execSafe } from './exec.js';
-import type { ExecResult } from './exec.js';
+import { loadManifest } from './secrets';
+import { execSafe } from './exec';
+import type { ExecResult } from './exec';
 
 const ok = (stdout = ''): ExecResult => ({ ok: true, stdout, stderr: '', exitCode: 0 });
 

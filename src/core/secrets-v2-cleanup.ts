@@ -3,10 +3,10 @@ import { existsSync, readdirSync, rmSync, unlinkSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { findApp, load } from './registry.js';
-import { listSnapshots } from './secrets-v2-snapshot.js';
-import { SecretsError } from './errors.js';
-import type { Manifest } from './secrets.js';
+import { findApp, load } from './registry';
+import { listSnapshots } from './secrets-v2-snapshot';
+import { SecretsError } from './errors';
+import type { Manifest } from './secrets';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

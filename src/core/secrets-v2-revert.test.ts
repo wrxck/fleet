@@ -2,13 +2,13 @@ import * as fs from 'node:fs';
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { listSnapshots, restoreSnapshot } from './secrets-v2-snapshot.js';
-import { removeCredential } from './secrets-v2-creds.js';
-import { loadManifest } from './secrets.js';
-import { findApp, load } from './registry.js';
-import { execSafe } from './exec.js';
-import { validateApp } from './secrets-validate.js';
-import { revertAppFromV2 } from './secrets-v2-migrate.js';
+import { listSnapshots, restoreSnapshot } from './secrets-v2-snapshot';
+import { removeCredential } from './secrets-v2-creds';
+import { loadManifest } from './secrets';
+import { findApp, load } from './registry';
+import { execSafe } from './exec';
+import { validateApp } from './secrets-validate';
+import { revertAppFromV2 } from './secrets-v2-migrate';
 
 vi.mock('./secrets-v2-snapshot.js', () => ({
   snapshotApp: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-import type { ExecResult } from './exec.js';
+import type { ExecResult } from './exec';
 const ok = (stdout = ''): ExecResult => ({ ok: true, stdout, stderr: '', exitCode: 0 });
 
 const MOCK_APP_ENTRY = {
