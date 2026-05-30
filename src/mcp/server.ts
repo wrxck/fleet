@@ -7,17 +7,19 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
-import { restartService } from '../core/systemd';
+import { restartServiceResult } from '../core/systemd';
 import { getContainerLogs, getContainersByCompose } from '../core/docker';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx';
 import { generateNginxConfig } from '../templates/nginx';
-import { composeBuild } from '../core/docker';
+import { composeBuildResult } from '../core/docker';
 import { execSafe } from '../core/exec';
 import { AppNotFoundError } from '../core/errors';
 import { assertAppName, assertServiceName, assertFilePath, assertDomain, assertComposeFile } from '../core/validate';
 import { loadManifest, listSecrets, isInitialized } from '../core/secrets';
 import { unsealAll, getStatus as getSecretsStatus } from '../core/secrets-ops';
 import { validateApp, validateAll } from '../core/secrets-validate';
+import { guarded } from './guarded-server';
+import type { Guard } from './guard';
 import { registerGitTools } from './git-tools';
 import { registerSecretsTools } from './secrets-tools';
 import { registerRegistryTools } from './registry-bridge';
@@ -38,14 +40,23 @@ function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
 }
 
-export async function startMcpServer(): Promise<void> {
+// a tool failure the caller can actually see: isError marks it as failed so the
+// mcp client does not treat the message as a successful result.
+function fail(msg: string) {
+  return { content: [{ type: 'text' as const, text: msg }], isError: true as const };
+}
+
+export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
   const __dirname = dirname(fileURLToPath(import.meta.url));
   const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
 
-  const server = new McpServer({
+  const base = new McpServer({
     name: 'fleet',
     version: pkg.version,
   });
+  // when a guard is supplied (daemon path) every tool call is authorised and
+  // audited; the stdio path passes no guard and behaves exactly as before.
+  const server = opts.guard ? guarded(base, opts.guard) : base;
 
   registerRegistryTools(server);
 
@@ -100,6 +111,16 @@ export async function startMcpServer(): Promise<void> {
         return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
       const result = readContainerLogs(target, { lines, level, sinceMinutes, grep, maxBytes: 200_000 });
+      if (result.text.trim() === '') {
+        // empty is ambiguous (no logs vs over-tight filter) — say which knobs to
+        // loosen rather than returning a blank, which reads as "no output".
+        return text(
+          `No log lines for ${target} matching level>=${level} in the last ${sinceMinutes}m` +
+          `${grep ? ` with grep "${grep}"` : ''}. ` +
+          `Lower 'level' (e.g. "info"/"debug"), widen 'sinceMinutes', or drop 'grep'. ` +
+          `fleet_logs_summary gives a quick level breakdown.`,
+        );
+      }
       const suffix = result.truncated
         ? '\n\n[truncated at 200KB — narrow with smaller lines/sinceMinutes or add grep]'
         : '';
@@ -226,10 +247,21 @@ export async function startMcpServer(): Promise<void> {
     { app: z.string().describe('App name') },
     async ({ app }) => {
       const entry = requireApp(app);
-      const buildOk = composeBuild(entry.composePath, entry.composeFile, entry.name);
-      if (!buildOk) return text(`Build failed for ${entry.name}`);
-      const ok = restartService(entry.serviceName);
-      return text(ok ? `Deployed ${entry.name}` : `Deploy failed for ${entry.name}`);
+      // deploy needs root (it drives systemctl + docker). over the stdio path
+      // the server runs as the caller, so surface the real reason instead of a
+      // swallowed "Deploy failed" — the privilege-separated daemon runs as root
+      // and passes this check. mirrors the cli's root gate.
+      if (process.getuid && process.getuid() !== 0) {
+        return fail(
+          `Deploy for ${entry.name} requires root. Run fleet through the privilege-separated ` +
+          `MCP daemon (fleet mcp install) or, for the CLI, via sudo.`,
+        );
+      }
+      const build = composeBuildResult(entry.composePath, entry.composeFile, entry.name);
+      if (!build.ok) return fail(`Build failed for ${entry.name}: ${build.error}`);
+      const restart = restartServiceResult(entry.serviceName);
+      if (!restart.ok) return fail(`Deploy failed for ${entry.name}: ${restart.error}`);
+      return text(`Deployed ${entry.name}`);
     }
   );
 
@@ -267,8 +299,14 @@ export async function startMcpServer(): Promise<void> {
   });
 
   server.tool('fleet_secrets_status', 'Show vault initialisation state, sealed/unsealed, counts. The vault is the encrypted source of truth that survives reboots. Runtime (/run/fleet-secrets/) is the decrypted copy used by apps — it is lost on reboot.', async () => {
-    const status = getSecretsStatus();
-    return text(JSON.stringify(status, null, 2));
+    try {
+      const status = getSecretsStatus();
+      return text(JSON.stringify(status, null, 2));
+    } catch (err) {
+      // a non-root caller can't read the root-only runtime dir; return the
+      // actionable reason rather than a swallowed/raw filesystem error.
+      return fail(err instanceof Error ? err.message : String(err));
+    }
   });
 
   server.tool(
@@ -372,6 +410,13 @@ export async function startMcpServer(): Promise<void> {
   registerAuditTools(server);
   registerTestflightTools(server);
 
+  return base;
+}
+
+// legacy stdio entrypoint (`fleet mcp`): runs in-process as the caller, unguarded,
+// exactly as before — privileged ops still fail on their own file permissions.
+export async function startMcpServer(): Promise<void> {
+  const base = buildFleetServer();
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await base.connect(transport);
 }

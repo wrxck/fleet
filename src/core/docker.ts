@@ -73,6 +73,15 @@ function imageExists(image: string): boolean {
 }
 
 export function composeBuild(composePath: string, composeFile: string | null, appName?: string): boolean {
+  return composeBuildResult(composePath, composeFile, appName).ok;
+}
+
+/**
+ * like composeBuild but keeps the failure detail. callers that surface errors
+ * to a human or through mcp need docker's stderr (the actual build error)
+ * rather than a bare boolean.
+ */
+export function composeBuildResult(composePath: string, composeFile: string | null, appName?: string): { ok: boolean; error?: string } {
   const image = resolveImageName(composePath, composeFile);
   if (image && imageExists(image)) {
     const lastColon = image.lastIndexOf(':');
@@ -88,7 +97,7 @@ export function composeBuild(composePath: string, composeFile: string | null, ap
     timeout: 300_000,
     env: Object.keys(env).length > 0 ? env : undefined,
   });
-  return result.ok;
+  return result.ok ? { ok: true } : { ok: false, error: result.stderr || `docker compose build failed (exit ${result.exitCode})` };
 }
 
 export function composeUp(composePath: string, composeFile: string | null): boolean {
