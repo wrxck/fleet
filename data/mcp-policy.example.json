@@ -1,0 +1,19 @@
+{
+  "_comment": "Example /etc/fleet/mcp-policy.json that lets an UNPRIVILEGED MCP client (e.g. Claude run as an ordinary user) deploy and manage app lifecycle through the privilege-separated root daemon — without sudo. read/mutate stay allowed; the destructive tier stays denied by default, and only the specific lifecycle tools are opted in per-tool. Every call is still rate-limited and written to /var/log/fleet-mcp/audit.log. Copy to /etc/fleet/mcp-policy.json and restart the daemon (sudo systemctl restart fleet-mcp).",
+  "tiers": {
+    "read": "allow",
+    "mutate": "allow",
+    "destructive": "deny"
+  },
+  "tools": {
+    "fleet_deploy": "allow",
+    "fleet_start": "allow",
+    "fleet_stop": "allow",
+    "fleet_restart": "allow"
+  },
+  "rateLimits": {
+    "read": 0,
+    "mutate": 60,
+    "destructive": 10
+  }
+}

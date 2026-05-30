@@ -431,9 +431,25 @@ Same-user caveat: because the client runs as your user, anything else running as
 
 ### Running fleet from an unprivileged Claude session
 
-The daemon above is the recommended way for an AI agent to drive fleet without sudo. But the **CLI** (`fleet secrets`, `deploy`, `start`/`stop`/`restart`, `nginx`, `init`, `patch-systemd`, …) hard-requires root and aborts with `requires root privileges` when run as a non-root user. So if a Claude session shells out to the fleet CLI directly, it gets blocked — a non-interactive session can't answer a sudo password prompt.
+Privileged fleet operations (`deploy`, `start`/`stop`/`restart`, `secrets`, `nginx`, `init`, …) need root. An AI agent should run as an ordinary user, so it reaches those one of two ways.
 
-To let an unprivileged session use the CLI, give its user **passwordless** sudo for the fleet binary:
+**Recommended — through the daemon (no sudo).** The privilege-separated daemon above runs as root and does the privileged work; the agent connects over the `fleet-guard` socket. Deploy and the lifecycle tools are in the **destructive** tier, which is denied by default, so `fleet_deploy` comes back denied until you opt in per-tool in `/etc/fleet/mcp-policy.json`:
+
+```json
+{
+  "tiers": { "read": "allow", "mutate": "allow", "destructive": "deny" },
+  "tools": {
+    "fleet_deploy": "allow",
+    "fleet_start": "allow",
+    "fleet_stop": "allow",
+    "fleet_restart": "allow"
+  }
+}
+```
+
+Then `sudo systemctl restart fleet-mcp` so the daemon reloads the policy. The other tiers stay untouched and every call is still rate-limited and audited to `/var/log/fleet-mcp/audit.log`. A ready-to-copy file lives at [`data/mcp-policy.example.json`](data/mcp-policy.example.json). This is the path that lets an unprivileged agent deploy without ever touching sudo. **Make sure the agent's MCP client is pointed at the daemon (`fleet mcp connect`), not the in-process stdio server (`fleet mcp`)** — the stdio server runs as the agent's own user and so still hits the root wall below.
+
+**Fallback — the CLI via sudo.** If an agent shells out to the fleet CLI directly (rather than the MCP tools), the CLI hard-requires root and aborts with `requires root privileges`; a non-interactive session can't answer a password prompt. Give its user **passwordless** sudo for the fleet binary:
 
 ```sudoers
 # /etc/sudoers.d/90-<user>   —  always validate with:  visudo -c
