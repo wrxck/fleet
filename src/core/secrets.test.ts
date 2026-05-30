@@ -28,7 +28,7 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { existsSync, copyFileSync, rmSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR } from './secrets';
+import { backupVaultFile, restoreVaultFile, removeBackup, VAULT_DIR, RUNTIME_DIR, isSealed } from './secrets';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockCopyFileSync = vi.mocked(copyFileSync);
@@ -245,5 +245,22 @@ describe('ManifestEntry mode field', () => {
       keyCount: 1,
     };
     expect(e.mode).toBeUndefined();
+  });
+});
+
+describe('isSealed', () => {
+  it('treats a missing runtime dir as sealed', () => {
+    mockExistsSync.mockImplementation((p: unknown) => String(p) !== RUNTIME_DIR);
+    expect(isSealed()).toBeTruthy();
+  });
+
+  it('throws an actionable error (not raw EACCES) when the runtime dir is unreadable', () => {
+    mockExistsSync.mockImplementation((p: unknown) => String(p) === RUNTIME_DIR);
+    mockReaddirSync.mockImplementation(() => {
+      const err = new Error('EACCES: permission denied, scandir') as NodeJS.ErrnoException;
+      err.code = 'EACCES';
+      throw err;
+    });
+    expect(() => isSealed()).toThrow(/needs root|sudo|daemon/i);
   });
 });

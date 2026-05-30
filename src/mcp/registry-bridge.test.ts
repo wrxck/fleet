@@ -125,6 +125,20 @@ describe('registerRegistryTools handler', () => {
     expect(result.structuredContent).toEqual({ count: 2 });
   });
 
+  it('wraps array data as { items } so the sdk does not reject it', async () => {
+    loadRegistry();
+    register(defineCommand({
+      name: 'arry',
+      summary: 'returns an array (like list / health)',
+      args: z.object({}),
+      async run() { return { ok: true, summary: '2 items', data: [{ a: 1 }, { a: 2 }] }; },
+    }));
+    const { server, handlers } = fakeServer();
+    registerRegistryTools(server);
+    const result = await handlers.get('fleet_arry')!({}) as { structuredContent: { items: unknown[] } };
+    expect(result.structuredContent).toEqual({ items: [{ a: 1 }, { a: 2 }] });
+  });
+
   it('rejects args that fail the command schema', async () => {
     loadRegistry();
     register(defineCommand({

@@ -57,7 +57,19 @@ export function isInitialized(): boolean {
 }
 
 export function isSealed(): boolean {
-  return !existsSync(RUNTIME_DIR) || readdirSync(RUNTIME_DIR).length === 0;
+  if (!existsSync(RUNTIME_DIR)) return true;
+  try {
+    return readdirSync(RUNTIME_DIR).length === 0;
+  } catch (err) {
+    // RUNTIME_DIR is root-only (0700). a non-root caller — e.g. fleet driven
+    // over the stdio mcp path as an ordinary user — gets EACCES here. surface a
+    // typed, actionable error instead of leaking a raw "scandir EACCES".
+    const code = (err as NodeJS.ErrnoException).code ?? 'error';
+    throw new SecretsError(
+      `cannot read ${RUNTIME_DIR} (${code}). secrets operations need root — run fleet ` +
+      `through the privilege-separated MCP daemon (fleet mcp install) or via sudo.`,
+    );
+  }
 }
 
 function requireInit(): void {

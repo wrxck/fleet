@@ -68,12 +68,17 @@ describe('fleet_nginx_add port validation', () => {
 // --- MCP server tool registration ---
 // Capture registered tool names via a mock McpServer
 
+type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
 const capturedTools: string[] = [];
+const capturedHandlers = new Map<string, ToolHandler>();
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => {
   class McpServer {
-    tool(name: string, ...rest: any[]) {
+    tool(name: string, ...rest: unknown[]) {
       capturedTools.push(name);
+      // the handler is always the last argument (shape is optional).
+      const handler = rest[rest.length - 1];
+      if (typeof handler === 'function') capturedHandlers.set(name, handler as ToolHandler);
     }
     connect = vi.fn().mockResolvedValue(undefined);
   }
@@ -107,12 +112,14 @@ vi.mock('../core/systemd.js', () => ({
   startService: vi.fn(),
   stopService: vi.fn(),
   restartService: vi.fn(),
+  restartServiceResult: vi.fn().mockReturnValue({ ok: true }),
 }));
 vi.mock('../core/docker.js', () => ({
   getContainerLogs: vi.fn(),
   getContainersByCompose: vi.fn().mockReturnValue([]),
   listContainers: vi.fn().mockReturnValue([]),
   composeBuild: vi.fn(),
+  composeBuildResult: vi.fn().mockReturnValue({ ok: true }),
 }));
 vi.mock('../core/health.js', () => ({
   checkHealth: vi.fn(),
@@ -193,4 +200,33 @@ describe('MCP server tool registration', () => {
       expect(capturedTools).toContain(toolName);
     });
   }
+});
+
+describe('fleet_deploy surfaces the real reason', () => {
+  beforeEach(async () => {
+    capturedTools.length = 0;
+    capturedHandlers.clear();
+    await startMcpServer();
+  });
+
+  it('returns a clear "requires root" error to the caller when not root', async () => {
+    const registry = await import('../core/registry.js');
+    vi.mocked(registry.findApp).mockReturnValue({
+      name: 'demo', serviceName: 'demo', composePath: '/srv/demo', composeFile: null,
+      containers: ['demo'],
+    } as unknown as ReturnType<typeof registry.findApp>);
+
+    const getuid = process.getuid;
+    // simulate a non-root caller (the stdio path runs as the user).
+    process.getuid = () => 1000;
+    try {
+      const result = await capturedHandlers.get('fleet_deploy')!({ app: 'demo' }) as {
+        isError?: boolean; content: Array<{ text: string }>;
+      };
+      expect(result.isError).toBeTruthy();
+      expect(result.content[0].text).toMatch(/requires root/i);
+    } finally {
+      process.getuid = getuid;
+    }
+  });
 });
