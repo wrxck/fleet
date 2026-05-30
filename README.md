@@ -20,6 +20,35 @@ Manage Docker Compose apps on a single server -- systemd orchestration, nginx ro
 
 ---
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Install](#install)
+- [Key Features](#key-features)
+- [Secrets Flow](#secrets-flow)
+  - [Per-app secrets agent (v2, opt-in)](#per-app-secrets-agent-v2-opt-in)
+  - [Per-secret rotation (v1.6)](#per-secret-rotation-v16)
+  - [Log lifecycle (v1.6)](#log-lifecycle-v16)
+  - [Egress observation (v1.6)](#egress-observation-v16)
+- [Backups (off-host)](#backups-off-host)
+  - [Restore explorer](#restore-explorer)
+- [Routines](#routines)
+- [Mobile pipelines](#mobile-pipelines)
+  - [TestFlight publishing](#testflight-publishing)
+  - [App Store compliance audit](#app-store-compliance-audit)
+- [Cloudflare guard](#cloudflare-guard)
+- [Deployment Flow](#deployment-flow)
+- [Boot Refresh](#boot-refresh)
+- [MCP Server](#mcp-server)
+  - [Running fleet from an unprivileged Claude session](#running-fleet-from-an-unprivileged-claude-session)
+- [fleet-bot](#fleet-bot)
+- [Self-update](#self-update)
+- [Testing](#testing)
+- [Development](#development)
+- [License](#license)
+
+---
+
 ## Architecture
 
 ```mermaid
