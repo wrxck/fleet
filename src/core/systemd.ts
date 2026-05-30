@@ -98,6 +98,18 @@ export function restartService(serviceName: string): boolean {
   return execSafe('systemctl', ['restart', `${serviceName}.service`], { timeout: 120_000 }).ok;
 }
 
+/**
+ * like restartService but keeps the failure detail. callers that surface errors
+ * to a human or through mcp need the underlying systemctl stderr (e.g. the
+ * "interactive authentication required" / permission message a non-root caller
+ * gets) rather than a bare boolean.
+ */
+export function restartServiceResult(serviceName: string): { ok: boolean; error?: string } {
+  assertServiceName(serviceName);
+  const r = execSafe('systemctl', ['restart', `${serviceName}.service`], { timeout: 120_000 });
+  return r.ok ? { ok: true } : { ok: false, error: r.stderr || `systemctl restart ${serviceName}.service failed (exit ${r.exitCode})` };
+}
+
 export function enableService(serviceName: string): boolean {
   assertServiceName(serviceName);
   return execSafe('systemctl', ['enable', `${serviceName}.service`]).ok;
