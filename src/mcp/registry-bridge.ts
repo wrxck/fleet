@@ -19,6 +19,21 @@ function toMcpToolName(commandName: string): string {
   return 'fleet_' + commandName.replace(/:/g, '_');
 }
 
+/**
+ * build the optional structuredContent field for a tool result. the mcp sdk
+ * requires structuredContent to be a json object; a bare array (the shape
+ * fleet_list / fleet_health return) is wrapped as { items: [...] }. plain
+ * objects pass through unchanged; primitives, null and undefined yield no
+ * structuredContent at all.
+ */
+export function structuredContentFor(
+  data: unknown,
+): { structuredContent: Record<string, unknown> } | Record<string, never> {
+  if (Array.isArray(data)) return { structuredContent: { items: data } };
+  if (data && typeof data === 'object') return { structuredContent: data as Record<string, unknown> };
+  return {};
+}
+
 /** registry commands as flat tool descriptors, for inspection and tests. */
 export function collectRegistryTools(): BridgeTool[] {
   loadRegistry();
@@ -53,11 +68,12 @@ export function registerRegistryTools(server: McpServer): void {
         const result = await def.run(parsed.data, ctx);
         return {
           content: [{ type: 'text' as const, text: result.summary }],
-          // structuredContent must be an object — only attach it when the
-          // command actually returned one, otherwise the sdk rejects the shape.
-          ...(result.data && typeof result.data === 'object'
-            ? { structuredContent: result.data as Record<string, unknown> }
-            : {}),
+          // structuredContent must be a json object — the mcp sdk rejects a
+          // top-level array with -32602 (expected record, received array).
+          // arrays are wrapped as { items: [...] } so array-returning commands
+          // (fleet_list, fleet_health, …) still ship structured data; plain
+          // objects pass through; primitives/null carry no structuredContent.
+          ...structuredContentFor(result.data),
           isError: !result.ok,
         };
       } catch (err) {

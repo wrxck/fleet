@@ -174,6 +174,13 @@ const LEVEL_PATTERNS: Record<string, RegExp> = {
   error: /\b(error|err|fatal|critical|exception|panic)\b/i,
 };
 
+// any recognised level token. a line carrying none of these is "unlabelled" —
+// most app logs (e.g. "server running at http://localhost:3007") are. the level
+// filter must NOT drop unlabelled lines: we can't prove they're below the
+// threshold, and silently dropping them made fleet_logs_recent return nothing
+// for apps that log without level prefixes.
+const ANY_LEVEL = /\b(debug|trace|verbose|info|warn|warning|error|err|fatal|critical)\b/i;
+
 export function readContainerLogs(container: string, opts: LogReadOpts = {}): { text: string; truncated: boolean } {
   const args: string[] = ['logs', '--tail', String(opts.lines ?? 100)];
   if (opts.sinceMinutes) args.push('--since', `${opts.sinceMinutes}m`);
@@ -183,7 +190,11 @@ export function readContainerLogs(container: string, opts: LogReadOpts = {}): { 
   let text = r.stdout;
   if (opts.level) {
     const pat = LEVEL_PATTERNS[opts.level];
-    text = text.split('\n').filter(l => pat.test(l) || l.trim() === '').join('\n');
+    // keep blank lines, lines at/above the requested level, and unlabelled
+    // lines; drop only lines that explicitly carry a lower level.
+    text = text.split('\n')
+      .filter(l => l.trim() === '' || pat.test(l) || !ANY_LEVEL.test(l))
+      .join('\n');
   }
   if (opts.grep) {
     const g = opts.grep;

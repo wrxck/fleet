@@ -78,6 +78,19 @@ describe('readContainerLogs', () => {
     expect(out.text).toContain('ERROR bad');
     expect(out.text).not.toContain('DEBUG noise');
   });
+  it('keeps unlabelled lines under a level filter (the logs_recent regression)', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: true,
+      stdout: 'server running at http://localhost:3007\nINFO routine ping\nWARN trouble',
+      stderr: '',
+    });
+    const out = readContainerLogs('m', { level: 'warn' });
+    // the plain startup line has no level token, so it must survive...
+    expect(out.text).toContain('server running at http://localhost:3007');
+    expect(out.text).toContain('WARN trouble');
+    // ...while an explicitly lower-level line is still dropped.
+    expect(out.text).not.toContain('INFO routine ping');
+  });
   it('grep filter applied after level', () => {
     vi.mocked(execSafe).mockReturnValueOnce({
       ok: true,

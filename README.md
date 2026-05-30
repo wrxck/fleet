@@ -20,6 +20,36 @@ Manage Docker Compose apps on a single server -- systemd orchestration, nginx ro
 
 ---
 
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Install](#install)
+- [Key Features](#key-features)
+- [Secrets Flow](#secrets-flow)
+  - [Per-app secrets agent (v2, opt-in)](#per-app-secrets-agent-v2-opt-in)
+  - [Per-secret rotation (v1.6)](#per-secret-rotation-v16)
+  - [Log lifecycle (v1.6)](#log-lifecycle-v16)
+  - [Egress observation (v1.6)](#egress-observation-v16)
+- [Backups (off-host)](#backups-off-host)
+  - [Restore explorer](#restore-explorer)
+- [Routines](#routines)
+- [Mobile pipelines](#mobile-pipelines)
+  - [TestFlight publishing](#testflight-publishing)
+  - [App Store compliance audit](#app-store-compliance-audit)
+- [Cloudflare guard](#cloudflare-guard)
+- [Deployment Flow](#deployment-flow)
+- [Boot Refresh](#boot-refresh)
+- [MCP Server](#mcp-server)
+  - [Privilege-separated root daemon](#privilege-separated-root-daemon)
+  - [Running fleet from an unprivileged Claude session](#running-fleet-from-an-unprivileged-claude-session)
+- [fleet-bot](#fleet-bot)
+- [Self-update](#self-update)
+- [Testing](#testing)
+- [Development](#development)
+- [License](#license)
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -398,6 +428,38 @@ Migration is non-breaking: bare `fleet mcp` keeps working exactly as before, so 
 For a hardened setup, run the daemon from a **standalone global install** (`sudo npm i -g @matthesketh/fleet`) rather than a git checkout. `fleet mcp install` and `fleet mcp doctor` warn when the daemon would run from a checkout, because root git activity in that tree can leave root-owned `.git` objects that block the owner's commits; a standalone install has no `.git` to corrupt and can't be rewritten by an unprivileged user.
 
 Same-user caveat: because the client runs as your user, anything else running as that user (in `fleet-guard`) can also reach the socket — the guard limits this to the audited tool surface with destructive actions off by default, but it is not a defence against a full compromise of that account.
+
+### Running fleet from an unprivileged Claude session
+
+Privileged fleet operations (`deploy`, `start`/`stop`/`restart`, `secrets`, `nginx`, `init`, …) need root. An AI agent should run as an ordinary user, so it reaches those one of two ways.
+
+**Recommended — through the daemon (no sudo).** The privilege-separated daemon above runs as root and does the privileged work; the agent connects over the `fleet-guard` socket. Deploy and the lifecycle tools are in the **destructive** tier, which is denied by default, so `fleet_deploy` comes back denied until you opt in per-tool in `/etc/fleet/mcp-policy.json`:
+
+```json
+{
+  "tiers": { "read": "allow", "mutate": "allow", "destructive": "deny" },
+  "tools": {
+    "fleet_deploy": "allow",
+    "fleet_start": "allow",
+    "fleet_stop": "allow",
+    "fleet_restart": "allow"
+  }
+}
+```
+
+Then `sudo systemctl restart fleet-mcp` so the daemon reloads the policy. The other tiers stay untouched and every call is still rate-limited and audited to `/var/log/fleet-mcp/audit.log`. A ready-to-copy file lives at [`data/mcp-policy.example.json`](data/mcp-policy.example.json). This is the path that lets an unprivileged agent deploy without ever touching sudo. **Make sure the agent's MCP client is pointed at the daemon (`fleet mcp connect`), not the in-process stdio server (`fleet mcp`)** — the stdio server runs as the agent's own user and so still hits the root wall below.
+
+**Fallback — the CLI via sudo.** If an agent shells out to the fleet CLI directly (rather than the MCP tools), the CLI hard-requires root and aborts with `requires root privileges`; a non-interactive session can't answer a password prompt. Give its user **passwordless** sudo for the fleet binary:
+
+```sudoers
+# /etc/sudoers.d/90-<user>   —  always validate with:  visudo -c
+<user> ALL=(ALL) PASSWD: ALL
+<user> ALL=(ALL) NOPASSWD: /usr/local/bin/fleet, /usr/local/bin/fleet *
+```
+
+> **Order matters.** sudo applies the **last** matching rule. The broad `PASSWD: ALL` must come **before** the specific `NOPASSWD` line — if it comes after, it overrides the NOPASSWD and *every* `fleet` call prompts for a password, silently re-blocking the agent.
+
+This grants passwordless root for the fleet binary only; everything else still prompts. Treat it as you would any root-equivalent capability for that account.
 
 ## fleet-bot
 
