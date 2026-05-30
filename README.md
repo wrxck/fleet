@@ -40,6 +40,7 @@ Manage Docker Compose apps on a single server -- systemd orchestration, nginx ro
 - [Deployment Flow](#deployment-flow)
 - [Boot Refresh](#boot-refresh)
 - [MCP Server](#mcp-server)
+  - [Privilege-separated root daemon](#privilege-separated-root-daemon)
   - [Running fleet from an unprivileged Claude session](#running-fleet-from-an-unprivileged-claude-session)
 - [fleet-bot](#fleet-bot)
 - [Self-update](#self-update)
@@ -399,11 +400,38 @@ sudo fleet install-mcp
 
 Tools cover the full surface area: app lifecycle, secrets, nginx, Git, health checks, and dependency monitoring. See the [MCP documentation](https://fleet.hesketh.pro/mcp/) for the complete tool list.
 
+### Privilege-separated root daemon
+
+`fleet mcp` (stdio) runs in-process as whoever launched it, so privileged tools fail when that user is not root — and most fleet operators run their MCP client (e.g. Claude Code) as an ordinary user, not root.
+
+`fleet mcp install` sets up a privilege-separated alternative so an unprivileged client can drive the full toolset securely:
+
+- a **root daemon** (`fleet-mcp.service`) does all privileged work and is the only process that touches systemd / docker / nginx / the vault;
+- it listens on a unix socket (`/run/fleet-mcp/mcp.sock`) locked to `root:fleet-guard 0660`, so only root and members of the `fleet-guard` group can connect — the kernel is the access boundary;
+- the client runs `fleet mcp connect` as the ordinary user; it holds no privilege of its own and just shuttles bytes to the socket;
+- every tool call passes a **guard**: tier-based authorisation (`read`/`mutate`/`destructive`), per-tier rate limiting, and an append-only audit log at `/var/log/fleet-mcp/audit.log` with secret values redacted;
+- **destructive tools (deploy, start/stop/restart, rotate-key, git push/release) are denied by default** — opt in per tool in `/etc/fleet/mcp-policy.json`.
+
+```bash
+# on the server (one command; idempotent)
+sudo fleet mcp install --write-client-config   # sets up the daemon + patches ~/.claude.json
+# then log out/in so your shell picks up the fleet-guard group, and:
+fleet mcp doctor
+```
+
+Migration is non-breaking: bare `fleet mcp` keeps working exactly as before, so nothing changes until you opt in. To point an MCP client at the daemon manually, use:
+
+```json
+{ "mcpServers": { "fleet": { "command": "fleet", "args": ["mcp", "connect"] } } }
+```
+
+For a hardened setup, run the daemon from a **standalone global install** (`sudo npm i -g @matthesketh/fleet`) rather than a git checkout. `fleet mcp install` and `fleet mcp doctor` warn when the daemon would run from a checkout, because root git activity in that tree can leave root-owned `.git` objects that block the owner's commits; a standalone install has no `.git` to corrupt and can't be rewritten by an unprivileged user.
+
+Same-user caveat: because the client runs as your user, anything else running as that user (in `fleet-guard`) can also reach the socket — the guard limits this to the audited tool surface with destructive actions off by default, but it is not a defence against a full compromise of that account.
+
 ### Running fleet from an unprivileged Claude session
 
-We recommend running Claude Code (and any AI agent) as an **ordinary user, not root**. The MCP server is the intended way for such an agent to drive fleet without sudo.
-
-The **CLI**, however, hard-requires root: `secrets`, `deploy`, `start`/`stop`/`restart`, `nginx`, `init`, `patch-systemd` and friends abort with `requires root privileges` when run as a non-root user. So if a Claude session shells out to the fleet CLI directly, it gets blocked — a non-interactive session can't answer a sudo password prompt.
+The daemon above is the recommended way for an AI agent to drive fleet without sudo. But the **CLI** (`fleet secrets`, `deploy`, `start`/`stop`/`restart`, `nginx`, `init`, `patch-systemd`, …) hard-requires root and aborts with `requires root privileges` when run as a non-root user. So if a Claude session shells out to the fleet CLI directly, it gets blocked — a non-interactive session can't answer a sudo password prompt.
 
 To let an unprivileged session use the CLI, give its user **passwordless** sudo for the fleet binary:
 
