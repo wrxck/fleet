@@ -370,6 +370,24 @@ sudo fleet install-mcp
 
 Tools cover the full surface area: app lifecycle, secrets, nginx, Git, health checks, and dependency monitoring. See the [MCP documentation](https://fleet.hesketh.pro/mcp/) for the complete tool list.
 
+### Running fleet from an unprivileged Claude session
+
+We recommend running Claude Code (and any AI agent) as an **ordinary user, not root**. The MCP server is the intended way for such an agent to drive fleet without sudo.
+
+The **CLI**, however, hard-requires root: `secrets`, `deploy`, `start`/`stop`/`restart`, `nginx`, `init`, `patch-systemd` and friends abort with `requires root privileges` when run as a non-root user. So if a Claude session shells out to the fleet CLI directly, it gets blocked — a non-interactive session can't answer a sudo password prompt.
+
+To let an unprivileged session use the CLI, give its user **passwordless** sudo for the fleet binary:
+
+```sudoers
+# /etc/sudoers.d/90-<user>   —  always validate with:  visudo -c
+<user> ALL=(ALL) PASSWD: ALL
+<user> ALL=(ALL) NOPASSWD: /usr/local/bin/fleet, /usr/local/bin/fleet *
+```
+
+> **Order matters.** sudo applies the **last** matching rule. The broad `PASSWD: ALL` must come **before** the specific `NOPASSWD` line — if it comes after, it overrides the NOPASSWD and *every* `fleet` call prompts for a password, silently re-blocking the agent.
+
+This grants passwordless root for the fleet binary only; everything else still prompts. Treat it as you would any root-equivalent capability for that account.
+
 ## fleet-bot
 
 A Go companion bot (`bot/`) that provides remote server management through Telegram or iMessage. It runs Claude Code sessions with access to fleet's MCP tools for hands-free operations.
