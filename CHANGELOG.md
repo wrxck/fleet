@@ -2,6 +2,27 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.12.0 — 2026-05-30
+
+### Features
+
+- feat(mcp): prefer standalone install for daemon, warn on checkout
+- feat(mcp): privilege-separated root daemon for unprivileged clients
+
+### Fixes
+
+- fix(mcp): unblock unprivileged agents — surface deploy errors, fix array tools, logs_recent, docs (#118)
+
+### Other
+
+- test(mcp): assert the daemon negotiates the latest protocol version
+
+## v1.11.1 — 2026-05-29
+
+### Other
+
+- chore(release): 1.11.1
+
 ## v1.11.0 — 2026-05-29
 
 ### Fixes
