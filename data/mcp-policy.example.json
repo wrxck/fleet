@@ -1,15 +1,15 @@
 {
-  "_comment": "Example /etc/fleet/mcp-policy.json that lets an UNPRIVILEGED MCP client (e.g. Claude run as an ordinary user) deploy and manage app lifecycle through the privilege-separated root daemon — without sudo. read/mutate stay allowed; the destructive tier stays denied by default, and only the specific lifecycle tools are opted in per-tool. Every call is still rate-limited and written to /var/log/fleet-mcp/audit.log. Copy to /etc/fleet/mcp-policy.json and restart the daemon (sudo systemctl restart fleet-mcp).",
+  "_comment": "Example /etc/fleet/mcp-policy.json that lets an UNPRIVILEGED MCP client (e.g. Claude run as an ordinary user) deploy and manage SPECIFIC apps through the privilege-separated root daemon — without sudo. read/mutate stay allowed; the destructive tier stays denied by default, and deploy/lifecycle are opted in per-tool AND scoped to named apps via { apps: [...] } so a compromised or prompt-injected agent cannot touch anything off the list. A bare \"allow\" would permit every registered app. Every call is still rate-limited and written to /var/log/fleet-mcp/audit.log. Copy to /etc/fleet/mcp-policy.json and restart the daemon (sudo systemctl restart fleet-mcp).",
   "tiers": {
     "read": "allow",
     "mutate": "allow",
     "destructive": "deny"
   },
   "tools": {
-    "fleet_deploy": "allow",
-    "fleet_start": "allow",
-    "fleet_stop": "allow",
-    "fleet_restart": "allow"
+    "fleet_deploy": { "apps": ["nutrition"] },
+    "fleet_restart": { "apps": ["nutrition"] },
+    "fleet_start": { "apps": ["nutrition"] },
+    "fleet_stop": { "apps": ["nutrition"] }
   },
   "rateLimits": {
     "read": 0,
