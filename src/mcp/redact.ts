@@ -13,13 +13,12 @@ const MAX_LEN = 300;
 export function scrubForAudit(text: string): string {
   if (!text) return '';
   const firstLine = text.split('\n').map(l => l.trim()).find(l => l.length > 0) ?? '';
-  // truncate before redaction so a very long token doesn't just vanish silently
-  const capped = firstLine.length > MAX_LEN;
-  const source = capped ? firstLine.slice(0, MAX_LEN) : firstLine;
-  let out = source
+  // redact first, THEN cap — capping before redaction could leave a half-
+  // truncated secret at the boundary unredacted, defeating the point.
+  let out = firstLine
     .replace(AGE_KEY, '[redacted-age-key]')
     .replace(SECRET_ASSIGN, (_m, key: string) => `${key}=[redacted]`)
     .replace(HIGH_ENTROPY, '[redacted]');
-  if (capped) out = out + '…';
+  if (out.length > MAX_LEN) out = out.slice(0, MAX_LEN) + '…';
   return out;
 }
