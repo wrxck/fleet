@@ -27,9 +27,18 @@ describe('scrubForAudit', () => {
   });
 
   it('caps length and appends an ellipsis', () => {
-    const out = scrubForAudit('x'.repeat(400));
+    // a long, non-secret-looking line (spaces break the high-entropy run, so it
+    // survives redaction and exercises the length cap on the redact-then-cap path)
+    const out = scrubForAudit('cap '.repeat(200));
     expect(out.length).toBeLessThanOrEqual(301);
     expect(out.endsWith('…')).toBeTruthy();
+  });
+
+  it('still caps even when the long content is a high-entropy token', () => {
+    // redaction collapses the token to a short marker; the result is well under
+    // the cap, so there is no ellipsis — capping must not pre-truncate secrets.
+    const out = scrubForAudit('x'.repeat(400));
+    expect(out).toBe('[redacted]');
   });
 
   it('returns empty string for empty input', () => {
