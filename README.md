@@ -439,13 +439,15 @@ Privileged fleet operations (`deploy`, `start`/`stop`/`restart`, `secrets`, `ngi
 {
   "tiers": { "read": "allow", "mutate": "allow", "destructive": "deny" },
   "tools": {
-    "fleet_deploy": "allow",
-    "fleet_start": "allow",
-    "fleet_stop": "allow",
-    "fleet_restart": "allow"
+    "fleet_deploy":  { "apps": ["nutrition"] },
+    "fleet_start":   { "apps": ["nutrition"] },
+    "fleet_stop":    { "apps": ["nutrition"] },
+    "fleet_restart": { "apps": ["nutrition"] }
   }
 }
 ```
+
+Scope each tool to named apps with `{ "apps": [...] }` so the agent can only act on apps you list — a bare `"allow"` permits every registered app and is a much larger blast radius (a prompt-injected agent could redeploy anything). Use `"allow"` only if you genuinely want unrestricted deploys.
 
 Then `sudo systemctl restart fleet-mcp` so the daemon reloads the policy. The other tiers stay untouched and every call is still rate-limited and audited to `/var/log/fleet-mcp/audit.log`. A ready-to-copy file lives at [`data/mcp-policy.example.json`](data/mcp-policy.example.json). This is the path that lets an unprivileged agent deploy without ever touching sudo. **Make sure the agent's MCP client is pointed at the daemon (`fleet mcp connect`), not the in-process stdio server (`fleet mcp`)** — the stdio server runs as the agent's own user and so still hits the root wall below.
 
