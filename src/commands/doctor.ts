@@ -147,7 +147,19 @@ function checkVault(runner: SystemRunner): DoctorCheck {
   if (!runner.vaultInitialised()) {
     return { name: 'secrets vault', status: 'warn', detail: 'vault not initialised (run: fleet secrets init)' };
   }
-  const sealed = runner.vaultSealed();
+  let sealed: boolean;
+  try {
+    sealed = runner.vaultSealed();
+  } catch {
+    // the runtime dir is root-only; a non-root caller cannot read the sealed
+    // state. the vault IS initialised — say so plainly rather than crash or
+    // mislead, and point at how to inspect it.
+    return {
+      name: 'secrets vault',
+      status: 'warn',
+      detail: 'initialised; sealed-state needs root (run as root or via the fleet-mcp daemon)',
+    };
+  }
   return {
     name: 'secrets vault',
     status: 'ok',

@@ -57,6 +57,15 @@ describe('fleet doctor — runChecks', () => {
     expect(data.summary.fail).toBeGreaterThanOrEqual(1);
   });
 
+  it('warns (does not crash) when the sealed state is unreadable as a non-root user', () => {
+    const data = runChecks(makeRunner({
+      vaultSealed: () => { throw new Error('EACCES: permission denied, scandir'); },
+    }));
+    const vault = data.checks.find(c => c.name === 'secrets vault');
+    expect(vault?.status).toBe('warn');
+    expect(vault?.detail).toMatch(/needs root|daemon/i);
+  });
+
   it('warns when systemd is below 240 (LoadCredentialEncrypted)', () => {
     const data = runChecks(makeRunner({
       exec: (cmd, args) => {

@@ -230,3 +230,44 @@ describe('fleet_deploy surfaces the real reason', () => {
     }
   });
 });
+
+describe('tools flag genuine failures with isError', () => {
+  beforeEach(async () => {
+    capturedTools.length = 0;
+    capturedHandlers.clear();
+    await startMcpServer();
+  });
+
+  it('fleet_nginx_add returns isError for an out-of-range port', async () => {
+    const r = await capturedHandlers.get('fleet_nginx_add')!(
+      { domain: 'x.example', port: 80, type: 'proxy' },
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(r.isError).toBeTruthy();
+    expect(r.content[0].text).toMatch(/Invalid port/);
+  });
+
+  it('fleet_nginx_add returns isError for a reserved internal port', async () => {
+    const r = await capturedHandlers.get('fleet_nginx_add')!(
+      { domain: 'x.example', port: 5432, type: 'proxy' },
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(r.isError).toBeTruthy();
+    expect(r.content[0].text).toMatch(/not allowed/);
+  });
+
+  it('fleet_register returns isError for an invalid app name', async () => {
+    const r = await capturedHandlers.get('fleet_register')!(
+      { name: 'bad name!', composePath: '/srv/x' },
+    ) as { isError?: boolean; content: Array<{ text: string }> };
+    expect(r.isError).toBeTruthy();
+  });
+
+  it('fleet_secrets_list returns isError when the vault is not initialised', async () => {
+    const secrets = await import('../core/secrets.js');
+    vi.mocked(secrets.isInitialized).mockReturnValueOnce(false);
+    const r = await capturedHandlers.get('fleet_secrets_list')!({}) as {
+      isError?: boolean; content: Array<{ text: string }>;
+    };
+    expect(r.isError).toBeTruthy();
+    expect(r.content[0].text).toMatch(/not initialised/i);
+  });
+});

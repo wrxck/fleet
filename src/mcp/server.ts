@@ -108,7 +108,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
       if (entry.containers.length === 0) return text('No containers registered');
       const target = container ?? entry.containers[0];
       if (!entry.containers.includes(target)) {
-        return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
+        return fail(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
       const result = readContainerLogs(target, { lines, level, sinceMinutes, grep, maxBytes: 200_000 });
       if (result.text.trim() === '') {
@@ -140,7 +140,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
       const entry = requireApp(app);
       const target = container ?? entry.containers[0];
       if (!entry.containers.includes(target)) {
-        return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
+        return fail(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
       const all = readContainerLogs(target, { lines: 5000, sinceMinutes, maxBytes: 5_000_000 });
       const lines = all.text.split('\n').filter(l => l.trim());
@@ -189,7 +189,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
       const entry = requireApp(app);
       const target = container ?? entry.containers[0];
       if (!entry.containers.includes(target)) {
-        return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
+        return fail(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
       const result = readContainerLogs(target, { lines: 5000, sinceMinutes, grep: query, maxBytes: 1_000_000 });
       const matches = result.text.split('\n').filter(l => l.trim());
@@ -276,17 +276,17 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
     async ({ domain, port, type }) => {
       const DANGEROUS_PORTS = [5432, 3306, 27017, 6379, 9000];
       if (port < 1024 || port > 65535) {
-        return text(`Invalid port ${port}: must be in range 1024-65535`);
+        return fail(`Invalid port ${port}: must be in range 1024-65535`);
       }
       if (DANGEROUS_PORTS.includes(port)) {
-        return text(`Port ${port} is not allowed (reserved for internal services)`);
+        return fail(`Port ${port} is not allowed (reserved for internal services)`);
       }
       const config = generateNginxConfig({ domain, port, type });
       installConfig(domain, config);
       const test = testConfig();
       if (!test.ok) {
         removeConfig(domain);
-        return text(`Config test failed: ${test.output}`);
+        return fail(`Config test failed: ${test.output}`);
       }
       reload();
       return text(`Created and activated nginx config for ${domain}`);
@@ -314,7 +314,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
     'List managed secrets for an app (masked values). Shows vault contents — use fleet_secrets_drift to check if runtime differs.',
     { app: z.string().optional().describe('App name (omit for all apps)') },
     async ({ app }) => {
-      if (!isInitialized()) return text('Vault not initialised');
+      if (!isInitialized()) return fail('Vault not initialised');
       if (app) {
         const secrets = listSecrets(app);
         return text(JSON.stringify(secrets, null, 2));
@@ -325,7 +325,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
   );
 
   server.tool('fleet_secrets_unseal', 'Decrypt vault to /run/fleet-secrets/. WARNING: This overwrites any runtime changes that were not sealed back to the vault. Use fleet_secrets_drift first to check for unsaved changes.', async () => {
-    if (!isInitialized()) return text('Vault not initialised');
+    if (!isInitialized()) return fail('Vault not initialised');
     unsealAll();
     return text('Unsealed all secrets to /run/fleet-secrets/');
   });
@@ -335,7 +335,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
     'Validate compose secrets match vault. Returns missing/extra secrets per app. This checks that docker-compose secret references have matching entries in the vault.',
     { app: z.string().optional().describe('App name (omit for all apps)') },
     async ({ app }) => {
-      if (!isInitialized()) return text('Vault not initialised');
+      if (!isInitialized()) return fail('Vault not initialised');
       const results = app ? [validateApp(app)] : validateAll();
       return text(JSON.stringify(results, null, 2));
     }
@@ -365,11 +365,11 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
         if (params.composeFile) assertComposeFile(params.composeFile);
         for (const d of (params.domains ?? [])) assertDomain(d);
       } catch (err) {
-        return text(`Validation error: ${(err as Error).message}`);
+        return fail(`Validation error: ${(err as Error).message}`);
       }
 
       if (!existsSync(params.composePath)) {
-        return text(`Error: composePath does not exist: ${params.composePath}`);
+        return fail(`Error: composePath does not exist: ${params.composePath}`);
       }
 
       let containers = params.containers;
