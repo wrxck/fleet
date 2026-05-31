@@ -1,3 +1,7 @@
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, it, expect } from 'vitest';
 
 import { Guard, DEFAULT_POLICY, loadPolicy, redactArgs, type AuditEntry, type Policy } from './guard';
@@ -89,5 +93,34 @@ describe('Guard audit redaction', () => {
 describe('loadPolicy', () => {
   it('falls back to safe defaults when the file is missing', () => {
     expect(loadPolicy('/nonexistent/mcp-policy.json')).toEqual(DEFAULT_POLICY);
+  });
+});
+
+describe('loadPolicy tool rules', () => {
+  function writePolicy(obj: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), 'fleet-policy-'));
+    const p = join(dir, 'mcp-policy.json');
+    writeFileSync(p, JSON.stringify(obj));
+    return p;
+  }
+
+  it('keeps a string allow/deny rule', () => {
+    const p = writePolicy({ tools: { fleet_deploy: 'allow', fleet_stop: 'deny' } });
+    const pol = loadPolicy(p);
+    expect(pol.tools.fleet_deploy).toBe('allow');
+    expect(pol.tools.fleet_stop).toBe('deny');
+  });
+
+  it('keeps an app-scoped { apps } rule', () => {
+    const p = writePolicy({ tools: { fleet_deploy: { apps: ['nutrition', 'macpool'] } } });
+    const pol = loadPolicy(p);
+    expect(pol.tools.fleet_deploy).toEqual({ apps: ['nutrition', 'macpool'] });
+  });
+
+  it('drops a malformed tool rule (fails closed to tier default)', () => {
+    const p = writePolicy({ tools: { fleet_deploy: { apps: [1, 2] }, fleet_start: 'maybe' } });
+    const pol = loadPolicy(p);
+    expect(pol.tools.fleet_deploy).toBeUndefined();
+    expect(pol.tools.fleet_start).toBeUndefined();
   });
 });

@@ -7,12 +7,15 @@ export const POLICY_PATH = '/etc/fleet/mcp-policy.json';
 export const AUDIT_PATH = '/var/log/fleet-mcp/audit.log';
 
 export type TierRule = 'allow' | 'deny';
+// a per-tool rule: a flat allow/deny, or an app-scoped allow that only permits
+// the tool for the listed apps (matched against the call's `app` arg).
+export type ToolRule = TierRule | { apps: string[] };
 
 export interface Policy {
   // default decision per tier. destructive is deny out of the box.
   tiers: Record<Tier, TierRule>;
   // per-tool overrides; take precedence over the tier default.
-  tools: Record<string, TierRule>;
+  tools: Record<string, ToolRule>;
   // calls allowed per 60s window per tier; 0 means unlimited.
   rateLimits: Record<Tier, number>;
 }
@@ -37,6 +40,23 @@ export interface AuditEntry {
   unmapped?: boolean;
 }
 
+// keep only well-formed tool rules; anything else is dropped so the tool falls
+// through to its tier default (fail-closed for destructive tools).
+function normaliseTools(raw: unknown): Record<string, ToolRule> {
+  const out: Record<string, ToolRule> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [tool, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === 'allow' || v === 'deny') { out[tool] = v; continue; }
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const apps = (v as { apps?: unknown }).apps;
+      if (Array.isArray(apps) && apps.every((a): a is string => typeof a === 'string')) {
+        out[tool] = { apps };
+      }
+    }
+  }
+  return out;
+}
+
 // merge a parsed policy file onto the defaults so a partial file is valid.
 export function loadPolicy(path = POLICY_PATH): Policy {
   if (!existsSync(path)) return DEFAULT_POLICY;
@@ -44,7 +64,7 @@ export function loadPolicy(path = POLICY_PATH): Policy {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<Policy>;
     return {
       tiers: { ...DEFAULT_POLICY.tiers, ...(raw.tiers ?? {}) },
-      tools: { ...(raw.tools ?? {}) },
+      tools: normaliseTools(raw.tools),
       rateLimits: { ...DEFAULT_POLICY.rateLimits, ...(raw.rateLimits ?? {}) },
     };
   } catch {
@@ -132,7 +152,7 @@ export class Guard {
     this.sink = opts.auditSink ?? defaultAuditSink;
   }
 
-  private ruleFor(tool: string, tier: Tier): TierRule {
+  private ruleFor(tool: string, tier: Tier): ToolRule {
     return this.policy.tools[tool] ?? this.policy.tiers[tier];
   }
 
