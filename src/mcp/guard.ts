@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { type Tier, tierOf, isUnmapped } from './tiers';
+import { scrubForAudit } from './redact';
 
 export const POLICY_PATH = '/etc/fleet/mcp-policy.json';
 export const AUDIT_PATH = '/var/log/fleet-mcp/audit.log';
@@ -220,7 +221,13 @@ export class Guard {
   }
 
   private write(partial: Omit<AuditEntry, 'ts'>): void {
-    this.sink({ ts: new Date(this.now()).toISOString(), ...partial });
+    // scrub free-text error/reason before persisting; args are already redacted.
+    const cleaned: Omit<AuditEntry, 'ts'> = {
+      ...partial,
+      ...(partial.error !== undefined ? { error: scrubForAudit(partial.error) } : {}),
+      ...(partial.reason !== undefined ? { reason: scrubForAudit(partial.reason) } : {}),
+    };
+    this.sink({ ts: new Date(this.now()).toISOString(), ...cleaned });
   }
 }
 
