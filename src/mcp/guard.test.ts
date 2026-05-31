@@ -124,3 +124,43 @@ describe('loadPolicy tool rules', () => {
     expect(pol.tools.fleet_start).toBeUndefined();
   });
 });
+
+describe('Guard app-scoped authorize', () => {
+  function guardWith(tools: Record<string, unknown>) {
+    return new Guard({
+      policy: {
+        tiers: { read: 'allow', mutate: 'allow', destructive: 'deny' },
+        tools: tools as never,
+        rateLimits: { read: 0, mutate: 0, destructive: 0 },
+      },
+      auditSink: () => {},
+    });
+  }
+
+  it('allows a listed app', () => {
+    const g = guardWith({ fleet_deploy: { apps: ['nutrition'] } });
+    expect(g.authorize('fleet_deploy', { app: 'nutrition' }).ok).toBeTruthy();
+  });
+
+  it('denies an unlisted app', () => {
+    const g = guardWith({ fleet_deploy: { apps: ['nutrition'] } });
+    const d = g.authorize('fleet_deploy', { app: 'other' });
+    expect(d.ok).toBeFalsy();
+    expect(d.reason).toMatch(/not in allowlist/);
+  });
+
+  it('denies when the app arg is missing (fail-closed)', () => {
+    const g = guardWith({ fleet_deploy: { apps: ['nutrition'] } });
+    expect(g.authorize('fleet_deploy', {}).ok).toBeFalsy();
+  });
+
+  it('an empty allowlist denies everything', () => {
+    const g = guardWith({ fleet_deploy: { apps: [] } });
+    expect(g.authorize('fleet_deploy', { app: 'nutrition' }).ok).toBeFalsy();
+  });
+
+  it('string allow still works for any app (backward compat)', () => {
+    const g = guardWith({ fleet_deploy: 'allow' });
+    expect(g.authorize('fleet_deploy', { app: 'anything' }).ok).toBeTruthy();
+  });
+});
