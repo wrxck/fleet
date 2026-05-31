@@ -163,10 +163,32 @@ export class Guard {
     const unmapped = isUnmapped(tool);
     const base = { tool, tier, args: redactArgs(args), unmapped };
 
-    if (this.ruleFor(tool, tier) !== 'allow') {
-      const reason = `tier '${tier}' denied by policy`;
-      this.write({ ...base, outcome: 'deny', reason });
-      return { ok: false, tier, reason };
+    const rule = this.ruleFor(tool, tier);
+    let allowed: boolean;
+    let denyReason = '';
+    if (rule === 'allow') {
+      allowed = true;
+    } else if (rule === 'deny') {
+      allowed = false;
+      denyReason = `tier '${tier}' denied by policy`;
+    } else {
+      // app-scoped rule: allow only when the call's `app` arg is listed.
+      const app = (args && typeof args === 'object')
+        ? (args as Record<string, unknown>).app
+        : undefined;
+      if (typeof app === 'string' && rule.apps.includes(app)) {
+        allowed = true;
+      } else {
+        allowed = false;
+        denyReason = typeof app === 'string'
+          ? `app '${app}' not in allowlist for ${tool}`
+          : `${tool} is app-scoped but no app was provided`;
+      }
+    }
+
+    if (!allowed) {
+      this.write({ ...base, outcome: 'deny', reason: denyReason });
+      return { ok: false, tier, reason: denyReason };
     }
     if (!this.limiter.take(tier)) {
       const reason = `rate limit for tier '${tier}' exceeded`;
