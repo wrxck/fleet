@@ -163,4 +163,24 @@ describe('Guard app-scoped authorize', () => {
     const g = guardWith({ fleet_deploy: 'allow' });
     expect(g.authorize('fleet_deploy', { app: 'anything' }).ok).toBeTruthy();
   });
+
+  it('rate-limits an app-scoped allow like any other allow', () => {
+    const g = new Guard({
+      policy: {
+        tiers: { read: 'allow', mutate: 'allow', destructive: 'deny' },
+        tools: { fleet_deploy: { apps: ['nutrition'] } } as never,
+        rateLimits: { read: 0, mutate: 0, destructive: 1 },
+      },
+      auditSink: () => {},
+    });
+    expect(g.authorize('fleet_deploy', { app: 'nutrition' }).ok).toBeTruthy();
+    const second = g.authorize('fleet_deploy', { app: 'nutrition' });
+    expect(second.ok).toBeFalsy();
+    expect(second.reason).toMatch(/rate limit/);
+  });
+
+  it('reports a tool-specific deny distinctly from a tier deny', () => {
+    const g = guardWith({ fleet_deploy: 'deny' });
+    expect(g.authorize('fleet_deploy', { app: 'x' }).reason).toMatch(/tool 'fleet_deploy' denied/);
+  });
 });

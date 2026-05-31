@@ -43,7 +43,10 @@ export interface AuditEntry {
 // keep only well-formed tool rules; anything else is dropped so the tool falls
 // through to its tier default (fail-closed for destructive tools).
 function normaliseTools(raw: unknown): Record<string, ToolRule> {
-  const out: Record<string, ToolRule> = {};
+  // null-prototype so a `__proto__` (or `constructor`) key in the policy json —
+  // which JSON.parse materialises as an own property — is stored as a plain
+  // entry rather than mutating this object's prototype chain.
+  const out = Object.create(null) as Record<string, ToolRule>;
   if (!raw || typeof raw !== 'object') return out;
   for (const [tool, v] of Object.entries(raw as Record<string, unknown>)) {
     if (v === 'allow' || v === 'deny') { out[tool] = v; continue; }
@@ -165,12 +168,16 @@ export class Guard {
 
     const rule = this.ruleFor(tool, tier);
     let allowed: boolean;
-    let denyReason = '';
+    let denyReason: string | undefined;
     if (rule === 'allow') {
       allowed = true;
     } else if (rule === 'deny') {
       allowed = false;
-      denyReason = `tier '${tier}' denied by policy`;
+      // distinguish a tool-specific deny from a tier-default deny so an audit
+      // reader can tell which rule fired.
+      denyReason = (tool in this.policy.tools)
+        ? `tool '${tool}' denied by policy`
+        : `tier '${tier}' denied by policy`;
     } else {
       // app-scoped rule: allow only when the call's `app` arg is listed.
       const app = (args && typeof args === 'object')
