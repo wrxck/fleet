@@ -28,7 +28,11 @@ type FieldId =
 
 type ScheduleKindSelect = 'manual' | 'calendar';
 
-type TaskKindSelect = 'claude-cli' | 'shell' | 'mcp-call';
+// 'remote' is included so an existing remote routine round-trips through the
+// form's type, but it is not authorable here — it has no field set and the
+// kind cycle never lands on it (see buildRoutine + the cycle map below).
+// remote routines are managed via the fleet runner tools / registry.
+type TaskKindSelect = 'claude-cli' | 'shell' | 'mcp-call' | 'remote';
 
 interface DraftState {
   id: string;
@@ -94,6 +98,12 @@ function buildRoutine(draft: DraftState): { ok: true; routine: Routine } | { ok:
 
   if (!trimmed.id) errors.push('id is required');
   if (draft.scheduleKind === 'calendar' && !trimmed.onCalendar) errors.push('OnCalendar is required for calendar schedule');
+
+  if (draft.taskKind === 'remote') {
+    // not authorable in this form — refuse rather than silently rewrite a
+    // remote task into another kind.
+    return { ok: false, errors: [...errors, 'remote routines are managed via the fleet runner tools, not this form'] };
+  }
 
   let task: Routine['task'];
   if (draft.taskKind === 'claude-cli') {
@@ -247,6 +257,9 @@ export function RoutineForm({ initial, onSubmit, onCancel }: RoutineFormProps): 
             'claude-cli': 'shell',
             'shell': 'mcp-call',
             'mcp-call': 'claude-cli',
+            // remote is an exit only: cycling off it returns to the authorable
+            // kinds and nothing cycles back into it.
+            'remote': 'claude-cli',
           };
           return { ...d, taskKind: next[d.taskKind] };
         });
