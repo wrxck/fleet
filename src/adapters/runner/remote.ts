@@ -1,16 +1,12 @@
 import { spawn } from 'node:child_process';
 
 import type { RoutineTask, RunEvent } from '../../core/routines/schema';
+import { shquote, sshConnectFlags } from '../../core/runners/ssh';
+import type { RemoteHost } from '../../core/runners/types';
 import type { RunContext, RunnerAdapter } from '../types';
 
-// a registered remote build host. connection material is resolved from a host
-// id so a routine task only ever carries a safe slug, never raw ssh details.
-export interface RemoteHost {
-  destination: string; // ssh destination: user@host, or an ssh_config alias
-  port?: number;
-  identityFile?: string; // private key fleet authenticates with
-  defaultCwd?: string; // remote working dir used when a task omits one
-}
+// re-exported so existing importers (and tests) can keep `from './remote'`.
+export type { RemoteHost };
 
 export interface RemoteRunnerOptions {
   // resolve a host id (task.host) to its connection, or null when unknown.
@@ -21,12 +17,6 @@ export interface RemoteRunnerOptions {
 
 type RemoteTask = Extract<RoutineTask, { kind: 'remote' }>;
 
-// posix single-quote escaping: wraps a value so the remote shell receives it
-// as one literal argument whatever spaces or quotes it contains.
-function shquote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
 // build the local ssh invocation for a remote task. exported and pure because
 // it does the security-sensitive command rendering — unit-tested directly.
 export function buildSshInvocation(
@@ -34,10 +24,6 @@ export function buildSshInvocation(
   task: RemoteTask,
   sshBinary = 'ssh',
 ): { cmd: string; args: string[] } {
-  const flags = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10'];
-  if (host.port) flags.push('-p', String(host.port));
-  if (host.identityFile) flags.push('-i', host.identityFile);
-
   const cwd = task.cwd ?? host.defaultCwd;
   // each argv token is shell-quoted, so a validated token reaches the remote
   // intact even when it contains a space or a single quote.
@@ -47,7 +33,7 @@ export function buildSshInvocation(
   // PATH on a macos host; a bare ssh command runs a non-login shell without it.
   const remote = task.loginShell ? `zsh -lc ${shquote(withCwd)}` : withCwd;
 
-  return { cmd: sshBinary, args: [...flags, host.destination, remote] };
+  return { cmd: sshBinary, args: [...sshConnectFlags(host), host.destination, remote] };
 }
 
 export function createRemoteRunner(opts: RemoteRunnerOptions): RunnerAdapter {
