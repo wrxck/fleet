@@ -54,7 +54,7 @@ vi.mock('../core/boot-refresh.js', () => ({
 
 import { existsSync } from 'node:fs';
 import { deployCommand } from './deploy';
-import { load, save } from '../core/registry';
+import { load, save, findApp } from '../core/registry';
 import { composeBuild } from '../core/docker';
 import { startService, restartService, getServiceStatus } from '../core/systemd';
 import { addCommand } from './add';
@@ -64,6 +64,7 @@ import { recordBuiltCommit } from '../core/boot-refresh';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockLoad = vi.mocked(load);
+const mockFindApp = vi.mocked(findApp);
 const mockComposeBuild = vi.mocked(composeBuild);
 const mockStartService = vi.mocked(startService);
 const mockRestartService = vi.mocked(restartService);
@@ -124,9 +125,10 @@ describe('deployCommand — argument validation', () => {
     exitSpy.mockRestore();
   });
 
-  it('throws FleetError when directory does not exist', async () => {
+  it('throws when the argument is neither a registered app nor a directory', async () => {
     mockExistsSync.mockReturnValue(false);
-    await expect(deployCommand(['/nonexistent'])).rejects.toThrow('Directory not found');
+    mockFindApp.mockReturnValue(undefined);
+    await expect(deployCommand(['/nonexistent'])).rejects.toThrow(/No registered app named/);
   });
 });
 
@@ -186,9 +188,37 @@ describe('deployCommand — build and start', () => {
 });
 
 describe('deployCommand — security', () => {
-  it('throws for path traversal in app-dir', async () => {
+  it('rejects a path traversal argument that is neither an app nor a directory', async () => {
     mockExistsSync.mockReturnValue(false);
-    await expect(deployCommand(['../../etc/cron.d/evil'])).rejects.toThrow('Directory not found');
+    mockFindApp.mockReturnValue(undefined);
+    await expect(deployCommand(['../../etc/cron.d/evil'])).rejects.toThrow(/No registered app named/);
+  });
+});
+
+describe('deployCommand — by app name', () => {
+  it('resolves a registered app name when the argument is not a path', async () => {
+    // a name (not an existing path) is resolved against the registry, using that
+    // exact app's compose file and service so apps sharing a directory are
+    // unambiguous.
+    mockExistsSync.mockReturnValue(false);
+    mockFindApp.mockReturnValue(
+      makeApp({ name: 'web', serviceName: 'web-svc', composeFile: 'docker-compose.web.yml' })
+    );
+    mockGetServiceStatus.mockReturnValue({ state: 'active', active: true });
+
+    await deployCommand(['web', '-y']);
+
+    expect(mockFindApp).toHaveBeenCalledWith(expect.anything(), 'web');
+    expect(mockComposeBuild).toHaveBeenCalledWith('/apps/myapp', 'docker-compose.web.yml', 'web');
+    expect(mockRestartService).toHaveBeenCalledWith('web-svc');
+    expect(mockAddCommandRun).not.toHaveBeenCalled();
+  });
+
+  it('does not auto-register an unknown app name', async () => {
+    mockExistsSync.mockReturnValue(false);
+    mockFindApp.mockReturnValue(undefined);
+    await expect(deployCommand(['ghost'])).rejects.toThrow(/No registered app named 'ghost'/);
+    expect(mockAddCommandRun).not.toHaveBeenCalled();
   });
 });
 
