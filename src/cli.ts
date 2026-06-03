@@ -35,7 +35,7 @@ Usage: fleet <command> [options]
 Commands:
   status              Dashboard: all apps, services, health
   list [--json]       List registered apps
-  deploy <app-dir>    Full pipeline: register, build, start
+  deploy <app|dir>    Full pipeline: register, build, start
   start <app>         Start app via systemctl
   stop <app>          Stop app via systemctl
   restart <app>       Restart app via systemctl
