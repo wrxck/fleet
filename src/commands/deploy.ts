@@ -15,24 +15,34 @@ import { recordBuiltCommit } from '../core/boot-refresh';
 export async function deployCommand(args: string[]): Promise<void> {
   const dryRun = args.includes('--dry-run');
   const yes = args.includes('-y') || args.includes('--yes');
-  const appDir = args.find(a => !a.startsWith('-'));
+  const target = args.find(a => !a.startsWith('-'));
 
-  if (!appDir) {
-    error('Usage: fleet deploy <app-dir>');
+  if (!target) {
+    error('Usage: fleet deploy <app|dir>');
     process.exit(1);
-  }
-
-  const fullPath = resolve(appDir);
-  if (!existsSync(fullPath)) {
-    throw new FleetError(`Directory not found: ${fullPath}`);
   }
 
   heading('Deploy Pipeline');
 
   let reg = load();
-  let app = reg.apps.find(a => a.composePath.startsWith(fullPath));
+  const fullPath = resolve(target);
+  const isPath = existsSync(fullPath);
+  // accept either a registered app name or a path to an app directory. a name is
+  // only tried when the argument is not an existing path, so directory deploys
+  // (including auto-registering a new dir) keep working exactly as before.
+  // resolving by name is exact, so apps that share a directory but differ by
+  // compose file stay unambiguous.
+  let app = isPath
+    ? reg.apps.find(a => a.composePath.startsWith(fullPath))
+    : findApp(reg, target);
 
   if (!app) {
+    if (!isPath) {
+      throw new FleetError(
+        `No registered app named '${target}', and it is not a directory. ` +
+          `Pass an app name (see 'fleet list') or a path to an app directory.`
+      );
+    }
     info('App not registered, running add first...');
     await addCommand.run({ dir: fullPath, 'dry-run': dryRun, yes }, makeCliContext());
     reg = load();
