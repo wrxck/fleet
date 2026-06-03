@@ -106,7 +106,7 @@ Requires Node.js 20+, Docker Compose v2, systemd, nginx, and [age](https://githu
 
 ## Key Features
 
-**Deploy and manage apps** -- `fleet deploy <app-dir>` registers, builds, and starts an app in one command. Control services with `start`, `stop`, `restart`, and `logs`.
+**Deploy and manage apps** -- `fleet deploy <app|dir>` builds and starts an app by registered name, or registers a new app from a directory path -- in one command. Control services with `start`, `stop`, `restart`, and `logs`.
 
 **Encrypted secrets** -- age-encrypted vault with automatic backups, pre-seal validation, drift detection, and atomic rollback. Decrypted to tmpfs at boot -- secrets never touch disk.
 
@@ -338,7 +338,7 @@ Components installed under `/usr/local/sbin`:
 
 ```mermaid
 graph TD
-    Deploy["fleet deploy app-dir"]
+    Deploy["fleet deploy app|dir"]
     Deploy --> Register{"Already\nregistered?"}
     Register -->|No| Add["Register app"]
     Register -->|Yes| Build
