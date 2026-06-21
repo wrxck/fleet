@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { handle, ApiContext, ApiRequest } from './browser-api';
+import { createLoginThrottle } from './login-throttle';
 import { totpCode, signSession } from './totp';
 
 const NOW = 1_700_000_000_000;
@@ -12,6 +13,7 @@ function ctx(over: Partial<ApiContext> = {}): ApiContext {
     sessionSecret: 'test-session-secret',
     sessionTtlMs: 12 * 3600_000,
     domain: 'fleet.test',
+    loginThrottle: createLoginThrottle(),
     listApps: () => ['demo'],
     statusReport: () => ({ generatedAt: 'now', backend: 'rest', appendOnly: true, apps: [] }),
     snapshots: () => [{ id: 'abc12345', shortId: 'abc12345', time: 't', hostname: 'h', paths: [], tags: [] }],
@@ -60,6 +62,23 @@ describe('browser-api auth', () => {
   it('POST /api/login with a wrong totp returns 401', () => {
     const res = handle(req({ method: 'POST', path: '/api/login', body: { code: '000000' } }), ctx());
     expect(res.status).toBe(401);
+  });
+
+  it('throttles brute-force login attempts with 429 after the bucket empties', () => {
+    const c = ctx({ loginThrottle: createLoginThrottle({ capacity: 3, windowMs: 60_000 }) });
+    const guess = () => handle(req({ method: 'POST', path: '/api/login', body: { code: '000000' } }), c);
+    expect(guess().status).toBe(401); // 3 guesses allowed
+    expect(guess().status).toBe(401);
+    expect(guess().status).toBe(401);
+    expect(guess().status).toBe(429); // bucket empty — locked out
+  });
+
+  it('does not count a successful login against the throttle budget', () => {
+    const c = ctx({ loginThrottle: createLoginThrottle({ capacity: 1, windowMs: 60_000 }) });
+    const code = totpCode('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', NOW);
+    // a valid login is refunded, so a second valid login still succeeds.
+    expect(handle(req({ method: 'POST', path: '/api/login', body: { code } }), c).status).toBe(200);
+    expect(handle(req({ method: 'POST', path: '/api/login', body: { code } }), c).status).toBe(200);
   });
 
   it('rejects /api requests missing the CSRF header', () => {

@@ -26,6 +26,21 @@ export function loadNotifyConfig(): NotifyConfig | null {
   }
 }
 
+/** remove an adapter's secrets from a string before it is logged. fetch/undici
+ *  errors and tokenised API URLs can carry the bot token or password verbatim,
+ *  and notify logs frequently ship onward (telegram, aggregators). */
+export function scrubSecrets(text: string, secrets: Array<string | undefined>): string {
+  let out = text;
+  for (const s of secrets) {
+    if (!s) continue;
+    out = out.split(s).join('[redacted]');
+    // also catch percent-encoded copies (e.g. password in a URL query string)
+    const enc = encodeURIComponent(s);
+    if (enc !== s) out = out.split(enc).join('[redacted]');
+  }
+  return out;
+}
+
 export async function sendNotification(config: NotifyConfig, message: string): Promise<boolean> {
   let anySuccess = false;
   for (const adapter of config.adapters) {
@@ -35,14 +50,23 @@ export async function sendNotification(config: NotifyConfig, message: string): P
         : await sendTelegram(adapter, message);
       if (ok) anySuccess = true;
     } catch (err) {
-      console.error(`notify (${adapter.type}): ${err}`);
+      const msg = scrubSecrets(String(err), [adapter.password, adapter.botToken, adapter.cfAccessClientSecret]);
+      console.error(`notify (${adapter.type}): ${msg}`);
     }
   }
   return anySuccess;
 }
 
+/** build the BlueBubbles send URL. the password is a query param (the API's
+ *  required shape), so it MUST be percent-encoded — an un-encoded `&`/`#`/space
+ *  in the secret would otherwise corrupt the request or leak into other params. */
+export function buildBlueBubblesUrl(serverUrl: string, password: string): string {
+  const base = serverUrl.replace(/\/+$/, '');
+  return `${base}/api/v1/message/text?password=${encodeURIComponent(password)}`;
+}
+
 async function sendBlueBubbles(cfg: NotifyAdapterConfig, message: string): Promise<boolean> {
-  const url = `${cfg.serverUrl}/api/v1/message/text?password=${cfg.password}`;
+  const url = buildBlueBubblesUrl(cfg.serverUrl ?? '', cfg.password ?? '');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (cfg.cfAccessClientId) {
     headers['CF-Access-Client-Id'] = cfg.cfAccessClientId;

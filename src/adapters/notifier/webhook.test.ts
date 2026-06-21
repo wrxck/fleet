@@ -1,6 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
-import { createWebhookNotifier } from './webhook';
+import { createWebhookNotifier, redactUrl } from './webhook';
+
+describe('redactUrl', () => {
+  it('drops userinfo credentials', () => {
+    expect(redactUrl('https://user:s3cret@host.test/hook')).toBe('https://host.test/hook');
+  });
+  it('drops the query string (token-bearing)', () => {
+    expect(redactUrl('https://host.test/hook?token=abc123')).toBe('https://host.test/hook?[redacted]');
+  });
+  it('leaves a clean url untouched', () => {
+    expect(redactUrl('https://host.test/hook')).toBe('https://host.test/hook');
+  });
+  it('falls back to stripping after ? on an unparseable url', () => {
+    expect(redactUrl('not a url?token=x')).toBe('not a url?[redacted]');
+  });
+});
 
 describe('webhook notifier', () => {
   it('POSTs a JSON payload with subject and body', async () => {
@@ -49,5 +64,24 @@ describe('webhook notifier', () => {
     const fakeFetch: typeof fetch = async () => { throw new Error('connection refused'); };
     const notifier = createWebhookNotifier({ url: 'https://example.test/hook', fetcher: fakeFetch });
     await expect(notifier.notify('s', 'b', { routineId: 'r', runId: 'x', status: 'failed' })).resolves.toBeUndefined();
+  });
+
+  it('redacts credentials from the url when logging an error', async () => {
+    const writes: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c: string | Uint8Array) => {
+      writes.push(String(c));
+      return true;
+    });
+    const fakeFetch: typeof fetch = async () => new Response('boom', { status: 500 });
+    const notifier = createWebhookNotifier({
+      url: 'https://user:topsecret@example.test/hook?token=abc123',
+      fetcher: fakeFetch,
+    });
+    await notifier.notify('s', 'b', { routineId: 'r', runId: 'x', status: 'failed' });
+    spy.mockRestore();
+    const logged = writes.join('');
+    expect(logged).not.toContain('topsecret');
+    expect(logged).not.toContain('abc123');
+    expect(logged).toContain('[redacted]');
   });
 });

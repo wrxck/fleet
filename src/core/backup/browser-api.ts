@@ -2,6 +2,7 @@ import { StatusReport } from './statuspage';
 import { SnapshotInfo } from './types';
 import { TreeEntry } from './repo';
 import { verifyTotp, signSession, verifySession } from './totp';
+import type { LoginThrottle } from './login-throttle';
 import { renderLoginPage, renderExplorerPage } from './browser-ui';
 import { renderStatusHtml } from './statuspage';
 import { classify } from './sensitive';
@@ -27,6 +28,8 @@ export interface ApiContext {
   sessionTtlMs: number;
   /** the deployment domain — the same-origin check accepts only this host. */
   domain: string;
+  /** rate-limits TOTP login attempts to thwart online brute force. */
+  loginThrottle: LoginThrottle;
   listApps(): string[];
   statusReport(): StatusReport;
   snapshots(app: string): SnapshotInfo[];
@@ -112,10 +115,17 @@ export function handle(req: ApiRequest, ctx: ApiContext): ApiResponse {
     if (!csrfOk(req, ctx.domain)) return json(403, { error: 'csrf check failed' });
 
     if (req.path === '/api/login' && req.method === 'POST') {
+      // throttle BEFORE verifying so brute force can't burn unlimited guesses.
+      if (!ctx.loginThrottle.take(ctx.now())) {
+        return json(429, { error: 'too many login attempts — wait and retry' });
+      }
       const code = (req.body as { code?: string } | undefined)?.code ?? '';
       if (!verifyTotp(ctx.totpSecret, code, ctx.now())) {
         return json(401, { error: 'invalid code' });
       }
+      // a valid login shouldn't count against the bucket — refund it so a
+      // legitimate operator is never locked out by their own sign-ins.
+      ctx.loginThrottle.refund();
       const cookie = signSession({ exp: ctx.now() + ctx.sessionTtlMs }, ctx.sessionSecret);
       const attrs = `Path=/backups; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.floor(ctx.sessionTtlMs / 1000)}`;
       return json(200, { ok: true }, `${SESSION_COOKIE}=${cookie}; ${attrs}`);
