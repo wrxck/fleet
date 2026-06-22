@@ -66,3 +66,45 @@ describe('guarded() proxy', () => {
     expect(JSON.stringify(entry)).not.toContain('SEKRET');
   });
 });
+
+function harness(handlers: Map<string, (...a: unknown[]) => unknown>) {
+  return {
+    tool(name: string, ...rest: unknown[]) {
+      handlers.set(name, rest[rest.length - 1] as (...a: unknown[]) => unknown);
+    },
+  } as unknown as McpServer;
+}
+
+describe('guarded-server audit accuracy', () => {
+  it('records an isError result as outcome=error with scrubbed text', async () => {
+    const entries: AuditEntry[] = [];
+    const guard = new Guard({
+      policy: { tiers: { read: 'allow', mutate: 'allow', destructive: 'allow' }, tools: {}, rateLimits: { read: 0, mutate: 0, destructive: 0 } },
+      auditSink: (e) => entries.push(e),
+    });
+    const handlers = new Map<string, (...a: unknown[]) => unknown>();
+    const server = guarded(harness(handlers), guard);
+    server.tool('fleet_deploy', 'x', { app: () => {} }, async () => ({
+      content: [{ type: 'text', text: 'build failed: DB_PASSWORD=hunter2hunter2hunter2hunter2' }],
+      isError: true,
+    }));
+    await handlers.get('fleet_deploy')!({ app: 'nutrition' }, {});
+    const err = entries.find(e => e.tool === 'fleet_deploy' && e.outcome === 'error');
+    expect(err).toBeDefined();
+    expect(err!.error).toBeDefined();
+    expect(err!.error).not.toContain('hunter2hunter2hunter2');
+  });
+
+  it('records a normal result as outcome=allow', async () => {
+    const entries: AuditEntry[] = [];
+    const guard = new Guard({
+      policy: { tiers: { read: 'allow', mutate: 'allow', destructive: 'allow' }, tools: {}, rateLimits: { read: 0, mutate: 0, destructive: 0 } },
+      auditSink: (e) => entries.push(e),
+    });
+    const handlers = new Map<string, (...a: unknown[]) => unknown>();
+    const server = guarded(harness(handlers), guard);
+    server.tool('fleet_list', 'x', async () => ({ content: [{ type: 'text', text: 'ok' }] }));
+    await handlers.get('fleet_list')!({});
+    expect(entries.find(e => e.tool === 'fleet_list')!.outcome).toBe('allow');
+  });
+});
