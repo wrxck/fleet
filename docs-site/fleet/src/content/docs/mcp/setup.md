@@ -42,15 +42,94 @@ The server communicates over stdin/stdout using the MCP protocol. It does not ne
 
 ## What the MCP server provides
 
-The fleet MCP server exposes 35 tools grouped into five categories:
+The fleet MCP server exposes **52 tools** grouped into **nine** categories:
 
-- **Fleet management** — status, list, start, stop, restart, deploy, logs, health, register, freeze, unfreeze
+- **Fleet management** — status, list, start, stop, restart, deploy, rollback, health, register, freeze, unfreeze
+- **Logs / egress** — logs (deprecated), logs\_recent, logs\_summary, logs\_search, logs\_status, egress\_snapshot
 - **Nginx** — add config, list configs
 - **Secrets** — status, list, set, get, unseal, seal, drift, validate, restore
 - **Git** — status, onboard, branch, commit, push, pr create, pr list, release
 - **Dependencies** — status, scan, app findings, fix, ignore, config
+- **Audit** — run, status, ignore, guidelines
+- **TestFlight** — builds, doctor
+- **Remote runners** — list, status, register, remove
 
 See the [Tools Reference](/mcp/tools) for the full list with parameters.
+
+## Tier model and access control
+
+Every tool has a **tier** that determines whether the privilege-separated daemon allows it by default:
+
+| Tier | Default | Rate limit | Description |
+|------|---------|------------|-------------|
+| `read` | allow | unlimited | Observes state; never changes anything |
+| `secret` | **deny** | 10/min | Returns a decrypted secret value — opt-in required |
+| `mutate` | allow | 60/min | Changes vault, registry, or config state |
+| `destructive` | **deny** | 10/min | Restarts services, pushes outward, rotates keys |
+
+`read` and `mutate` tools work without any policy file. `secret` and `destructive` tools are blocked by default — the operator must opt them in via `/etc/fleet/mcp-policy.json`.
+
+> **`fleet_secrets_get` is `secret` tier.** Unlike all other listing/status tools, it returns a decrypted plaintext value and is **denied by default** under the daemon. Add it to `mcp-policy.json` to enable it.
+
+## Policy file (`/etc/fleet/mcp-policy.json`)
+
+Create `/etc/fleet/mcp-policy.json` to override default tier behaviour. A partial file is valid — unspecified keys inherit the defaults shown above.
+
+```json
+{
+  "tiers": {
+    "read": "allow",
+    "secret": "deny",
+    "mutate": "allow",
+    "destructive": "deny"
+  },
+  "tools": {
+    "fleet_deploy":  { "apps": ["my-app"] },
+    "fleet_restart": { "apps": ["my-app"] },
+    "fleet_start":   { "apps": ["my-app"] },
+    "fleet_stop":    { "apps": ["my-app"] }
+  },
+  "rateLimits": {
+    "read": 0,
+    "secret": 10,
+    "mutate": 60,
+    "destructive": 10
+  }
+}
+```
+
+The `tools` block supports three rule forms per tool:
+
+- `"allow"` — always permit regardless of tier default.
+- `"deny"` — always block regardless of tier default.
+- `{ "apps": ["name1", "name2"] }` — **app-scoped**: only permit the tool when the `app` argument matches a name in the list. A destructive tool set to `{ "apps": [...] }` is allowed for those apps only; every other app is still blocked.
+
+After editing the file, restart the daemon:
+
+```bash
+sudo systemctl restart fleet-mcp
+```
+
+A worked example is in [`data/mcp-policy.example.json`](https://github.com/wrxck/fleet/blob/main/data/mcp-policy.example.json).
+
+## Audit log
+
+Every tool call — allowed or denied — is appended as a JSON line to `/var/log/fleet-mcp/audit.log`. The log is created automatically (directory mode `0750`, file mode `0640`).
+
+Each entry contains:
+
+```json
+{
+  "ts": "2026-01-01T00:00:00.000Z",
+  "tool": "fleet_deploy",
+  "tier": "destructive",
+  "outcome": "allow",
+  "durationMs": 1234,
+  "args": { "app": "my-app" }
+}
+```
+
+Secret argument values are redacted to `[redacted]` before writing. Tool results are never logged.
 
 ## Verify the connection
 
