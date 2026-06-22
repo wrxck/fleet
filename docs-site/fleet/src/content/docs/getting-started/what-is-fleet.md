@@ -13,11 +13,23 @@ Fleet is a production management CLI and MCP server for running Docker Compose a
 
 - **MCP server for Claude Code** — Running `fleet mcp` starts a stdio-based Model Context Protocol server. Every fleet operation is exposed as a tool that Claude Code (or any MCP client) can call. Install it once with `fleet install-mcp`.
 
-- **Multi-channel alerts** — The `fleet watchdog` command checks all services and sends alerts via Telegram when something is unhealthy. Designed to run on a cron schedule.
+- **Multi-channel alerts** — The `fleet watchdog` command checks all services and sends alerts via Telegram or BlueBubbles (iMessage) when something is unhealthy. Designed to run on a cron schedule.
 
-- **Dependency scanning** — Fleet scans all registered apps for outdated packages (npm, Composer, pip), Docker image updates, runtime EOL warnings, and security vulnerabilities (via OSV API). Results surface in the CLI, SSH MOTD, and Telegram notifications.
+- **Dependency scanning** — Fleet scans all registered apps for outdated packages (npm, Composer, pip), Docker image updates, runtime EOL warnings, and security vulnerabilities (via OSV API). Results surface in the CLI, SSH MOTD, and alert notifications (Telegram or BlueBubbles).
 
 - **TUI dashboard** — `fleet tui` launches an interactive terminal dashboard (Ink/React) showing all apps, their systemd state, container counts, and health.
+
+- **Remote build runners** — `fleet_runner_*` MCP tools dispatch builds to a remote SSH host (e.g. a Mac Mini for iOS builds).
+
+- **Mock servers** — `fleet mock` starts and manages local wiremock-ts dev servers for offline development.
+
+- **Encrypted off-host backups** — `fleet backup` provides restic+age encrypted backups.
+
+- **App Store audit** — `fleet audit` runs greenlight compliance scans for iOS apps targeting the App Store.
+
+- **TestFlight publishing** — `fleet testflight` dispatches builds and manages TestFlight distribution.
+
+- **Scheduled routines** — `fleet routines` provides a TUI for managing fleet-wide scheduled routines (signals grid + history).
 
 ## Who it is for
 
