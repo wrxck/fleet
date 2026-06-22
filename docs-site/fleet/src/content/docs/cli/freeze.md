@@ -30,6 +30,12 @@ fleet freeze <app> [reason]
 | `app` | Yes | App name |
 | `reason` | No | Human-readable reason (stored in registry, shown in status) |
 
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `-y`, `--yes` | Skip the confirmation prompt |
+
 ### Examples
 
 ```bash

@@ -5,7 +5,7 @@ description: Dashboard, Health, Secrets, Logs, and detail views
 
 import { Aside } from '@astrojs/starlight/components';
 
-The TUI has six views — three top-level and three detail views.
+The TUI has eight views — four top-level and four detail views.
 
 ## Dashboard
 
@@ -55,6 +55,14 @@ Available actions:
 - `l` seal vault — removes runtime copies
 - `a` add secret — opens the secret editor
 - `d` delete secret — with y/n confirmation
+
+## Logs (multi-tail)
+
+A top-level view (Tab-cycled) that tails log output from all registered apps simultaneously. Each app's output is shown in a separate scrollable pane.
+
+- Streams live output from `docker compose logs -f` for every app
+- Use arrow keys to navigate between app panes
+- Press **Esc** or **Tab** to leave this view
 
 ## App Detail
 
