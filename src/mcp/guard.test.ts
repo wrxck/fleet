@@ -1,3 +1,7 @@
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, it, expect } from 'vitest';
 
 import { Guard, DEFAULT_POLICY, loadPolicy, redactArgs, type AuditEntry, type Policy } from './guard';
@@ -21,6 +25,34 @@ describe('Guard authorisation by tier', () => {
     expect(guard.authorize('fleet_status', {}).ok).toBeTruthy();
     expect(guard.authorize('fleet_secrets_set', { app: 'a', key: 'K', value: 'v' }).ok).toBeTruthy();
     expect(guard.authorize('fleet_deploy', { app: 'a' }).ok).toBeFalsy();
+  });
+
+  it('denies decrypted-secret reads (fleet_secrets_get) by default', () => {
+    const { guard, log } = makeGuard();
+    const d = guard.authorize('fleet_secrets_get', { app: 'a', key: 'DATABASE_URL' });
+    expect(d.ok).toBeFalsy();
+    expect(d.tier).toBe('secret');
+    expect(log.at(-1)?.outcome).toBe('deny');
+    // sibling read-tier secret tools (masked/metadata) stay allowed
+    expect(guard.authorize('fleet_secrets_list', { app: 'a' }).ok).toBeTruthy();
+    expect(guard.authorize('fleet_secrets_drift', { app: 'a' }).ok).toBeTruthy();
+  });
+
+  it('allows fleet_secrets_get only when the operator opts the secret tier (or tool) in', () => {
+    const byTier = makeGuard({ tiers: { secret: 'allow' } });
+    expect(byTier.guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' }).ok).toBeTruthy();
+    const byTool = makeGuard({ tools: { fleet_secrets_get: 'allow' } });
+    expect(byTool.guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' }).ok).toBeTruthy();
+  });
+
+  it('rate-limits decrypted-secret reads even once allowed (default budget 10/min)', () => {
+    const { guard } = makeGuard({ tiers: { secret: 'allow' } });
+    for (let i = 0; i < 10; i++) {
+      expect(guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' }).ok).toBeTruthy();
+    }
+    const limited = guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' });
+    expect(limited.ok).toBeFalsy();
+    expect(limited.reason).toMatch(/rate limit/);
   });
 
   it('allows a destructive tool only when the policy opts it in', () => {
@@ -48,7 +80,7 @@ describe('Guard authorisation by tier', () => {
 
 describe('Guard rate limiting', () => {
   it('limits a tier to its budget then refills over time', () => {
-    const { guard, advance } = makeGuard({ rateLimits: { read: 0, mutate: 2, destructive: 0 } });
+    const { guard, advance } = makeGuard({ rateLimits: { read: 0, secret: 0, mutate: 2, destructive: 0 } });
     expect(guard.authorize('fleet_secrets_set', {}).ok).toBeTruthy();
     expect(guard.authorize('fleet_secrets_set', {}).ok).toBeTruthy();
     const limited = guard.authorize('fleet_secrets_set', {});
@@ -59,7 +91,7 @@ describe('Guard rate limiting', () => {
   });
 
   it('never limits an unlimited (0) tier', () => {
-    const { guard } = makeGuard({ rateLimits: { read: 0, mutate: 60, destructive: 10 } });
+    const { guard } = makeGuard({ rateLimits: { read: 0, secret: 10, mutate: 60, destructive: 10 } });
     for (let i = 0; i < 50; i++) expect(guard.authorize('fleet_status', {}).ok).toBeTruthy();
   });
 });
@@ -89,5 +121,94 @@ describe('Guard audit redaction', () => {
 describe('loadPolicy', () => {
   it('falls back to safe defaults when the file is missing', () => {
     expect(loadPolicy('/nonexistent/mcp-policy.json')).toEqual(DEFAULT_POLICY);
+  });
+});
+
+describe('loadPolicy tool rules', () => {
+  function writePolicy(obj: unknown): string {
+    const dir = mkdtempSync(join(tmpdir(), 'fleet-policy-'));
+    const p = join(dir, 'mcp-policy.json');
+    writeFileSync(p, JSON.stringify(obj));
+    return p;
+  }
+
+  it('keeps a string allow/deny rule', () => {
+    const p = writePolicy({ tools: { fleet_deploy: 'allow', fleet_stop: 'deny' } });
+    const pol = loadPolicy(p);
+    expect(pol.tools.fleet_deploy).toBe('allow');
+    expect(pol.tools.fleet_stop).toBe('deny');
+  });
+
+  it('keeps an app-scoped { apps } rule', () => {
+    const p = writePolicy({ tools: { fleet_deploy: { apps: ['nutrition', 'macpool'] } } });
+    const pol = loadPolicy(p);
+    expect(pol.tools.fleet_deploy).toEqual({ apps: ['nutrition', 'macpool'] });
+  });
+
+  it('drops a malformed tool rule (fails closed to tier default)', () => {
+    const p = writePolicy({ tools: { fleet_deploy: { apps: [1, 2] }, fleet_start: 'maybe' } });
+    const pol = loadPolicy(p);
+    expect(pol.tools.fleet_deploy).toBeUndefined();
+    expect(pol.tools.fleet_start).toBeUndefined();
+  });
+});
+
+describe('Guard app-scoped authorize', () => {
+  function guardWith(tools: Record<string, unknown>) {
+    return new Guard({
+      policy: {
+        tiers: { read: 'allow', secret: 'deny', mutate: 'allow', destructive: 'deny' },
+        tools: tools as never,
+        rateLimits: { read: 0, secret: 0, mutate: 0, destructive: 0 },
+      },
+      auditSink: () => {},
+    });
+  }
+
+  it('allows a listed app', () => {
+    const g = guardWith({ fleet_deploy: { apps: ['nutrition'] } });
+    expect(g.authorize('fleet_deploy', { app: 'nutrition' }).ok).toBeTruthy();
+  });
+
+  it('denies an unlisted app', () => {
+    const g = guardWith({ fleet_deploy: { apps: ['nutrition'] } });
+    const d = g.authorize('fleet_deploy', { app: 'other' });
+    expect(d.ok).toBeFalsy();
+    expect(d.reason).toMatch(/not in allowlist/);
+  });
+
+  it('denies when the app arg is missing (fail-closed)', () => {
+    const g = guardWith({ fleet_deploy: { apps: ['nutrition'] } });
+    expect(g.authorize('fleet_deploy', {}).ok).toBeFalsy();
+  });
+
+  it('an empty allowlist denies everything', () => {
+    const g = guardWith({ fleet_deploy: { apps: [] } });
+    expect(g.authorize('fleet_deploy', { app: 'nutrition' }).ok).toBeFalsy();
+  });
+
+  it('string allow still works for any app (backward compat)', () => {
+    const g = guardWith({ fleet_deploy: 'allow' });
+    expect(g.authorize('fleet_deploy', { app: 'anything' }).ok).toBeTruthy();
+  });
+
+  it('rate-limits an app-scoped allow like any other allow', () => {
+    const g = new Guard({
+      policy: {
+        tiers: { read: 'allow', secret: 'deny', mutate: 'allow', destructive: 'deny' },
+        tools: { fleet_deploy: { apps: ['nutrition'] } } as never,
+        rateLimits: { read: 0, secret: 0, mutate: 0, destructive: 1 },
+      },
+      auditSink: () => {},
+    });
+    expect(g.authorize('fleet_deploy', { app: 'nutrition' }).ok).toBeTruthy();
+    const second = g.authorize('fleet_deploy', { app: 'nutrition' });
+    expect(second.ok).toBeFalsy();
+    expect(second.reason).toMatch(/rate limit/);
+  });
+
+  it('reports a tool-specific deny distinctly from a tier deny', () => {
+    const g = guardWith({ fleet_deploy: 'deny' });
+    expect(g.authorize('fleet_deploy', { app: 'x' }).reason).toMatch(/tool 'fleet_deploy' denied/);
   });
 });

@@ -20,6 +20,12 @@
  * checkForUpdate() does a non-blocking `git fetch` + compares HEAD with the
  * remote. applyUpdate() runs the pull + build. Both are pure shell wrappers
  * around execSafe — easy to mock in tests, easy to reason about under sudo.
+ *
+ * Supply-chain hardening (opt-in):
+ *   - FLEET_UPDATE_VERIFY=1 → require a trusted signature on the pulled HEAD
+ *     before running `npm run build`; an unverified pull is rolled back.
+ *   - FLEET_UPDATE_ALLOWED_SIGNERS=<path> → SSH allowed-signers file used for
+ *     verification, scoped to the one verify-commit invocation.
  */
 
 import { dirname } from 'node:path';
@@ -126,8 +132,42 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
 }
 
 /**
+ * Whether signature verification of pulled commits is required before building.
+ * Off by default (most installs have no maintainer key imported, and forcing it
+ * unconditionally would brick self-update). When the operator opts in, a pull
+ * that lands an unverified commit is rolled back and the build never runs.
+ */
+export function verificationEnabled(): boolean {
+  const v = (process.env.FLEET_UPDATE_VERIFY ?? '').toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes';
+}
+
+/**
+ * Verify a revision's signature with git. When an allowed-signers file is
+ * configured (SSH signing) it is passed scoped to this one command so we do
+ * not mutate global git config. Returns ok=false (never throws) so the caller
+ * can fail closed. `runner` is injectable for tests.
+ */
+export function verifyRevision(
+  rev: string,
+  runner: typeof execSafe = execSafe,
+): { ok: boolean; output: string } {
+  const signers = process.env.FLEET_UPDATE_ALLOWED_SIGNERS;
+  const cfg = signers ? ['-c', `gpg.ssh.allowedSignersFile=${signers}`] : [];
+  const r = runner('git', ['-C', FLEET_REPO, ...cfg, 'verify-commit', '--raw', rev], { timeout: 15_000 });
+  return { ok: r.ok, output: r.stderr || r.stdout };
+}
+
+/**
  * Apply: git pull --ff-only origin <channel-branch> + npm run build. Refuses
  * to run if the working tree is dirty (would clobber uncommitted changes).
+ *
+ * Supply-chain hardening: when FLEET_UPDATE_VERIFY is enabled, the freshly
+ * pulled HEAD must carry a trusted signature before we run `npm run build`
+ * (the build script comes from the pulled tree and runs with fleet's
+ * privileges, so an unverified pull is an RCE primitive). On a failed
+ * verification we hard-reset back to the pre-pull commit and refuse to build.
+ *
  * Returns aggregate output for the toast / TUI to surface.
  */
 export async function applyUpdate(): Promise<UpdateResult> {
@@ -151,6 +191,24 @@ export async function applyUpdate(): Promise<UpdateResult> {
   }
   const post = execSafe('git', ['-C', FLEET_REPO, 'rev-parse', 'HEAD']);
   const pulled = pre.stdout !== post.stdout ? 1 : 0;  // 1 = something updated
+
+  // Only meaningful when HEAD actually moved. Verify BEFORE building so an
+  // untrusted commit's build script never executes.
+  if (pulled === 1 && verificationEnabled()) {
+    const verdict = verifyRevision(post.stdout);
+    if (!verdict.ok) {
+      // roll the working tree back to the trusted commit we started from.
+      execSafe('git', ['-C', FLEET_REPO, 'reset', '--hard', pre.stdout], { timeout: 15_000 });
+      return {
+        ok: false,
+        pulled: 0,
+        buildOk: false,
+        output:
+          `Refusing to build: pulled commit ${post.stdout.slice(0, 12)} failed signature ` +
+          `verification — rolled back to ${pre.stdout.slice(0, 12)}. ${verdict.output}`.trim(),
+      };
+    }
+  }
 
   const build = execSafe('npm', ['run', 'build'], { cwd: FLEET_REPO, timeout: 120_000 });
   return {

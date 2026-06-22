@@ -42,6 +42,19 @@ export const RoutineTaskSchema = z.discriminatedUnion('kind', [
     args: z.record(z.string(), z.unknown()).default({}),
     wallClockMs: z.number().int().positive().max(60 * 60 * 1000).default(DEFAULT_WALLCLOCK_MS),
   }),
+  z.object({
+    // run an allow-listed argv on a registered remote host over ssh. `host` is
+    // a safe slug resolved to its connection elsewhere — raw ssh details never
+    // travel in a task. argv reuses the shell runner's no-metacharacter guard
+    // and is shell-quoted before it reaches the remote, so a validated token
+    // cannot break out into the remote shell.
+    kind: z.literal('remote'),
+    host: z.string().regex(ROUTINE_ID_REGEX),
+    argv: z.array(z.string().min(1).regex(NO_SHELL_META)).min(1).max(64),
+    cwd: z.string().min(1).max(512).regex(/^[A-Za-z0-9_./@~-]+$/).optional(),
+    loginShell: z.boolean().default(true),
+    wallClockMs: z.number().int().positive().max(60 * 60 * 1000).default(DEFAULT_WALLCLOCK_MS),
+  }),
 ]);
 
 export type RoutineTask = z.infer<typeof RoutineTaskSchema>;

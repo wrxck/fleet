@@ -6,6 +6,7 @@ import { createServer, IncomingMessage, ServerResponse, Server } from 'node:http
 import { loadOperator } from '../operator';
 
 import { handle, ApiContext, ApiRequest, ApiResponse } from './browser-api';
+import { createLoginThrottle } from './login-throttle';
 import { listConfiguredApps } from './config';
 import { listSnapshots, lsTree, dumpFileSpawn, restore } from './repo';
 import { classify } from './sensitive';
@@ -112,12 +113,15 @@ function doRestore(app: string, snap: string, path: string, stagingRoot: string)
 
 function buildContext(opts: ServeOptions): ApiContext {
   const stagingRoot = opts.stagingRoot ?? STAGING_ROOT_DEFAULT;
+  // one bucket per server process: caps total TOTP guesses across all clients.
+  const loginThrottle = createLoginThrottle();
   return {
     now: () => Date.now(),
     totpSecret: opts.totpSecret,
     sessionSecret: opts.sessionSecret,
     sessionTtlMs: opts.sessionTtlMs ?? 12 * 3600_000,
     domain: loadOperator().domain,
+    loginThrottle,
     listApps: () => listConfiguredApps(),
     statusReport: () => buildStatusReport(),
     snapshots: app => listSnapshots(app),

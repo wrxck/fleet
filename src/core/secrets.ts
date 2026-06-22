@@ -115,7 +115,10 @@ export function loadManifest(): Manifest {
 }
 
 export function saveManifest(manifest: Manifest): void {
-  writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
+  // 0600: the manifest holds key names, recipients and metadata — not secret
+  // values, but there's no reason for it to be world-readable. Match the
+  // vault's root-only posture explicitly rather than relying on umask.
+  writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 });
 }
 
 /**
@@ -249,7 +252,8 @@ export function sealApp(app: string, envContent: string, sourceFile: string): vo
   assertAppName(app);
   const encrypted = ageEncrypt(envContent);
   const encFile = `${app}.env.age`;
-  writeFileSync(join(VAULT_DIR, encFile), encrypted);
+  // 0600 even though the contents are age-encrypted — defence in depth.
+  writeFileSync(join(VAULT_DIR, encFile), encrypted, { mode: 0o600 });
 
   const keyCount = envContent.split('\n').filter(l => l.includes('=') && !l.startsWith('#')).length;
   const manifest = loadManifest();
@@ -271,7 +275,8 @@ export function sealDbSecrets(app: string, secretsMap: Record<string, string>, s
   const bundle = parts.join('\n');
   const encrypted = ageEncrypt(bundle);
   const encFile = `${app}.secrets.age`;
-  writeFileSync(join(VAULT_DIR, encFile), encrypted);
+  // 0600 even though the contents are age-encrypted — defence in depth.
+  writeFileSync(join(VAULT_DIR, encFile), encrypted, { mode: 0o600 });
 
   const manifest = loadManifest();
   manifest.apps[app] = {

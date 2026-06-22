@@ -2,25 +2,31 @@ import { appendFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { type Tier, tierOf, isUnmapped } from './tiers';
+import { scrubForAudit } from './redact';
 
 export const POLICY_PATH = '/etc/fleet/mcp-policy.json';
 export const AUDIT_PATH = '/var/log/fleet-mcp/audit.log';
 
 export type TierRule = 'allow' | 'deny';
+// a per-tool rule: a flat allow/deny, or an app-scoped allow that only permits
+// the tool for the listed apps (matched against the call's `app` arg).
+export type ToolRule = TierRule | { apps: string[] };
 
 export interface Policy {
   // default decision per tier. destructive is deny out of the box.
   tiers: Record<Tier, TierRule>;
   // per-tool overrides; take precedence over the tier default.
-  tools: Record<string, TierRule>;
+  tools: Record<string, ToolRule>;
   // calls allowed per 60s window per tier; 0 means unlimited.
   rateLimits: Record<Tier, number>;
 }
 
 export const DEFAULT_POLICY: Policy = {
-  tiers: { read: 'allow', mutate: 'allow', destructive: 'deny' },
+  // `secret` (decrypted-value reads) is deny-by-default like `destructive`: the
+  // operator opts in per-tool or per-tier in mcp-policy.json.
+  tiers: { read: 'allow', secret: 'deny', mutate: 'allow', destructive: 'deny' },
   tools: {},
-  rateLimits: { read: 0, mutate: 60, destructive: 10 },
+  rateLimits: { read: 0, secret: 10, mutate: 60, destructive: 10 },
 };
 
 export type Outcome = 'allow' | 'deny' | 'rate-limited' | 'error';
@@ -37,6 +43,26 @@ export interface AuditEntry {
   unmapped?: boolean;
 }
 
+// keep only well-formed tool rules; anything else is dropped so the tool falls
+// through to its tier default (fail-closed for destructive tools).
+function normaliseTools(raw: unknown): Record<string, ToolRule> {
+  // null-prototype so a `__proto__` (or `constructor`) key in the policy json —
+  // which JSON.parse materialises as an own property — is stored as a plain
+  // entry rather than mutating this object's prototype chain.
+  const out = Object.create(null) as Record<string, ToolRule>;
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [tool, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === 'allow' || v === 'deny') { out[tool] = v; continue; }
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const apps = (v as { apps?: unknown }).apps;
+      if (Array.isArray(apps) && apps.every((a): a is string => typeof a === 'string')) {
+        out[tool] = { apps };
+      }
+    }
+  }
+  return out;
+}
+
 // merge a parsed policy file onto the defaults so a partial file is valid.
 export function loadPolicy(path = POLICY_PATH): Policy {
   if (!existsSync(path)) return DEFAULT_POLICY;
@@ -44,7 +70,7 @@ export function loadPolicy(path = POLICY_PATH): Policy {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<Policy>;
     return {
       tiers: { ...DEFAULT_POLICY.tiers, ...(raw.tiers ?? {}) },
-      tools: { ...(raw.tools ?? {}) },
+      tools: normaliseTools(raw.tools),
       rateLimits: { ...DEFAULT_POLICY.rateLimits, ...(raw.rateLimits ?? {}) },
     };
   } catch {
@@ -83,8 +109,8 @@ class RateLimiter {
   private last: Record<Tier, number>;
 
   constructor(private readonly limits: Record<Tier, number>, private readonly now: () => number) {
-    this.tokens = { read: limits.read, mutate: limits.mutate, destructive: limits.destructive };
-    this.last = { read: now(), mutate: now(), destructive: now() };
+    this.tokens = { read: limits.read, secret: limits.secret, mutate: limits.mutate, destructive: limits.destructive };
+    this.last = { read: now(), secret: now(), mutate: now(), destructive: now() };
   }
 
   // try to consume one token for a tier. returns false when the bucket is empty.
@@ -132,7 +158,7 @@ export class Guard {
     this.sink = opts.auditSink ?? defaultAuditSink;
   }
 
-  private ruleFor(tool: string, tier: Tier): TierRule {
+  private ruleFor(tool: string, tier: Tier): ToolRule {
     return this.policy.tools[tool] ?? this.policy.tiers[tier];
   }
 
@@ -143,10 +169,36 @@ export class Guard {
     const unmapped = isUnmapped(tool);
     const base = { tool, tier, args: redactArgs(args), unmapped };
 
-    if (this.ruleFor(tool, tier) !== 'allow') {
-      const reason = `tier '${tier}' denied by policy`;
-      this.write({ ...base, outcome: 'deny', reason });
-      return { ok: false, tier, reason };
+    const rule = this.ruleFor(tool, tier);
+    let allowed: boolean;
+    let denyReason: string | undefined;
+    if (rule === 'allow') {
+      allowed = true;
+    } else if (rule === 'deny') {
+      allowed = false;
+      // distinguish a tool-specific deny from a tier-default deny so an audit
+      // reader can tell which rule fired.
+      denyReason = (tool in this.policy.tools)
+        ? `tool '${tool}' denied by policy`
+        : `tier '${tier}' denied by policy`;
+    } else {
+      // app-scoped rule: allow only when the call's `app` arg is listed.
+      const app = (args && typeof args === 'object')
+        ? (args as Record<string, unknown>).app
+        : undefined;
+      if (typeof app === 'string' && rule.apps.includes(app)) {
+        allowed = true;
+      } else {
+        allowed = false;
+        denyReason = typeof app === 'string'
+          ? `app '${app}' not in allowlist for ${tool}`
+          : `${tool} is app-scoped but no app was provided`;
+      }
+    }
+
+    if (!allowed) {
+      this.write({ ...base, outcome: 'deny', reason: denyReason });
+      return { ok: false, tier, reason: denyReason };
     }
     if (!this.limiter.take(tier)) {
       const reason = `rate limit for tier '${tier}' exceeded`;
@@ -171,7 +223,13 @@ export class Guard {
   }
 
   private write(partial: Omit<AuditEntry, 'ts'>): void {
-    this.sink({ ts: new Date(this.now()).toISOString(), ...partial });
+    // scrub free-text error/reason before persisting; args are already redacted.
+    const cleaned: Omit<AuditEntry, 'ts'> = {
+      ...partial,
+      ...(partial.error !== undefined ? { error: scrubForAudit(partial.error) } : {}),
+      ...(partial.reason !== undefined ? { reason: scrubForAudit(partial.reason) } : {}),
+    };
+    this.sink({ ts: new Date(this.now()).toISOString(), ...cleaned });
   }
 }
 
