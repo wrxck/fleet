@@ -6,6 +6,22 @@ function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
 }
 
+// pull an error message out of a tool result that signalled failure via
+// isError, so the guard can audit it as a failure (handlers return rather than
+// throw, so without this a failed call is mis-recorded as a success).
+function errorTextFromResult(result: unknown): string | undefined {
+  if (!result || typeof result !== 'object') return undefined;
+  const r = result as { isError?: unknown; content?: unknown };
+  if (r.isError !== true) return undefined;
+  if (!Array.isArray(r.content)) return 'tool reported an error';
+  const joined = r.content
+    .map(c => (c && typeof c === 'object' && typeof (c as { text?: unknown }).text === 'string')
+      ? (c as { text: string }).text : '')
+    .filter(Boolean)
+    .join(' ');
+  return joined || 'tool reported an error';
+}
+
 // wrap a tool handler so the guard authorises the call, audits the outcome, and
 // blocks execution when policy or rate limits deny it. the mcp server always
 // passes the request extra as the handler's final argument, so a schema tool is
@@ -19,7 +35,7 @@ function wrapHandler(name: string, guard: Guard, original: (...a: unknown[]) => 
     const start = Date.now();
     try {
       const result = await original(...callArgs);
-      guard.complete(name, toolArgs, { durationMs: Date.now() - start });
+      guard.complete(name, toolArgs, { durationMs: Date.now() - start, error: errorTextFromResult(result) });
       return result;
     } catch (err) {
       guard.complete(name, toolArgs, { durationMs: Date.now() - start, error: (err as Error).message });

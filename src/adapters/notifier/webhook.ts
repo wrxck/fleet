@@ -10,6 +10,22 @@ export interface WebhookOptions {
   timeoutMs?: number;
 }
 
+/** strip credentials from a URL before it is logged: drop any userinfo
+ *  (user:pass@) and the entire query string (tokens are commonly passed as
+ *  `?token=...`). on an unparseable URL fall back to the part before `?`. */
+export function redactUrl(raw: string): string {
+  try {
+    const u = new URL(raw);
+    u.username = '';
+    u.password = '';
+    u.search = u.search ? '?[redacted]' : '';
+    return u.toString();
+  } catch {
+    const q = raw.indexOf('?');
+    return q === -1 ? raw : `${raw.slice(0, q)}?[redacted]`;
+  }
+}
+
 export function createWebhookNotifier(opts: WebhookOptions): NotifierAdapter {
   const fetcher = opts.fetcher ?? fetch;
   const timeoutMs = opts.timeoutMs ?? 10_000;
@@ -36,10 +52,10 @@ export function createWebhookNotifier(opts: WebhookOptions): NotifierAdapter {
           signal: controller.signal,
         });
         if (!res.ok) {
-          process.stderr.write(`[webhook] ${opts.url} returned ${res.status}\n`);
+          process.stderr.write(`[webhook] ${redactUrl(opts.url)} returned ${res.status}\n`);
         }
       } catch (err) {
-        process.stderr.write(`[webhook] ${opts.url} failed: ${(err as Error).message}\n`);
+        process.stderr.write(`[webhook] ${redactUrl(opts.url)} failed: ${(err as Error).message}\n`);
       } finally {
         clearTimeout(timer);
       }

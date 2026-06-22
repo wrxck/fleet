@@ -19,6 +19,7 @@ import { testflightCommand } from './commands/testflight';
 import { watchdogCommand } from './commands/watchdog';
 import { guardCommand } from './commands/guard';
 import { backupCommand } from './commands/backup';
+import { mockCommand } from './commands/mock';
 import { routineRunCommand } from './commands/routine-run';
 import { routinesCommand } from './commands/routines';
 import { startMcpServer } from './mcp/server';
@@ -103,6 +104,11 @@ Commands:
   unfreeze <app>      Unfreeze and restart a frozen service
   guard <subcommand>  Cloudflare protection layer (install/status/approve/reject/...)
   backup <subcommand> Encrypted off-host backups via restic + age (init/snapshot/list/restore/...)
+  mock start <name> --port <n> [--mappings <dir>]  Start a local wiremock-ts mock server (dev)
+  mock list           List running mock servers
+  mock stub <name> --url <path> [--method GET] [--status 200] [--json '{...}' | --body <text>]
+  mock reset <name>   Clear a mock's stubs and request journal
+  mock stop <name|--all>  Stop mock server(s)
   update [--check] [--channel stable|prerelease] [--branch <name>]
                       Self-update fleet (check / apply, channel selectable)
   doctor              Preflight: host requirements, registry, vault, operator config, orphans
@@ -209,6 +215,7 @@ export async function run(argv: string[]): Promise<void> {
     case 'watchdog': return watchdogCommand(rest);
     case 'guard': return guardCommand(rest);
     case 'backup': return backupCommand(rest);
+    case 'mock': return mockCommand(rest);
     case 'mcp': {
       const mcpSub = rest[0];
       if (mcpSub === 'connect') {

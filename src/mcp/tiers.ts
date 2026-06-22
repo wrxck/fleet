@@ -1,7 +1,12 @@
 // tool risk tiers — single source of truth the root daemon's guard uses to
 // decide whether an mcp tool call is allowed. see src/mcp/guard.ts.
 //
-//   read        observes state only; allowed by default.
+//   read        observes state only (status, masked listings, logs); allowed by default.
+//   secret      returns a DECRYPTED secret value to the caller. denied by
+//               default and rate-limited — the operator opts in per-tool (or
+//               for the whole tier) in mcp-policy.json. kept distinct from
+//               `read` so a compromised/unattended client cannot bulk-exfiltrate
+//               plaintext secrets through an otherwise-harmless read budget.
 //   mutate      changes vault/registry/config state, recoverable; allowed by default.
 //   destructive restarts/redeploys services, pushes outward, or rotates keys;
 //               denied by default, operator opts in per-tool in mcp-policy.json.
@@ -10,7 +15,7 @@
 // or unmapped tool can never run through the daemon until classified. the daemon
 // logs an unmapped-tool audit event when it sees one.
 
-export type Tier = 'read' | 'mutate' | 'destructive';
+export type Tier = 'read' | 'secret' | 'mutate' | 'destructive';
 
 export const TOOL_TIERS: Readonly<Record<string, Tier>> = {
   // registry / status (registry-bridge)
@@ -42,7 +47,8 @@ export const TOOL_TIERS: Readonly<Record<string, Tier>> = {
   fleet_secrets_list: 'read',
   fleet_secrets_validate: 'read',
   fleet_secrets_drift: 'read',
-  fleet_secrets_get: 'read',
+  // returns a decrypted value — deny-by-default `secret` tier, not `read`.
+  fleet_secrets_get: 'secret',
   fleet_secrets_set: 'mutate',
   fleet_secrets_seal: 'mutate',
   fleet_secrets_unseal: 'mutate',
@@ -78,6 +84,12 @@ export const TOOL_TIERS: Readonly<Record<string, Tier>> = {
   // testflight (read-only)
   fleet_testflight_builds: 'read',
   fleet_testflight_doctor: 'read',
+
+  // remote build runners
+  fleet_runner_list: 'read',
+  fleet_runner_status: 'read',
+  fleet_runner_register: 'mutate',
+  fleet_runner_remove: 'mutate',
 };
 
 // tier for a tool name, fail-closed to destructive when unmapped.

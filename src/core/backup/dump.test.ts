@@ -121,6 +121,42 @@ describe('dumpStreamCommand', () => {
       .toThrow(DumpError);
   });
 
+  it('single-quotes a container name carrying shell metacharacters', () => {
+    const cmd = dumpStreamCommand({ type: 'postgres', container: 'pg; rm -rf /', user: 'postgres' });
+    // the malicious name must be quoted, not interpolated as a bare command
+    expect(cmd).toContain(`docker exec 'pg; rm -rf /'`);
+    expect(cmd).not.toMatch(/docker exec pg; rm -rf \//);
+  });
+
+  it('quotes a user value carrying shell metacharacters', () => {
+    const cmd = dumpStreamCommand({ type: 'mysql', container: 'm', user: 'r$(id)', passwordFile: '/x' });
+    // the bare form would command-substitute inside the container shell; the
+    // value must be single-quoted (the literal `$(id)` survives only inside quotes).
+    expect(cmd).not.toContain('-ur$(id)');
+    expect(cmd).toContain(`-u'\\''r$(id)'\\''`);
+  });
+
+  it('rejects an env var name that is not a shell identifier', () => {
+    expect(() => dumpStreamCommand({
+      type: 'mysql', container: 'm', passwordEnv: 'X}; curl evil ;${',
+    })).toThrow(DumpError);
+    expect(() => dumpStreamCommand({
+      type: 'mysql', container: 'm', userEnv: 'A B',
+    })).toThrow(DumpError);
+  });
+
+  it('rejects a non-integer redis port', () => {
+    expect(() => dumpStreamCommand({
+      type: 'redis', container: 'r', port: 1.5,
+    })).toThrow(DumpError);
+  });
+
+  it('leaves ordinary container/user values as clean barewords', () => {
+    const cmd = dumpStreamCommand({ type: 'mongo', container: 'shared-mongodb', user: 'root', passwordFile: '/x' });
+    expect(cmd).toContain('docker exec shared-mongodb');
+    expect(cmd).toContain('--username root');
+  });
+
   it('output is single-quoted to neutralise outer-shell expansion', () => {
     // the docker exec sh -c "..." must be single-quoted so $POSTGRES_USER
     // expands inside the container, not in the calling shell.
