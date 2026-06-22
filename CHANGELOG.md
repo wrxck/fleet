@@ -2,20 +2,53 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
-## v1.12.0 — 2026-05-30
+## v1.13.0 — 2026-06-22
 
 ### Features
 
+- feat(deploy): resolve an app name as well as a directory path
+- feat(runner): fleet_runner_* MCP tools + registry and doctor
+- feat(runner): remote build-host runner adapter over ssh
+- feat(mock): add `fleet mock` to manage local wiremock-ts dev servers
+- feat(mcp): enforce per-app allowlist for destructive tools
+- feat(mcp): policy supports per-app { apps } tool rule
+- feat(mcp): add scrubForAudit redactor for audit-log error text
 - feat(mcp): prefer standalone install for daemon, warn on checkout
 - feat(mcp): privilege-separated root daemon for unprivileged clients
 
 ### Fixes
 
+- fix(mcp): audit isError results as failures and scrub persisted error text
+- fix(mcp): redact before capping so a boundary secret can't survive truncation
 - fix(mcp): unblock unprivileged agents — surface deploy errors, fix array tools, logs_recent, docs (#118)
 
 ### Other
 
+- chore(release): 1.13.0
+- docs: remove loose audit/plan/spec scratch files, keep README + CHANGELOG
+- security: harden secrets MCP tier, self-update, backup login, dump shell, notify logs
+- docs(mcp): document per-app allowlist for unprivileged agent deploy
+- harden(mcp): null-proto policy map, precise deny reason, rate-limit test
+- docs(plan): implementation plan for daemon security & safe agent deploy
+- docs(spec): daemon security & safe agent deploy (v1.13.0 Spec A)
+- chore(release): regenerate CHANGELOG for v1.12.0 (#119)
 - test(mcp): assert the daemon negotiates the latest protocol version
+
+## v1.12.1 — 2026-06-03
+
+### Features
+
+- feat(deploy): resolve an app name as well as a directory path
+
+### Other
+
+- chore(release): 1.12.1
+
+## v1.12.0 — 2026-05-31
+
+### Other
+
+- Release v1.12.0 (#120)
 
 ## v1.11.1 — 2026-05-29
 
