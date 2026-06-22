@@ -11,6 +11,8 @@ import { builtInDefaultRoutines } from '../../core/routines/defaults';
 import { RoutineEngine as Engine } from '../../core/routines/engine';
 import { createClaudeCliRunner } from '../../adapters/runner/claude-cli';
 import { createMcpCallRunner } from '../../adapters/runner/mcp-call';
+import { createRemoteRunner } from '../../adapters/runner/remote';
+import { createHostResolver } from '../../adapters/runner/remote-hosts';
 import { createShellRunner } from '../../adapters/runner/shell';
 import { createSystemdTimerAdapter } from '../../adapters/scheduler/systemd-timer';
 import { RoutineStore } from '../../core/routines/store';
@@ -45,7 +47,12 @@ export function createRuntime(opts: RuntimeOptions = {}): RoutinesRuntime {
   const engine = new Engine({
     store,
     db,
-    runners: [createShellRunner(), createClaudeCliRunner(), createMcpCallRunner()],
+    runners: [
+      createShellRunner(),
+      createClaudeCliRunner(),
+      createMcpCallRunner(),
+      createRemoteRunner({ resolveHost: createHostResolver() }),
+    ],
     scheduler: scheduler.available() ? scheduler : null,
     notifiers: [createStdoutNotifier()],
   });
