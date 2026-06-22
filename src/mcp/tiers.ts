@@ -78,6 +78,12 @@ export const TOOL_TIERS: Readonly<Record<string, Tier>> = {
   // testflight (read-only)
   fleet_testflight_builds: 'read',
   fleet_testflight_doctor: 'read',
+
+  // remote build runners
+  fleet_runner_list: 'read',
+  fleet_runner_status: 'read',
+  fleet_runner_register: 'mutate',
+  fleet_runner_remove: 'mutate',
 };
 
 // tier for a tool name, fail-closed to destructive when unmapped.

@@ -28,6 +28,7 @@ import { snapshotEgress } from '../core/egress';
 import { registerDepsTools } from './deps-tools';
 import { registerAuditTools } from './audit-tools';
 import { registerTestflightTools } from './testflight-tools';
+import { registerRunnerTools } from './runner-tools';
 
 function requireApp(name: string) {
   const reg = load();
@@ -409,6 +410,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
   registerDepsTools(server);
   registerAuditTools(server);
   registerTestflightTools(server);
+  registerRunnerTools(server);
 
   return base;
 }
