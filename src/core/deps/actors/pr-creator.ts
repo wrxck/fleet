@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { execSafe } from '../../exec';
 import { getGitStatus } from '../../git';
+import { assertBranch } from '../../validate';
 import type { AppEntry } from '../../registry';
 import type { Finding } from '../types';
 
@@ -16,8 +17,25 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Package names and version strings come from third-party registries (npm,
+// PyPI, Packagist, Docker Hub). They are written verbatim into manifests, git
+// commit messages and PR bodies, so constrain them to benign tokens — a hostile
+// or MITM'd registry must not be able to smuggle shell/markdown/whitespace
+// payloads through a "version" field.
+const SAFE_PACKAGE_RE = /^[A-Za-z0-9._/@-]+$/;
+const SAFE_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
+
 export function generateVersionBump(finding: Finding): VersionBump | null {
   if (!finding.fixable || !finding.package || !finding.currentVersion || !finding.latestVersion) {
+    return null;
+  }
+  // Reject registry-supplied values that don't look like a real package/version
+  // rather than write attacker-controlled content into the repo.
+  if (
+    !SAFE_PACKAGE_RE.test(finding.package) ||
+    !SAFE_VERSION_RE.test(finding.currentVersion) ||
+    !SAFE_VERSION_RE.test(finding.latestVersion)
+  ) {
     return null;
   }
 
@@ -105,6 +123,16 @@ export function createDepsPr(
 
   const date = new Date().toISOString().split('T')[0];
   const branch = `deps/${app.name}/${date}`;
+
+  // Defence-in-depth: app.name flows into `git checkout -b`/`git push` here
+  // without re-validation elsewhere. execSafe uses an arg array (no shell), but
+  // a name with a leading '-' or odd chars could still be mis-parsed as a git
+  // flag/ref — assert it is a clean branch name before any git op.
+  try {
+    assertBranch(branch);
+  } catch (err) {
+    return { branch: '', bumps: [], error: `invalid branch for ${app.name}: ${(err as Error).message}` };
+  }
 
   if (dryRun) {
     return { branch, bumps };

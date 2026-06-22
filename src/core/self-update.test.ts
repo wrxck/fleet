@@ -148,4 +148,56 @@ describe('applyUpdate', () => {
     expect(r.ok).toBe(false);
     expect(r.output).toMatch(/non-ff/);
   });
+
+  describe('with FLEET_UPDATE_VERIFY enabled', () => {
+    afterEach(() => { delete process.env.FLEET_UPDATE_VERIFY; });
+
+    it('builds when the pulled commit verifies', async () => {
+      process.env.FLEET_UPDATE_VERIFY = '1';
+      m.mockReturnValueOnce(ok(''));            // status clean
+      m.mockReturnValueOnce(ok('aaa1111'));     // pre HEAD
+      m.mockReturnValueOnce(ok(''));            // pull
+      m.mockReturnValueOnce(ok('bbb2222'));     // post HEAD (changed)
+      m.mockReturnValueOnce(ok('Good signature')); // verify-commit
+      m.mockReturnValueOnce(ok('built'));       // npm run build
+      const r = await applyUpdate();
+      expect(r.ok).toBe(true);
+      expect(r.buildOk).toBe(true);
+      const verifyCall = m.mock.calls[4];
+      expect(verifyCall[1]).toContain('verify-commit');
+      expect(verifyCall[1]).toContain('bbb2222');
+    });
+
+    it('refuses to build and rolls back when the pulled commit fails verification', async () => {
+      process.env.FLEET_UPDATE_VERIFY = '1';
+      m.mockReturnValueOnce(ok(''));            // status clean
+      m.mockReturnValueOnce(ok('aaa1111'));     // pre HEAD
+      m.mockReturnValueOnce(ok(''));            // pull
+      m.mockReturnValueOnce(ok('bbb2222'));     // post HEAD (changed)
+      m.mockReturnValueOnce(fail('no signature')); // verify-commit fails
+      m.mockReturnValueOnce(ok(''));            // reset --hard
+      const r = await applyUpdate();
+      expect(r.ok).toBe(false);
+      expect(r.buildOk).toBe(false);
+      expect(r.output).toMatch(/failed signature verification/);
+      // the rollback ran, and crucially npm build did NOT.
+      const resetCall = m.mock.calls[5];
+      expect(resetCall[1]).toEqual(['-C', expect.any(String), 'reset', '--hard', 'aaa1111']);
+      const builtABuild = m.mock.calls.some(c => c[0] === 'npm');
+      expect(builtABuild).toBe(false);
+    });
+
+    it('skips verification when nothing was pulled', async () => {
+      process.env.FLEET_UPDATE_VERIFY = '1';
+      m.mockReturnValueOnce(ok(''));            // status clean
+      m.mockReturnValueOnce(ok('aaa1111'));     // pre
+      m.mockReturnValueOnce(ok(''));            // pull
+      m.mockReturnValueOnce(ok('aaa1111'));     // post (unchanged)
+      m.mockReturnValueOnce(ok('built'));       // build
+      const r = await applyUpdate();
+      expect(r.ok).toBe(true);
+      const ranVerify = m.mock.calls.some(c => Array.isArray(c[1]) && (c[1] as string[]).includes('verify-commit'));
+      expect(ranVerify).toBe(false);
+    });
+  });
 });

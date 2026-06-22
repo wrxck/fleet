@@ -45,7 +45,7 @@ function writeDefaultPolicy(): void {
   }
   mkdirSync(dirname(POLICY_PATH), { recursive: true, mode: 0o710 });
   writeFileSync(POLICY_PATH, JSON.stringify(DEFAULT_POLICY, null, 2) + '\n', { mode: 0o640 });
-  info(`wrote default policy to ${POLICY_PATH} (destructive tools denied)`);
+  info(`wrote default policy to ${POLICY_PATH} (destructive + decrypted-secret reads denied)`);
 }
 
 function homeOf(user: string): string | null {

@@ -10,7 +10,7 @@ vi.mock('node:fs', async () => {
 });
 
 import { existsSync, readFileSync } from 'node:fs';
-import { loadNotifyConfig } from './notify';
+import { loadNotifyConfig, buildBlueBubblesUrl, scrubSecrets } from './notify';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);
@@ -69,6 +69,11 @@ describe('loadNotifyConfig', () => {
     expect(config!.adapters[0].serverUrl).toBe('https://bb.example.com');
   });
 
+  it('does not duplicate the slash when serverUrl has a trailing slash', () => {
+    expect(buildBlueBubblesUrl('https://bb.example.com/', 'pw'))
+      .toBe('https://bb.example.com/api/v1/message/text?password=pw');
+  });
+
   it('returns parsed config with multiple adapters', () => {
     mockExistsSync.mockReturnValue(true);
     mockReadFileSync.mockReturnValue(
@@ -82,5 +87,29 @@ describe('loadNotifyConfig', () => {
     const config = loadNotifyConfig();
     expect(config).not.toBeNull();
     expect(config!.adapters).toHaveLength(2);
+  });
+});
+
+describe('buildBlueBubblesUrl', () => {
+  it('percent-encodes the password in the query string', () => {
+    const url = buildBlueBubblesUrl('https://bb.example.com', 'p@ss w&rd#1');
+    expect(url).toBe('https://bb.example.com/api/v1/message/text?password=p%40ss%20w%26rd%231');
+    // the raw secret must not appear unencoded (it would corrupt/leak the request)
+    expect(url).not.toContain('p@ss w&rd#1');
+  });
+});
+
+describe('scrubSecrets', () => {
+  it('redacts raw and percent-encoded secret occurrences', () => {
+    const msg = 'fetch to https://api.telegram.org/bot12345:AAToken/sendMessage failed (pw=s p@ce, enc=s%20p%40ce)';
+    const out = scrubSecrets(msg, ['12345:AAToken', 's p@ce']);
+    expect(out).not.toContain('12345:AAToken');
+    expect(out).not.toContain('s p@ce');
+    expect(out).not.toContain('s%20p%40ce');
+    expect(out).toContain('[redacted]');
+  });
+
+  it('ignores undefined / empty secrets', () => {
+    expect(scrubSecrets('hello', [undefined, ''])).toBe('hello');
   });
 });
