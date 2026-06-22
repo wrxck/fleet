@@ -22,9 +22,11 @@ export interface Policy {
 }
 
 export const DEFAULT_POLICY: Policy = {
-  tiers: { read: 'allow', mutate: 'allow', destructive: 'deny' },
+  // `secret` (decrypted-value reads) is deny-by-default like `destructive`: the
+  // operator opts in per-tool or per-tier in mcp-policy.json.
+  tiers: { read: 'allow', secret: 'deny', mutate: 'allow', destructive: 'deny' },
   tools: {},
-  rateLimits: { read: 0, mutate: 60, destructive: 10 },
+  rateLimits: { read: 0, secret: 10, mutate: 60, destructive: 10 },
 };
 
 export type Outcome = 'allow' | 'deny' | 'rate-limited' | 'error';
@@ -107,8 +109,8 @@ class RateLimiter {
   private last: Record<Tier, number>;
 
   constructor(private readonly limits: Record<Tier, number>, private readonly now: () => number) {
-    this.tokens = { read: limits.read, mutate: limits.mutate, destructive: limits.destructive };
-    this.last = { read: now(), mutate: now(), destructive: now() };
+    this.tokens = { read: limits.read, secret: limits.secret, mutate: limits.mutate, destructive: limits.destructive };
+    this.last = { read: now(), secret: now(), mutate: now(), destructive: now() };
   }
 
   // try to consume one token for a tier. returns false when the bucket is empty.

@@ -27,6 +27,34 @@ describe('Guard authorisation by tier', () => {
     expect(guard.authorize('fleet_deploy', { app: 'a' }).ok).toBeFalsy();
   });
 
+  it('denies decrypted-secret reads (fleet_secrets_get) by default', () => {
+    const { guard, log } = makeGuard();
+    const d = guard.authorize('fleet_secrets_get', { app: 'a', key: 'DATABASE_URL' });
+    expect(d.ok).toBeFalsy();
+    expect(d.tier).toBe('secret');
+    expect(log.at(-1)?.outcome).toBe('deny');
+    // sibling read-tier secret tools (masked/metadata) stay allowed
+    expect(guard.authorize('fleet_secrets_list', { app: 'a' }).ok).toBeTruthy();
+    expect(guard.authorize('fleet_secrets_drift', { app: 'a' }).ok).toBeTruthy();
+  });
+
+  it('allows fleet_secrets_get only when the operator opts the secret tier (or tool) in', () => {
+    const byTier = makeGuard({ tiers: { secret: 'allow' } });
+    expect(byTier.guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' }).ok).toBeTruthy();
+    const byTool = makeGuard({ tools: { fleet_secrets_get: 'allow' } });
+    expect(byTool.guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' }).ok).toBeTruthy();
+  });
+
+  it('rate-limits decrypted-secret reads even once allowed (default budget 10/min)', () => {
+    const { guard } = makeGuard({ tiers: { secret: 'allow' } });
+    for (let i = 0; i < 10; i++) {
+      expect(guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' }).ok).toBeTruthy();
+    }
+    const limited = guard.authorize('fleet_secrets_get', { app: 'a', key: 'K' });
+    expect(limited.ok).toBeFalsy();
+    expect(limited.reason).toMatch(/rate limit/);
+  });
+
   it('allows a destructive tool only when the policy opts it in', () => {
     const { guard } = makeGuard({ tools: { fleet_deploy: 'allow' } });
     expect(guard.authorize('fleet_deploy', { app: 'a' }).ok).toBeTruthy();
@@ -52,7 +80,7 @@ describe('Guard authorisation by tier', () => {
 
 describe('Guard rate limiting', () => {
   it('limits a tier to its budget then refills over time', () => {
-    const { guard, advance } = makeGuard({ rateLimits: { read: 0, mutate: 2, destructive: 0 } });
+    const { guard, advance } = makeGuard({ rateLimits: { read: 0, secret: 0, mutate: 2, destructive: 0 } });
     expect(guard.authorize('fleet_secrets_set', {}).ok).toBeTruthy();
     expect(guard.authorize('fleet_secrets_set', {}).ok).toBeTruthy();
     const limited = guard.authorize('fleet_secrets_set', {});
@@ -63,7 +91,7 @@ describe('Guard rate limiting', () => {
   });
 
   it('never limits an unlimited (0) tier', () => {
-    const { guard } = makeGuard({ rateLimits: { read: 0, mutate: 60, destructive: 10 } });
+    const { guard } = makeGuard({ rateLimits: { read: 0, secret: 10, mutate: 60, destructive: 10 } });
     for (let i = 0; i < 50; i++) expect(guard.authorize('fleet_status', {}).ok).toBeTruthy();
   });
 });
@@ -129,9 +157,9 @@ describe('Guard app-scoped authorize', () => {
   function guardWith(tools: Record<string, unknown>) {
     return new Guard({
       policy: {
-        tiers: { read: 'allow', mutate: 'allow', destructive: 'deny' },
+        tiers: { read: 'allow', secret: 'deny', mutate: 'allow', destructive: 'deny' },
         tools: tools as never,
-        rateLimits: { read: 0, mutate: 0, destructive: 0 },
+        rateLimits: { read: 0, secret: 0, mutate: 0, destructive: 0 },
       },
       auditSink: () => {},
     });
@@ -167,9 +195,9 @@ describe('Guard app-scoped authorize', () => {
   it('rate-limits an app-scoped allow like any other allow', () => {
     const g = new Guard({
       policy: {
-        tiers: { read: 'allow', mutate: 'allow', destructive: 'deny' },
+        tiers: { read: 'allow', secret: 'deny', mutate: 'allow', destructive: 'deny' },
         tools: { fleet_deploy: { apps: ['nutrition'] } } as never,
-        rateLimits: { read: 0, mutate: 0, destructive: 1 },
+        rateLimits: { read: 0, secret: 0, mutate: 0, destructive: 1 },
       },
       auditSink: () => {},
     });

@@ -38,7 +38,9 @@ export function registerSecretsTools(server: McpServer): void {
     'fleet_secrets_get',
     'Get a single decrypted secret value from the vault. ' +
     'Returns the value stored in the encrypted vault, NOT the runtime value. ' +
-    'Use fleet_secrets_drift to check if runtime differs from vault.',
+    'Use fleet_secrets_drift to check if runtime differs from vault. ' +
+    'NOTE: under the privilege-separated daemon this is the deny-by-default "secret" ' +
+    'tier — the operator must opt it in via mcp-policy.json.',
     {
       app: z.string().describe('App name'),
       key: z.string().describe('Secret key name'),
