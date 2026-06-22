@@ -15,7 +15,7 @@ fleet <command> [options]
 |---------|-------------|
 | `status` | Dashboard: all apps, systemd state, containers, health |
 | `list [--json]` | List registered apps |
-| `deploy <app-dir>` | Full pipeline: register, build, start |
+| `deploy <app\|dir>` | Full pipeline: register if needed, build, start |
 | `start <app>` | Start app via systemctl |
 | `stop <app>` | Stop app via systemctl |
 | `restart <app>` | Restart app via systemctl |
@@ -30,13 +30,13 @@ fleet <command> [options]
 | `nginx list` | List nginx site configs |
 | `secrets init` | Initialise age vault and unseal service |
 | `secrets list [app]` | Show managed secrets (masked values) |
-| `secrets set <app> <KEY> <VAL>` | Set a secret |
+| `secrets set <app> <KEY>` | Set a secret (value prompted interactively or via `--from-stdin`) |
 | `secrets get <app> <KEY>` | Print decrypted value |
 | `secrets import <app> [path]` | Import .env or secrets directory into vault |
 | `secrets export <app>` | Print full decrypted .env to stdout |
 | `secrets seal [app]` | Re-encrypt runtime secrets back to vault |
 | `secrets unseal` | Decrypt vault to /run/fleet-secrets/ |
-| `secrets rotate` | Generate new age key, re-encrypt everything |
+| `secrets rotate <app> [KEY]` | Interactive walkthrough to rotate app secret values |
 | `secrets validate [app]` | Check compose secrets vs vault |
 | `secrets drift [app]` | Detect vault vs runtime differences |
 | `secrets restore <app>` | Restore vault from backup |

@@ -35,10 +35,13 @@ worker       failed    0/1          ✗ down
 
 ## 3. Deploy an app
 
-Point `fleet deploy` at the directory containing your `docker-compose.yml`:
+Point `fleet deploy` at the directory containing your `docker-compose.yml`, or use the registered app name:
 
 ```bash
 sudo fleet deploy /srv/myapp
+
+# Alternatively, by app name (if already registered)
+sudo fleet deploy myapp
 ```
 
 Fleet will:

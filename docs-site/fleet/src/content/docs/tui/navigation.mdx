@@ -9,13 +9,14 @@ The fleet TUI is a terminal dashboard for managing your apps. Launch it with `su
 
 ## Navigation model
 
-The TUI has three top-level views you cycle through with **Tab**:
+The TUI has four top-level views you cycle through with **Tab**:
 
 1. **Dashboard** — app list with status
 2. **Health** — health check results for all apps
 3. **Secrets** — vault management (seal/unseal, view/edit secrets)
+4. **Logs** — multi-app log tail (all registered apps simultaneously)
 
-From any top-level view you can drill into detail views (app detail, logs, secret editing) and return with **Esc**.
+From any top-level view you can drill into detail views (app detail, single-app logs, secret editing) and return with **Esc**.
 
 ## Global shortcuts
 
@@ -23,7 +24,7 @@ These work from every view (except the secret editor, which captures all input):
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Cycle between Dashboard, Health, Secrets |
+| `Tab` | Cycle between Dashboard, Health, Secrets, Logs |
 | `Esc` | Go back to previous view |
 | `q` | Quit the TUI |
 | `x` | Toggle secret redaction (show/hide values) |
