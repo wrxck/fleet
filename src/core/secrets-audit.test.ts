@@ -1,21 +1,17 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { readFileSync, statSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, existsSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
-const { FAKE_HOME } = vi.hoisted(() => {
-  const { mkdtempSync } = require('node:fs');
-  const { tmpdir } = require('node:os');
-  const { join } = require('node:path');
-  return { FAKE_HOME: mkdtempSync(join(tmpdir(), 'fleet-audit-test-')) };
-});
-
-vi.mock('node:os', async () => {
-  const actual = await vi.importActual<typeof import('node:os')>('node:os');
-  return { ...actual, homedir: () => FAKE_HOME };
-});
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 import { auditLog, getAuditPath } from './secrets-audit';
 
 describe('secrets-audit', () => {
+  beforeAll(() => {
+    // redirect the root-owned default (/var/log/fleet) to a writable temp dir.
+    process.env.FLEET_AUDIT_DIR = mkdtempSync(join(homedir(), '.fleet-audit-test-'));
+  });
+
   beforeEach(() => {
     if (existsSync(getAuditPath())) rmSync(getAuditPath(), { force: true });
   });
@@ -46,6 +42,14 @@ describe('secrets-audit', () => {
     auditLog({ op: 'set', app: 'x', actor: 'cron', ok: true });
     const entry = JSON.parse(readFileSync(getAuditPath(), 'utf-8').trim());
     expect(entry.actor).toBe('cron');
+  });
+
+  it('records a trusted numeric uid alongside the spoofable actor', () => {
+    auditLog({ op: 'get', app: 'x', secret: 'K', actor: 'spoofed', ok: true });
+    const entry = JSON.parse(readFileSync(getAuditPath(), 'utf-8').trim());
+    // actor is environment-derived (here overridden); uid is the real one.
+    expect(entry.actor).toBe('spoofed');
+    expect(typeof entry.uid).toBe('number');
   });
 
   it('never writes a `value` field', () => {

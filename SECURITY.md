@@ -115,6 +115,12 @@ depends on the operator deploying fleet as intended.
     or changed host keys fail closed. There is no `StrictHostKeyChecking=no`
     anywhere. First-contact hosts must be pre-seeded in `known_hosts`.
 
+The secrets audit log is written to a fixed root-owned directory
+(`FLEET_AUDIT_DIR`, default `/var/log/fleet`) at mode `0600`, and each entry
+records a trusted `uid` (the kernel login/process uid) alongside the
+environment-derived `actor`, so the trail no longer fragments across user homes
+and the actor cannot be silently spoofed via `SUDO_USER`.
+
 ## Bot authorization
 
 The bot's sender authorization is the single most important control to configure
