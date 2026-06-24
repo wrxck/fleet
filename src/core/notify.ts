@@ -50,7 +50,13 @@ export async function sendNotification(config: NotifyConfig, message: string): P
       const ok = adapter.type === 'bluebubbles'
         ? await sendBlueBubbles(adapter, message)
         : await sendTelegram({ botToken: adapter.botToken ?? '', chatId: adapter.chatId ?? '' }, message);
-      if (ok) anySuccess = true;
+      if (ok) {
+        anySuccess = true;
+      } else if (adapter.type === 'telegram') {
+        // sendTelegram swallows its own fetch error and returns false; surface a
+        // line so a misconfigured/unreachable telegram is still visible in logs.
+        console.error('notify (telegram): send failed');
+      }
     } catch (err) {
       const msg = scrubSecrets(String(err), [adapter.password, adapter.botToken, adapter.cfAccessClientSecret]);
       console.error(`notify (${adapter.type}): ${msg}`);

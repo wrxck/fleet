@@ -9,6 +9,13 @@ describe('assertDestination', () => {
     expect(() => assertDestination('build.host_1')).not.toThrow();
   });
 
+  it('accepts ipv4 and ipv6 hosts', () => {
+    expect(() => assertDestination('matt@192.168.1.10')).not.toThrow();
+    expect(() => assertDestination('matt@2001:db8::1')).not.toThrow();
+    expect(() => assertDestination('matt@[2001:db8::1]')).not.toThrow();
+    expect(() => assertDestination('2001:db8::1')).not.toThrow();
+  });
+
   it('rejects an ssh-flag-injecting destination', () => {
     // the SEC-H1 payload class: a destination ssh would parse as options.
     expect(() => assertDestination('-oProxyCommand=touch /tmp/pwned')).toThrow();

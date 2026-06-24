@@ -1,11 +1,12 @@
 import type { RemoteHost } from './types';
 
-// an ssh destination is either `user@host` or a bare ssh_config alias. only
-// letters, digits and `._-` are permitted, so the value can never be parsed by
-// ssh as an option (e.g. `-oProxyCommand=...`) and never carries shell-special
-// characters. a literal `--` separator is also placed before the destination at
-// the call sites as a structural backstop.
-const DESTINATION_RE = /^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+$/;
+// an ssh destination is either `user@host` or a bare ssh_config alias. the host
+// is letters/digits/`._-` (hostnames, ipv4, aliases) or an ipv6 literal — bare
+// (`2001:db8::1`) or bracketed (`[2001:db8::1]`). a leading dash is rejected
+// outright (see assertDestination) and a literal `--` is also placed before the
+// destination at the call sites, so the value can never be read by ssh as an
+// option regardless.
+const DESTINATION_RE = /^(?:[A-Za-z0-9._-]+@)?(?:\[[0-9A-Fa-f:]+\]|[A-Za-z0-9._:-]+)$/;
 
 export function assertDestination(dest: string): void {
   if (dest.startsWith('-')) {
