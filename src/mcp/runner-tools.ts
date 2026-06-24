@@ -4,6 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { probeRunner } from '../core/runners/probe';
 import { loadRunners, removeRunner, runnersPath, upsertRunner } from '../core/runners/store';
 import type { RemoteHost } from '../core/runners/types';
+import { validateHost } from '../core/runners/validate';
 
 function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
@@ -28,6 +29,13 @@ export function registerRunnerTools(server: McpServer): void {
       if (port !== undefined) host.port = port;
       if (identityFile !== undefined) host.identityFile = identityFile;
       if (defaultCwd !== undefined) host.defaultCwd = defaultCwd;
+      // reject a destination/identityFile/cwd that could inject an ssh flag
+      // before it is ever persisted or placed on an ssh command line.
+      try {
+        validateHost(host);
+      } catch (e) {
+        return text(`Refused: ${e instanceof Error ? e.message : String(e)}`);
+      }
       upsertRunner(id, host);
       return text(`Registered runner "${id}" -> ${destination} (${runnersPath()})`);
     },

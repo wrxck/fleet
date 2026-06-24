@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import type { RemoteHost } from './types';
+import { isValidHost } from './validate';
 
 // the runner registry path: FLEET_RUNNERS_FILE when set, else the fleet local
 // state dir (matching src/core/secrets-audit.ts). a vault-backed registry can
@@ -15,7 +16,15 @@ export function loadRunners(path: string = runnersPath()): Record<string, Remote
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'));
     if (!parsed || typeof parsed !== 'object') return {};
-    return parsed as Record<string, RemoteHost>;
+    // re-validate every entry on load: a registry that was tampered with
+    // directly (bypassing fleet_runner_register) must not be able to feed an
+    // ssh-flag-injecting destination into a command line. invalid entries are
+    // dropped so the affected host simply fails to resolve (fail closed).
+    const out: Record<string, RemoteHost> = {};
+    for (const [id, host] of Object.entries(parsed as Record<string, RemoteHost>)) {
+      if (isValidHost(host)) out[id] = host;
+    }
+    return out;
   } catch {
     // missing or unreadable -> no hosts; remote tasks then fail closed.
     return {};

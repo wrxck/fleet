@@ -41,6 +41,15 @@ describe('buildSshInvocation', () => {
     expect(args).toEqual(expect.arrayContaining(['-p', '2222', '-i', '/k/id', 'matt@box']));
   });
 
+  it('places a -- separator immediately before the destination', () => {
+    const { args } = buildSshInvocation(host, remoteTask({}));
+    const sep = args.indexOf('--');
+    expect(sep).toBeGreaterThanOrEqual(0);
+    // the destination must be the token right after --, so ssh can never read
+    // it as an option (e.g. -oProxyCommand=...).
+    expect(args[sep + 1]).toBe('matt@box');
+  });
+
   it('wraps in a login shell when requested so brew PATH resolves', () => {
     const { args } = buildSshInvocation(host, remoteTask({ loginShell: true, argv: ['node', '-v'] }));
     const remote = args[args.length - 1];
