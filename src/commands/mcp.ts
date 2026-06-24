@@ -6,7 +6,7 @@ import { dirname } from 'node:path';
 
 import { error, info, success, warn, heading } from '../ui/output';
 import { execSafe } from '../core/exec';
-import { generateMcpService, resolveDaemonEntry, MCP_SERVICE_PATH } from '../templates/mcp-units';
+import { generateMcpService, generateMcpSocket, resolveDaemonEntry, MCP_SERVICE_PATH, MCP_SOCKET_PATH } from '../templates/mcp-units';
 import { DEFAULT_POLICY, POLICY_PATH, AUDIT_PATH } from '../mcp/guard';
 import { socketPath, GUARD_GROUP } from '../mcp/socket-path';
 
@@ -90,6 +90,8 @@ function install(args: string[]): void {
   writeDefaultPolicy();
   mkdirSync(dirname(AUDIT_PATH), { recursive: true, mode: 0o750 });
 
+  writeFileSync(MCP_SOCKET_PATH, generateMcpSocket());
+  info(`installed ${MCP_SOCKET_PATH}`);
   writeFileSync(MCP_SERVICE_PATH, generateMcpService());
   info(`installed ${MCP_SERVICE_PATH}`);
   const { entry, fromCheckout } = resolveDaemonEntry();
@@ -99,8 +101,11 @@ function install(args: string[]): void {
     warn('for a standalone install: sudo npm i -g @matthesketh/fleet, then re-run: sudo fleet mcp install');
   }
   run('systemctl', ['daemon-reload']);
-  run('systemctl', ['enable', '--now', 'fleet-mcp.service']);
-  success('fleet-mcp.service started');
+  // enable the socket (systemd owns the socket perms and activates the daemon),
+  // then warm-start the daemon so it is ready before the first connection.
+  run('systemctl', ['enable', '--now', 'fleet-mcp.socket']);
+  run('systemctl', ['start', 'fleet-mcp.service']);
+  success('fleet-mcp.socket and fleet-mcp.service started');
 
   if (args.includes('--write-client-config')) {
     writeClientConfig();
@@ -118,7 +123,9 @@ function install(args: string[]): void {
 function uninstall(): void {
   requireRoot();
   heading('fleet mcp uninstall');
+  spawnSync('systemctl', ['disable', '--now', 'fleet-mcp.socket'], { stdio: 'inherit' });
   spawnSync('systemctl', ['disable', '--now', 'fleet-mcp.service'], { stdio: 'inherit' });
+  if (existsSync(MCP_SOCKET_PATH)) { run('rm', ['-f', MCP_SOCKET_PATH]); info('removed socket unit'); }
   if (existsSync(MCP_SERVICE_PATH)) { run('rm', ['-f', MCP_SERVICE_PATH]); info('removed service unit'); }
   run('systemctl', ['daemon-reload']);
   info(`left ${POLICY_PATH}, the ${GUARD_GROUP} group, and ${AUDIT_PATH} in place (remove manually if desired)`);
@@ -142,8 +149,14 @@ function doctor(): void {
   const grp = execSafe('getent', ['group', GUARD_GROUP]);
   checks.push([`group ${GUARD_GROUP}`, grp.ok, grp.ok ? grp.stdout.split(':')[2] : 'missing']);
 
+  const sockUnit = existsSync(MCP_SOCKET_PATH);
+  checks.push(['socket unit', sockUnit, sockUnit ? MCP_SOCKET_PATH : 'missing']);
+
   const unit = existsSync(MCP_SERVICE_PATH);
   checks.push(['service unit', unit, unit ? MCP_SERVICE_PATH : 'missing']);
+
+  const sockActive = execSafe('systemctl', ['is-active', 'fleet-mcp.socket']);
+  checks.push(['socket active', sockActive.stdout === 'active', sockActive.stdout || sockActive.stderr]);
 
   const active = execSafe('systemctl', ['is-active', 'fleet-mcp.service']);
   checks.push(['service active', active.stdout === 'active', active.stdout || active.stderr]);

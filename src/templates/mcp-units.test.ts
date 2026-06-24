@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, afterEach } from 'vitest';
 
-import { isInsideGitCheckout, resolveDaemonEntry, generateMcpService } from './mcp-units';
+import { isInsideGitCheckout, resolveDaemonEntry, generateMcpService, generateMcpSocket } from './mcp-units';
 
 describe('isInsideGitCheckout', () => {
   const made: string[] = [];
@@ -37,5 +37,19 @@ describe('resolveDaemonEntry / generateMcpService', () => {
     const { entry, fromCheckout } = resolveDaemonEntry();
     expect(fromCheckout).toBeTruthy();
     expect(generateMcpService()).toContain(`ExecStart=/usr/bin/node ${entry} mcp daemon`);
+  });
+
+  it('service requires the socket unit', () => {
+    expect(generateMcpService()).toContain('Requires=fleet-mcp.socket');
+  });
+});
+
+describe('generateMcpSocket', () => {
+  it('binds the socket with a guard-group 0660 acl that systemd owns', () => {
+    const unit = generateMcpSocket();
+    expect(unit).toContain('ListenStream=/run/fleet-mcp/mcp.sock');
+    expect(unit).toContain('SocketGroup=fleet-guard');
+    expect(unit).toContain('SocketMode=0660');
+    expect(unit).toContain('WantedBy=sockets.target');
   });
 });
