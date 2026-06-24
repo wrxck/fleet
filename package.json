@@ -19,6 +19,8 @@
     "build": "tsc && tsc-alias --resolve-full-paths",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
     "changelog": "node scripts/gen-changelog.mjs > CHANGELOG.md",
     "prepublishOnly": "npm run build"
   },
@@ -90,8 +92,15 @@
     "@types/react": "^18.3.28",
     "ink-testing-library": "^4.0.0",
     "tsc-alias": "1.8.16",
-    "tsx": "4.21.0",
+    "tsx": "4.22.4",
     "typescript": "5.6.3",
-    "vitest": "4.0.18"
+    "vitest": "4.1.9"
+  },
+  "overrides": {
+    "ws": "8.21.0",
+    "qs": "6.15.2",
+    "ip-address": "10.2.0",
+    "fast-uri": "3.1.2",
+    "hono": "4.12.27"
   }
 }
