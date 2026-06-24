@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { writeJsonAtomic } from '../fs-json';
 import type { AuditConfig } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,11 +27,7 @@ export function loadAuditConfig(path: string = DEFAULT_CONFIG_PATH): AuditConfig
 
 // persist the audit config via an atomic tmp-file rename.
 export function saveAuditConfig(config: AuditConfig, path: string = DEFAULT_CONFIG_PATH): void {
-  const dir = dirname(path);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const tmp = path + '.tmp';
-  writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n');
-  renameSync(tmp, path);
+  writeJsonAtomic(path, config);
 }
 
 export function auditConfigPath(): string {

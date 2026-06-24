@@ -1,7 +1,8 @@
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { writeJsonAtomic } from '../fs-json';
 import type { DepsCache } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -14,11 +15,7 @@ export function loadCache(path: string = DEFAULT_CACHE_PATH): DepsCache | null {
 }
 
 export function saveCache(cache: DepsCache, path: string = DEFAULT_CACHE_PATH): void {
-  const dir = dirname(path);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const tmpPath = path + '.tmp';
-  writeFileSync(tmpPath, JSON.stringify(cache, null, 2) + '\n');
-  renameSync(tmpPath, path);
+  writeJsonAtomic(path, cache);
 }
 
 export function isCacheStale(cache: DepsCache | null, intervalHours: number): boolean {

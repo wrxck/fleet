@@ -1,4 +1,6 @@
-import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+
+import { writeJsonAtomic } from '../fs-json';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,12 +30,7 @@ export function loadAuditCache(path: string = DEFAULT_CACHE_PATH): AuditCache {
 export function saveAuditRecord(record: AuditRecord, path: string = DEFAULT_CACHE_PATH): void {
   const cache = loadAuditCache(path);
   cache.audits[record.target] = record;
-
-  const dir = dirname(path);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const tmp = path + '.tmp';
-  writeFileSync(tmp, JSON.stringify(cache, null, 2) + '\n');
-  renameSync(tmp, path);
+  writeJsonAtomic(path, cache);
 }
 
 export function auditCachePath(): string {
