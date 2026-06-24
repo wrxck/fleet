@@ -147,12 +147,13 @@ HIGH-or-above advisory (`npm run audit:prod`). A small `overrides` block in
 `package.json` pins patched versions of transitive dependencies that fleet does
 not exercise at runtime:
 
-- `express` / `qs` / `ip-address` / `express-rate-limit` / `hono` / `fast-uri`
-  are pulled in by `@modelcontextprotocol/sdk` for its HTTP/SSE transport. fleet
-  uses a **custom unix-socket MCP transport** (`src/mcp/socket-transport.ts`) and
-  never imports the SDK's HTTP transport, so those advisories are not on a
-  reachable code path. The overrides keep the audit clean and pull the patched
-  versions regardless.
+- `qs` / `ip-address` / `express-rate-limit` / `hono` / `fast-uri` are pulled in
+  by `@modelcontextprotocol/sdk` (via its `express`/`hono` HTTP-transport stack).
+  fleet uses a **custom unix-socket MCP transport** (`src/mcp/socket-transport.ts`)
+  and never imports the SDK's HTTP transport, so those advisories are not on a
+  reachable code path. The `overrides` block pins patched `qs`, `ip-address`,
+  `fast-uri` and `hono` (the `ip-address` bump also resolves the
+  `express-rate-limit` advisory) so `npm audit` stays clean.
 - `ws` is pulled in by `ink` (the TUI renderer) and is not used as a
   network-facing server.
 
