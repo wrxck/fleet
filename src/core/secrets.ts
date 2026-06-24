@@ -5,6 +5,7 @@ import { SecretsError, VaultNotInitializedError } from './errors';
 import { execSafe } from './exec';
 import { assertAppName, assertFilePath } from './validate';
 import { withFileLock } from './file-lock';
+import { scrubSecrets } from './redact';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // vault dir resolves from FLEET_VAULT_DIR if set; otherwise falls back to
@@ -230,20 +231,20 @@ export function removeBackup(app: string, bakPath?: string): void {
 export function ageEncrypt(plaintext: string): string {
   const pubkey = getPublicKey();
   const r = execSafe('age', ['-r', pubkey, '--armor'], { input: plaintext });
-  if (!r.ok) throw new SecretsError(`age encrypt failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age encrypt failed: ${scrubSecrets(r.stderr)}`);
   return r.stdout;
 }
 
 export function ageDecrypt(ciphertext: string | Buffer): string {
   const r = execSafe('age', ['-d', '-i', KEY_PATH], { input: ciphertext.toString() });
-  if (!r.ok) throw new SecretsError(`age decrypt failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age decrypt failed: ${scrubSecrets(r.stderr)}`);
   return r.stdout;
 }
 
 export function ageDecryptFile(filePath: string): string {
   assertFilePath(filePath);
   const r = execSafe('age', ['-d', '-i', KEY_PATH, filePath]);
-  if (!r.ok) throw new SecretsError(`age decrypt file failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age decrypt file failed: ${scrubSecrets(r.stderr)}`);
   return r.stdout;
 }
 
