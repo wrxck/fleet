@@ -12,6 +12,7 @@ import { applySuppressions } from '../core/audit/suppress';
 import { formatReport } from '../core/audit/reporters/cli';
 import { FleetError } from '../core/errors';
 import { heading, success, error, info } from '../ui/output';
+import { extractFlag } from './args';
 import type { AuditRecord } from '../core/audit/types';
 
 // `fleet audit` — App Store compliance audits for mobile app projects, backed
@@ -160,10 +161,4 @@ async function auditIgnores(): Promise<void> {
       `    ${rule.reason}\n`,
     );
   }
-}
-
-function extractFlag(args: string[], flag: string): string | undefined {
-  const idx = args.indexOf(flag);
-  if (idx === -1 || idx + 1 >= args.length) return undefined;
-  return args[idx + 1];
 }
