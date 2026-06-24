@@ -37,4 +37,15 @@ describe('scrubSecrets', () => {
   it('returns empty string for empty input', () => {
     expect(scrubSecrets('')).toBe('');
   });
+
+  it('caps very long input so the regex cannot stall', () => {
+    // SECRET_ASSIGN backtracks quadratically on a long word-char run; the cap
+    // bounds it. assert it returns quickly and is truncated.
+    const huge = 'a'.repeat(100_000);
+    const t0 = Date.now();
+    const out = scrubSecrets(huge);
+    expect(Date.now() - t0).toBeLessThan(500);
+    expect(out.length).toBeLessThan(10_000);
+    expect(out).toContain('[truncated]');
+  });
 });

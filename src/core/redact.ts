@@ -18,11 +18,18 @@ const URL_CREDENTIAL = /([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+:)[^\s@/]+@/gi;
 // shorter api tokens fleet's providers list classifies as critical are caught.
 const HIGH_ENTROPY = /[A-Za-z0-9+/_-]{24,}={0,2}/g;
 
+// cap the input before the regex passes. the SECRET_ASSIGN leading `[A-Za-z0-9_]*`
+// backtracks quadratically on a long run of word chars, so an unbounded stderr
+// line could stall the scrubber for seconds. error/credential strings worth
+// scrubbing are well under this; anything larger is truncated (with a marker).
+const MAX_SCRUB_LEN = 8192;
+
 // scrubSecrets redacts secret material across the whole input, preserving line
 // structure. use for live error/response strings returned to a caller.
 export function scrubSecrets(text: string): string {
   if (!text) return '';
-  return text
+  const input = text.length > MAX_SCRUB_LEN ? text.slice(0, MAX_SCRUB_LEN) + '…[truncated]' : text;
+  return input
     .replace(AGE_KEY, '[redacted-age-key]')
     .replace(URL_CREDENTIAL, '$1[redacted]@')
     .replace(SECRET_ASSIGN, (_m, key: string) => `${key}=[redacted]`)
