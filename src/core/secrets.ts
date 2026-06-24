@@ -6,6 +6,7 @@ import { execSafe } from './exec';
 import { assertAppName, assertFilePath } from './validate';
 import { withFileLock } from './file-lock';
 import { scrubSecrets } from './redact';
+import { writeJsonAtomic } from './fs-json';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // vault dir resolves from FLEET_VAULT_DIR if set; otherwise falls back to
@@ -116,10 +117,10 @@ export function loadManifest(): Manifest {
 }
 
 export function saveManifest(manifest: Manifest): void {
-  // 0600: the manifest holds key names, recipients and metadata — not secret
-  // values, but there's no reason for it to be world-readable. Match the
-  // vault's root-only posture explicitly rather than relying on umask.
-  writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 });
+  // atomic write (tmp + fsync + rename) so a crash or a concurrent reader never
+  // sees a torn manifest. 0600: the manifest holds key names, recipients and
+  // metadata — not secret values, but there's no reason for it to be readable.
+  writeJsonAtomic(MANIFEST_PATH, manifest, { mode: 0o600 });
 }
 
 /**
