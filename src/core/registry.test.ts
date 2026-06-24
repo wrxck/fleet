@@ -330,7 +330,28 @@ describe('security: prototype pollution', () => {
     });
     mockReadFileSync.mockReturnValue(maliciousJson);
     load();
-    // Object prototype should not be polluted
+    // object prototype should not be polluted
     expect(({} as Record<string, unknown>).isAdmin).toBeUndefined();
+  });
+
+  it('warns on a tampered serviceName but still loads (non-fatal integrity check)', () => {
+    mockExistsSync.mockReturnValue(true);
+    mockReadFileSync.mockReturnValue(JSON.stringify({
+      version: 1,
+      apps: [makeApp({ name: 'evil', serviceName: '../../etc/systemd/system/x', composePath: 'relative/path' })],
+      infrastructure: {
+        databases: { serviceName: 'docker-databases', composePath: '' },
+        nginx: { configPath: '/etc/nginx' },
+      },
+    }));
+    const warn = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
+    const reg = load();
+    // the app is still returned (never silently dropped)...
+    expect(reg.apps.find(a => a.name === 'evil')).toBeTruthy();
+    // ...and both the serviceName and composePath issues were flagged.
+    const out = warn.mock.calls.map(c => String(c[0])).join('');
+    expect(out).toMatch(/suspicious serviceName/);
+    expect(out).toMatch(/not absolute/);
+    warn.mockRestore();
   });
 });
