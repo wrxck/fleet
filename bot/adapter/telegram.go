@@ -36,26 +36,44 @@ func NewTelegram(botToken string, allowedChatIDs, allowedSenderIDs, alertChatIDs
 	}
 }
 
-// IsAuthorizedSender reports whether senderID is in the allowed list.
-// Telegram senders are user IDs; we authorise by chat ID (transport-level)
-// AND by sender ID for parity with the BlueBubbles adapter.
-//
-// If no per-sender list is configured, fall back to chat-level allow
-// (preserves existing behaviour for single-user installs).
-func (a *TelegramAdapter) IsAuthorizedSender(senderID string) bool {
-	if len(a.allowedSenderIDs) == 0 {
-		return true
-	}
-	n, err := strconv.ParseInt(senderID, 10, 64)
-	if err != nil {
+// IsAuthorizedSender reports whether senderID may invoke commands. An explicit
+// allowedSenderIDs list is authoritative when present. When it is empty we
+// default-deny rather than allow: only a private (1:1) chat is accepted, which
+// telegram models by making the chat id equal the sender's user id. group and
+// channel ids are negative and never equal a sender id, so every member of an
+// allowlisted group is rejected until the operator configures allowedSenderIds.
+// this prevents "any member of an allowlisted group gets root via /sh".
+func (a *TelegramAdapter) IsAuthorizedSender(senderID, chatID string) bool {
+	if len(a.allowedSenderIDs) > 0 {
+		n, err := strconv.ParseInt(senderID, 10, 64)
+		if err != nil {
+			return false
+		}
+		for _, id := range a.allowedSenderIDs {
+			if id == n {
+				return true
+			}
+		}
 		return false
 	}
-	for _, id := range a.allowedSenderIDs {
-		if id == n {
-			return true
+	return senderID != "" && senderID == chatID
+}
+
+// ValidateTelegramAuth rejects an insecure telegram configuration at startup:
+// an allowlisted group/channel chat (negative id) with no per-sender allowlist
+// would let every member of that group issue commands. callers should refuse to
+// start when this returns an error.
+func ValidateTelegramAuth(allowedChatIDs, allowedSenderIDs []int64) error {
+	if len(allowedSenderIDs) > 0 {
+		return nil
+	}
+	for _, id := range allowedChatIDs {
+		if id < 0 {
+			return fmt.Errorf("telegram chat %d is a group/channel but no allowedSenderIds are configured; "+
+				"set allowedSenderIds to the operator's user id(s) so group members cannot issue commands", id)
 		}
 	}
-	return false
+	return nil
 }
 
 // Name returns the adapter identifier.
