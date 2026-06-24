@@ -65,6 +65,12 @@ depends on the operator deploying fleet as intended.
 2. **`fleet-guard` group membership is root-equivalent.** Any process whose user
    is in the `fleet-guard` group can reach the full policy-allowed tool surface
    of the root MCP daemon. Treat adding a user to `fleet-guard` as granting root.
+   The daemon socket (`/run/fleet-mcp/mcp.sock`) is created and locked to
+   `root:fleet-guard 0660` by systemd via `fleet-mcp.socket` (no listen-then-chmod
+   race). Authorization is by group membership; the audit log records the tool,
+   tier and outcome but **not** the calling uid/pid, so a multi-member guard
+   group has no per-principal attribution — keep the group to a single trusted
+   operator if attribution matters.
 
 3. **The v2 secrets socket authorizes by unix group only.** A per-app secrets
    agent serves all of that app's decrypted secrets to any process that can open
@@ -123,6 +129,10 @@ correctly:
   rejects stale/replayed requests via a signed timestamp + nonce.
 - Sensitive commands (`/sh`, `/secrets`) should be routed through `fleet-guard`
   approval where possible.
+- `/claude` runs with the host home mounted and read-only file tools plus web
+  fetch enabled, so an authorized operator can read host files and reach the
+  network through it. This is gated entirely by the sender allowlist above; do
+  not widen the allowlist beyond trusted operators.
 
 ## Dependency posture
 
