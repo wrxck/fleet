@@ -15,9 +15,9 @@ const selectionExpiry = 2 * time.Minute
 // pendingSelection holds state for a command that returned Options, awaiting
 // the user to reply with a numeric choice.
 type pendingSelection struct {
-	cmd      command.Command
-	options  []string
-	original adapter.InboundMessage
+	cmd       command.Command
+	options   []string
+	original  adapter.InboundMessage
 	expiresAt time.Time
 }
 
@@ -88,7 +88,7 @@ func (r *Router) dispatch(msg adapter.InboundMessage) {
 	// already authenticated the sender at the transport layer.
 	if a, ok := r.adapters[msg.Provider]; ok {
 		if auth, ok := a.(adapter.SenderAuthorizer); ok {
-			if !auth.IsAuthorizedSender(msg.SenderID) {
+			if !auth.IsAuthorizedSender(msg.SenderID, msg.ChatID) {
 				return
 			}
 		}
@@ -126,9 +126,9 @@ func (r *Router) dispatch(msg adapter.InboundMessage) {
 	if len(resp.Options) > 0 {
 		r.mu.Lock()
 		r.pending[msg.ChatID] = &pendingSelection{
-			cmd:      cmd,
-			options:  resp.Options,
-			original: msg,
+			cmd:       cmd,
+			options:   resp.Options,
+			original:  msg,
 			expiresAt: time.Now().Add(selectionExpiry),
 		}
 		r.mu.Unlock()
@@ -189,9 +189,9 @@ func (r *Router) handlePendingSelection(msg adapter.InboundMessage, text string)
 	if len(resp.Options) > 0 {
 		r.mu.Lock()
 		r.pending[msg.ChatID] = &pendingSelection{
-			cmd:      ps.cmd,
-			options:  resp.Options,
-			original: ps.original,
+			cmd:       ps.cmd,
+			options:   resp.Options,
+			original:  ps.original,
 			expiresAt: time.Now().Add(selectionExpiry),
 		}
 		r.mu.Unlock()

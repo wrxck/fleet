@@ -63,6 +63,9 @@ func main() {
 
 	// Add adapters based on config.
 	if tg := cfg.Adapters.Telegram; tg != nil && tg.Enabled {
+		if err := adapter.ValidateTelegramAuth(tg.AllowedChatIDs, tg.AllowedSenderIDs); err != nil {
+			log.Fatalf("telegram config: %v", err)
+		}
 		tgAdapter := adapter.NewTelegram(tg.BotToken, tg.AllowedChatIDs, tg.AllowedSenderIDs, tg.AlertChatIDs)
 		r.AddAdapter(tgAdapter)
 		log.Println("telegram adapter registered")
@@ -72,6 +75,7 @@ func main() {
 		bbAdapter := adapter.NewBlueBubbles(
 			im.ServerURL,
 			im.Password,
+			im.WebhookSecret,
 			im.CfAccessClientID,
 			im.CfAccessClientSecret,
 			im.WebhookPort,

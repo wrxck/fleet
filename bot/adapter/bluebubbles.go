@@ -11,31 +11,44 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+// replayWindow bounds how old a signed webhook delivery may be and how long a
+// seen message guid is remembered for de-duplication.
+const replayWindow = 10 * time.Minute
 
 // webhookSignatureHeader is the HTTP header that must carry the hex-encoded
 // HMAC-SHA256 of the raw request body, computed with the adapter password as
 // the shared key. Requests without a valid signature are rejected.
 const webhookSignatureHeader = "X-BlueBubbles-Signature"
 
-// BlueBubblesAdapter implements Adapter for iMessage via BlueBubbles relay.
+// BlueBubblesAdapter implements the adapter interface for imessage via the
+// bluebubbles relay.
 type BlueBubblesAdapter struct {
-	serverURL       string
-	password        string
-	cfClientID      string
-	cfClientSecret  string
-	webhookPort     int
-	allowedNumbers  map[string]bool
-	alertChatGuids  []string
-	client          *http.Client
-	server          *http.Server
+	serverURL      string
+	password       string
+	webhookSecret  string
+	cfClientID     string
+	cfClientSecret string
+	webhookPort    int
+	allowedNumbers map[string]bool
+	alertChatGuids []string
+	client         *http.Client
+	server         *http.Server
+	replay         *replayGuard
 }
 
-// NewBlueBubbles constructs a BlueBubblesAdapter.
+// NewBlueBubbles constructs a BlueBubblesAdapter. webhookSecret keys the
+// inbound-webhook HMAC; when empty it falls back to password for backwards
+// compatibility, but separating the two means a leak of one does not grant the
+// other (the API password is sent to the relay on every outbound call, so it is
+// the weaker secret to verify inbound auth with).
 func NewBlueBubbles(
-	serverURL, password, cfClientID, cfClientSecret string,
+	serverURL, password, webhookSecret, cfClientID, cfClientSecret string,
 	webhookPort int,
 	allowedNumbers, alertChatGuids []string,
 ) *BlueBubblesAdapter {
@@ -46,13 +59,67 @@ func NewBlueBubbles(
 	return &BlueBubblesAdapter{
 		serverURL:      serverURL,
 		password:       password,
+		webhookSecret:  webhookSecret,
 		cfClientID:     cfClientID,
 		cfClientSecret: cfClientSecret,
 		webhookPort:    webhookPort,
 		allowedNumbers: allowed,
 		alertChatGuids: alertChatGuids,
 		client:         &http.Client{},
+		replay:         newReplayGuard(replayWindow),
 	}
+}
+
+// signingKey is the secret used to verify inbound webhook signatures: a
+// dedicated webhookSecret when configured, otherwise the API password.
+func (b *BlueBubblesAdapter) signingKey() string {
+	if b.webhookSecret != "" {
+		return b.webhookSecret
+	}
+	return b.password
+}
+
+// replayGuard rejects duplicate or stale webhook deliveries. it keys on the
+// imessage message guid — which is covered by the hmac signature and so cannot
+// be forged or altered without the signing secret — and additionally rejects
+// deliveries whose signed creation time is outside the window. together these
+// close the replay gap: a captured-and-resent body is dropped because its guid
+// is already seen or its timestamp is stale.
+type replayGuard struct {
+	mu     sync.Mutex
+	seen   map[string]time.Time
+	window time.Duration
+}
+
+func newReplayGuard(window time.Duration) *replayGuard {
+	return &replayGuard{seen: make(map[string]time.Time), window: window}
+}
+
+// admit reports whether a delivery with the given guid and signed creation time
+// (unix milliseconds; 0 when unknown) should be processed. it returns false for
+// a replayed guid or an out-of-window timestamp, and prunes expired entries so
+// the seen-set cannot grow unbounded.
+func (g *replayGuard) admit(guid string, createdMs int64, now time.Time) bool {
+	if createdMs > 0 {
+		age := now.Sub(time.UnixMilli(createdMs))
+		if age > g.window || age < -g.window {
+			return false
+		}
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for k, t := range g.seen {
+		if now.Sub(t) > g.window {
+			delete(g.seen, k)
+		}
+	}
+	if guid != "" {
+		if _, dup := g.seen[guid]; dup {
+			return false
+		}
+		g.seen[guid] = now
+	}
+	return true
 }
 
 // Name returns the adapter identifier.
@@ -91,7 +158,10 @@ func (b *BlueBubblesAdapter) Start(ctx context.Context, inbox chan<- InboundMess
 // IsAuthorizedSender reports whether the given sender identity is in the
 // configured allowlist. The router consults this before dispatching any
 // command originating from the BlueBubbles adapter.
-func (b *BlueBubblesAdapter) IsAuthorizedSender(senderID string) bool {
+// chatID is unused: bluebubbles authorises strictly by the configured handle
+// allowlist (default-deny — an empty map rejects everyone), independent of the
+// chat the message arrived on.
+func (b *BlueBubblesAdapter) IsAuthorizedSender(senderID, _ string) bool {
 	return b.allowedNumbers[senderID]
 }
 
@@ -101,14 +171,15 @@ func (b *BlueBubblesAdapter) IsAuthorizedSender(senderID string) bool {
 // adapter refuses to accept any webhook) to avoid silently accepting an
 // unauthenticated deployment.
 func (b *BlueBubblesAdapter) verifyWebhookSignature(body []byte, headerSig string) bool {
-	if b.password == "" || headerSig == "" {
+	key := b.signingKey()
+	if key == "" || headerSig == "" {
 		return false
 	}
 	provided, err := hex.DecodeString(headerSig)
 	if err != nil {
 		return false
 	}
-	mac := hmac.New(sha256.New, []byte(b.password))
+	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write(body)
 	expected := mac.Sum(nil)
 	return subtle.ConstantTimeCompare(provided, expected) == 1
@@ -136,10 +207,12 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 		var payload struct {
 			Type string `json:"type"`
 			Data struct {
+				GUID   string `json:"guid"`
 				Handle struct {
 					Address string `json:"address"`
 				} `json:"handle"`
-				Text string `json:"text"`
+				Text        string `json:"text"`
+				DateCreated int64  `json:"dateCreated"`
 			} `json:"data"`
 		}
 
@@ -153,13 +226,19 @@ func (b *BlueBubblesAdapter) webhookHandler(inbox chan<- InboundMessage) http.Ha
 			return
 		}
 
-		sender := payload.Data.Handle.Address
-		if !b.IsAuthorizedSender(sender) {
+		// reject replayed or stale deliveries. the guid and dateCreated are
+		// covered by the verified signature, so they cannot be forged.
+		if !b.replay.admit(payload.Data.GUID, payload.Data.DateCreated, time.Now()) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
+		sender := payload.Data.Handle.Address
 		chatGuid := fmt.Sprintf("iMessage;-;%s", sender)
+		if !b.IsAuthorizedSender(sender, chatGuid) {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 
 		inbox <- InboundMessage{
 			ChatID:   chatGuid,
