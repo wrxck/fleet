@@ -41,7 +41,6 @@ export function resolveDaemonEntry(): { entry: string; fromCheckout: boolean } {
 export function generateMcpSocket(): string {
   return `[Unit]
 Description=Fleet MCP root daemon socket
-PartOf=fleet-mcp.service
 
 [Socket]
 ListenStream=/run/fleet-mcp/mcp.sock
@@ -75,11 +74,12 @@ Type=simple
 ExecStart=/usr/bin/node ${entry} mcp daemon
 Restart=on-failure
 RestartSec=2
-RuntimeDirectory=fleet-mcp
-RuntimeDirectoryMode=0755
+# the /run/fleet-mcp runtime dir is owned by fleet-mcp.socket and deliberately
+# not re-declared here: declaring it twice would let a service restart tear down
+# the directory — and the live socket inside it — that the socket unit owns.
+# when the daemon is run directly without systemd, daemon.ts creates the dir.
 # the daemon is intentionally NOT sandboxed: its tools drive systemctl, docker
-# and nginx, so it needs full root. access control is the socket mode + group,
-# now enforced by systemd via fleet-mcp.socket.
+# and nginx, so it needs full root. access control is the socket mode + group.
 
 [Install]
 WantedBy=multi-user.target
