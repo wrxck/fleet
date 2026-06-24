@@ -150,3 +150,33 @@ Backup explorer HTTP server (path allowlists, `..` rejection, CSRF custom-header
 **Phase 4 — Architecture (larger, can span releases):** ARC-P2 (lock git-onboard — small, do in Phase 2) · ARC-P5 (atomic manifest — Phase 2) · ARC-P4 (consolidate notify) · ARC-P1/P6 (continue CommandDef migration + secrets v1 sunset plan) · ARC-P3 (test-seam standardization) · ARC-P7 (TUI→core).
 
 **Review & test process for each phase:** unit tests for every fix; targeted integration tests for the bot auth path, ssh arg-injection, and peer-creds; full `vitest run` + `tsc --noEmit` green gate; `/code-review` on the diff; manual verify of the bot allowlist and webhook on a scratch deploy before merge.
+
+---
+
+# 6. Remediation status (implemented 2026-06-24)
+
+Branch `chore/audit-remediation-2026-06`, 14 commits. Gate: typecheck clean, build clean, `npm audit` 0 vulns (prod + dev), **TS 1935 tests pass**, bot suite + `go vet` pass.
+
+**Done**
+- **Phase 0:** CI gains Node 24 + a typecheck step + a prod-dependency `npm audit` gate; `overrides` pin patched transitive deps and dev-dep bumps clear the audit (0 vulns); `SECURITY.md` added (threat model + 10 by-design impacts + dep posture).
+- **Phase 1 (all Critical/High):** SEC-C1 Telegram default-deny + group-chat startup guard; SEC-C2 BlueBubbles dedicated signing key + replay guard; SEC-H1 ssh destination validation + `--`; SEC-H3 `fleet-mcp.socket` (systemd-owned ACL, fixes the dead socket-activation path + wrong `connect.ts` hint); SEC-H4 live age/systemd-creds stderr scrubbing; SEC-H5 deploy-webhook credential loading + non-loopback warning. SEC-H2 (`/claude` reach) documented per the agreed "harden-where-cheap" scope.
+- **Phase 2:** SEC-M1 github.ts self-validation; M2 registry load-time integrity warning; M3 runner registry validation on load; M5 audited `get` path; M6 root-owned audit log with a trusted uid; M7 `/waf` rate bounds; M8 `cf_block_ip` IP validation; ARC-P2 locked git-onboard write; ARC-P5 atomic manifest.
+- **Phase 3:** REU-1 removed phantom `chokidar`; REU-3 four JSON writers onto `writeJsonAtomic`; REU-4 `extractFlag`/`sleep`/`sendTelegram` deduped; REU-2 `messageOf()` helper added (+ backup.ts converted).
+- **Phase 4:** unguarded TUI poll rejection fixed; `git.ts` ssh-sock init named/testable.
+
+**Deferred (documented, recommended as focused follow-up PRs)**
+- **SEC-M4** — build subprocess env from an allowlist (changing the central `execSafe` default risks breaking git/gh/docker/systemctl/ssh; defence-in-depth, no demonstrated leak).
+- **REU-2 full sweep** — ~36 remaining `(x as Error).message` casts + ~33 `instanceof` copies → `messageOf` (mechanical, the helper is in place).
+- **REU-5** — consolidate the age encrypt/decrypt wrappers + `parseEnvMap` + `resolveVaultDir` shared between secrets v1/v2 (security-sensitive; do with full secrets-test coverage).
+- **ARC-P1/P6** — finish the `CommandDef` migration of the 15 legacy commands and set a secrets-v1 sunset date.
+- **ARC-P3** — standardise on the temp-dir test seam; retire per-function `vi.mock('node:fs')`.
+- **ARC-P4 / P7** — consolidate the three notifiers on `NotifierAdapter`; route TUI orchestration through core.
+- **Tooling** — add a linter (Biome, conservative config) + a `process.exit`-in-`commands/*` guard.
+
+# 7. v1.14.0 upgrade notes (operator-facing)
+
+- **Telegram bot now default-denies.** With no `allowedSenderIds`, only a private (1:1) operator chat is accepted; the bot **refuses to start** if an allowlisted chat is a group/channel and no `allowedSenderIds` is set. Action: set `allowedSenderIds` to your user id(s) if you use a group chat.
+- **BlueBubbles:** set a dedicated `webhookSecret` (separate from the relay `password`) for inbound webhook verification; replayed/stale webhooks are now rejected.
+- **Secrets audit log moved** from `~/.local/share/fleet/audit.jsonl` to `/var/log/fleet/secrets-audit.jsonl` (`FLEET_AUDIT_DIR` overrides). Old history is not migrated.
+- **MCP install** now ships `fleet-mcp.socket`; `sudo systemctl start fleet-mcp.socket` is the correct start command. Re-run `sudo fleet mcp install`.
+- **Deploy webhook:** move the token out of the unit's `Environment=` to `LoadCredential=` (the script reads `$CREDENTIALS_DIRECTORY/deploy-webhook-token`).
