@@ -76,19 +76,41 @@ function defaultRegistry(): Registry {
   };
 }
 
+// the root daemon uses serviceName to build /etc/systemd/system paths and
+// composePath as a `docker compose` cwd. these are validated at registration,
+// but if the registry file is edited directly (it can live in a user-writable
+// checkout) the daemon would trust the new values. re-check them on load and
+// warn loudly on anything malformed — a serviceName with path separators or a
+// non-absolute composePath is a tamper signal. non-fatal so a legitimate
+// registry is never rejected; callers that act on a flagged entry should treat
+// the warning as a stop sign.
+const SAFE_SERVICE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._@-]*$/;
+
+function checkIntegrity(reg: Registry): Registry {
+  for (const app of reg.apps ?? []) {
+    if (app.serviceName && !SAFE_SERVICE_RE.test(app.serviceName)) {
+      process.stderr.write(`[registry] WARNING: app "${app.name}" has a suspicious serviceName ${JSON.stringify(app.serviceName)} — possible tampering\n`);
+    }
+    if (app.composePath && !app.composePath.startsWith('/')) {
+      process.stderr.write(`[registry] WARNING: app "${app.name}" composePath ${JSON.stringify(app.composePath)} is not absolute — possible tampering\n`);
+    }
+  }
+  return reg;
+}
+
 export function load(): Registry {
   const path = resolveRegistryPath();
   const bakPath = path + '.bak';
   if (existsSync(path)) {
     try {
-      return JSON.parse(readFileSync(path, 'utf-8')) as Registry;
+      return checkIntegrity(JSON.parse(readFileSync(path, 'utf-8')) as Registry);
     } catch {
       process.stderr.write(`[registry] Warning: failed to parse ${path}, trying ${bakPath}\n`);
     }
   }
   if (existsSync(bakPath)) {
     try {
-      return JSON.parse(readFileSync(bakPath, 'utf-8')) as Registry;
+      return checkIntegrity(JSON.parse(readFileSync(bakPath, 'utf-8')) as Registry);
     } catch {
       process.stderr.write(`[registry] Warning: failed to parse ${bakPath}, using default\n`);
     }
