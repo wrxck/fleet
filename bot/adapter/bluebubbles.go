@@ -100,6 +100,12 @@ func newReplayGuard(window time.Duration) *replayGuard {
 // a replayed guid or an out-of-window timestamp, and prunes expired entries so
 // the seen-set cannot grow unbounded.
 func (g *replayGuard) admit(guid string, createdMs int64, now time.Time) bool {
+	// the guid is the dedup key; without it there is no anti-replay (a fresh
+	// timestamp alone does not stop a replay within the window), so fail closed.
+	// real bluebubbles "new-message" deliveries always carry a message guid.
+	if guid == "" {
+		return false
+	}
 	if createdMs > 0 {
 		age := now.Sub(time.UnixMilli(createdMs))
 		if age > g.window || age < -g.window {
@@ -113,12 +119,10 @@ func (g *replayGuard) admit(guid string, createdMs int64, now time.Time) bool {
 			delete(g.seen, k)
 		}
 	}
-	if guid != "" {
-		if _, dup := g.seen[guid]; dup {
-			return false
-		}
-		g.seen[guid] = now
+	if _, dup := g.seen[guid]; dup {
+		return false
 	}
+	g.seen[guid] = now
 	return true
 }
 

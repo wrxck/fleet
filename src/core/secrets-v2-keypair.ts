@@ -26,7 +26,7 @@ export function reencryptForRecipient(args: {
 
 export function generateKeypair(): Keypair {
   const r = execSafe('age-keygen', []);
-  if (!r.ok) throw new SecretsError(`age-keygen failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age-keygen failed: ${scrubSecrets(r.stderr)}`);
   const lines = r.stdout.split('\n');
   const pub = lines.find(l => l.startsWith('# public key: '))?.slice('# public key: '.length).trim();
   const priv = lines.find(l => l.startsWith('AGE-SECRET-KEY-'))?.trim();

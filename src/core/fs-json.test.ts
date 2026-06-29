@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,10 +29,39 @@ describe('writeJsonAtomic / readJson', () => {
     expect(statSync(path).mode & 0o777).toBe(0o600);
   });
 
-  it('leaves no .tmp sibling behind', () => {
-    const path = join(tmp(), 'state.json');
+  it('leaves no temp sibling behind on success', () => {
+    const dir = tmp();
+    const path = join(dir, 'state.json');
     writeJsonAtomic(path, { ok: true });
-    expect(() => statSync(`${path}.tmp`)).toThrow();
+    // unique-suffixed temp file must be renamed away, not just the legacy `.tmp`.
+    expect(readdirSync(dir).filter(f => f.endsWith('.tmp'))).toEqual([]);
+    expect(readdirSync(dir)).toEqual(['state.json']);
+  });
+
+  it('enforces 0600 even when the requested mode is omitted', () => {
+    const path = join(tmp(), 'state.json');
+    writeJsonAtomic(path, {});
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it('preserves the existing target and cleans up the temp file when the rename fails', () => {
+    const dir = tmp();
+    // make the target an existing non-empty directory so renameSync() fails.
+    const path = join(dir, 'target');
+    mkdirSync(join(path, 'child'), { recursive: true });
+    expect(() => writeJsonAtomic(path, { v: 1 })).toThrow();
+    // the failed write must not litter a temp file next to the target.
+    expect(readdirSync(dir).filter(f => f.includes('.tmp'))).toEqual([]);
+    // the pre-existing target is untouched.
+    expect(statSync(path).isDirectory()).toBe(true);
+  });
+
+  it('serialises repeated writes to the same target without leaving temp files', () => {
+    const dir = tmp();
+    const path = join(dir, 'state.json');
+    for (let i = 0; i < 25; i++) writeJsonAtomic(path, { i }, { mode: 0o600 });
+    expect(readJson<{ i: number }>(path)).toEqual({ i: 24 });
+    expect(readdirSync(dir)).toEqual(['state.json']);
   });
 
   it('readJson returns null for a missing or corrupt file', () => {
