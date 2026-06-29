@@ -1,8 +1,7 @@
-import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { writeJsonAtomic } from '../fs-json';
+import { readJson, writeJsonAtomic } from '../fs-json';
 import type { AuditConfig } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -15,14 +14,9 @@ export function defaultAuditConfig(): AuditConfig {
 // load the audit config (ignore rules). a missing or corrupt file yields the
 // default empty config — a bad config must never abort an audit.
 export function loadAuditConfig(path: string = DEFAULT_CONFIG_PATH): AuditConfig {
-  if (!existsSync(path)) return defaultAuditConfig();
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as AuditConfig;
-    if (!parsed || !Array.isArray(parsed.ignore)) return defaultAuditConfig();
-    return { version: 1, ignore: parsed.ignore };
-  } catch {
-    return defaultAuditConfig();
-  }
+  const parsed = readJson<AuditConfig>(path);
+  if (!parsed || !Array.isArray(parsed.ignore)) return defaultAuditConfig();
+  return { version: 1, ignore: parsed.ignore };
 }
 
 // persist the audit config via an atomic tmp-file rename.
