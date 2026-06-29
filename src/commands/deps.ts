@@ -12,6 +12,7 @@ import {
 import { createDepsPr } from '../core/deps/actors/pr-creator';
 import { AppNotFoundError } from '../core/errors';
 import { heading, success, error, info, warn } from '../ui/output';
+import { extractFlag } from './args';
 
 export async function depsCommand(args: string[]): Promise<void> {
   const sub = args[0];
@@ -262,10 +263,4 @@ async function depsInit(): Promise<void> {
   info('Running initial scan...');
   await depsScan(['--quiet']);
   success('Initial scan complete. Run: fleet deps');
-}
-
-function extractFlag(args: string[], flag: string): string | undefined {
-  const idx = args.indexOf(flag);
-  if (idx === -1 || idx + 1 >= args.length) return undefined;
-  return args[idx + 1];
 }

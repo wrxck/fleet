@@ -15,7 +15,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20, 22]
+        node-version: [20, 22, 24]
 
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -30,10 +30,27 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Run tests
         run: npm test
 
       - name: Build
         run: npm run build
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Use Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # fails the build on a high+ vuln reachable from production dependencies.
+      # dev-only advisories are excluded; see SECURITY.md for the rationale and
+      # the `overrides` block in package.json that pins patched transitive deps.
+      - name: Audit production dependencies
+        run: npm run audit:prod

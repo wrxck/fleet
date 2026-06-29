@@ -33,7 +33,8 @@ export function buildSshInvocation(
   // PATH on a macos host; a bare ssh command runs a non-login shell without it.
   const remote = task.loginShell ? `zsh -lc ${shquote(withCwd)}` : withCwd;
 
-  return { cmd: sshBinary, args: [...sshConnectFlags(host), host.destination, remote] };
+  // `--` ends ssh option parsing so the destination can never be read as a flag.
+  return { cmd: sshBinary, args: [...sshConnectFlags(host), '--', host.destination, remote] };
 }
 
 export function createRemoteRunner(opts: RemoteRunnerOptions): RunnerAdapter {

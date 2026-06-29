@@ -72,6 +72,8 @@ type Adapter interface {
 // authenticated the sender at the transport layer.
 type SenderAuthorizer interface {
 	// IsAuthorizedSender reports whether the given senderID (as populated in
-	// InboundMessage.SenderID) is permitted to invoke bot commands.
-	IsAuthorizedSender(senderID string) bool
+	// InboundMessage.SenderID) is permitted to invoke bot commands. chatID is
+	// the originating chat so adapters can default-deny group chats when no
+	// explicit sender allowlist is configured.
+	IsAuthorizedSender(senderID, chatID string) bool
 }

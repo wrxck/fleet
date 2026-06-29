@@ -53,7 +53,8 @@ export function parseProbe(out: string): Pick<RunnerProbe, 'os' | 'node' | 'xcod
 }
 
 export async function probeRunner(host: RemoteHost, exec: ProbeExec = defaultExec): Promise<RunnerProbe> {
-  const args = [...sshConnectFlags(host), host.destination, `zsh -lc ${shquote(probeScript())}`];
+  // `--` ends ssh option parsing so the destination can never be read as a flag.
+  const args = [...sshConnectFlags(host), '--', host.destination, `zsh -lc ${shquote(probeScript())}`];
   try {
     const { stdout } = await exec('ssh', args);
     return { reachable: true, raw: stdout, ...parseProbe(stdout) };
