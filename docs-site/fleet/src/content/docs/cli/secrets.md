@@ -454,7 +454,7 @@ The provider registry classifies each secret name and picks one of:
 
 ### Audit + rollback
 
-Every rotation creates a snapshot at `vault/.snapshots/<app>-<ts>.env.age` before any change. If reseal fails, the snapshot is automatically restored. Audit log entry is appended to `~/.local/share/fleet/audit.jsonl` (mode `0600`, **never logs the value**).
+Every rotation creates a snapshot at `vault/.snapshots/<app>-<ts>.env.age` before any change. If reseal fails, the snapshot is automatically restored. An audit entry is appended to `/var/log/fleet/secrets-audit.jsonl` (file mode `0600` in a root-owned `0700` directory, **never logs the value** — only the secret name, the operation, and the trusted login uid). Override the directory with `FLEET_AUDIT_DIR`. History from the pre-v1.14.0 location (`~/.local/share/fleet/audit.jsonl`) is **not** migrated.
 
 To restore manually:
 
