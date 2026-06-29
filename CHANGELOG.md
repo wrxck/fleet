@@ -2,6 +2,40 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.14.0 — 2026-06-29
+
+### Fixes
+
+- fix: harden writeJsonAtomic, fail-closed bluebubbles replay, scrub age-keygen stderr
+- fix: self-review findings (systemd socket lifecycle, scrub backtracking)
+- fix(ci): revert dev-dep bumps that destabilised the lockfile
+- fix: address review findings (ipv6 ssh, notify log, docs)
+- fix(tui,git): guard unhandled poll rejection; name the ssh-sock init
+- fix(registry): non-fatal integrity check warns on tampered entries
+- fix: self-validate github refs; bound waf rate; validate guard block ip
+- fix(audit): record value reads; root-owned log with a trusted uid
+- fix(core): lock git-onboard registry write; atomic manifest write
+- fix(mcp): ship fleet-mcp.socket; systemd owns the socket acl
+- fix(webhook): load deploy token from file/credential; warn on non-loopback bind
+- fix(secrets): scrub age/systemd-creds stderr on the live error path
+- fix(runners): validate ssh destination and add -- end-of-options guard
+- fix(bot): default-deny sender auth; replay guard + dedicated webhook key
+- fix(docs): healthcheck uses 127.0.0.1 not localhost (IPv6 ::1 refused)
+
+### Other
+
+- refactor: work through low-severity review findings
+- chore(release): bump version to 1.14.0
+- docs(audit): record remediation status, deferrals, and v1.14.0 upgrade notes
+- refactor: add messageOf() error helper; convert backup.ts casts
+- refactor: route json state writes through writeJsonAtomic
+- refactor: drop phantom chokidar dep; de-duplicate helpers
+- chore(security): add CI audit/typecheck/node24, dep overrides, SECURITY.md
+- docs: correct feature lists, alert channels, TUI/arch counts
+- docs(mcp): document secret tier, runner/audit/testflight tools, policy model
+- docs(cli): correct deploy/secrets/overview for current behavior
+- chore(release): regenerate CHANGELOG for v1.13.0
+
 ## v1.13.0 — 2026-06-22
 
 ### Features
