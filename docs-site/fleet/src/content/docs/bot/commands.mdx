@@ -50,6 +50,8 @@ fleet-bot accepts slash commands via Telegram or iMessage. Any message that isn'
 | `/waf_rate` | Configure rate limiting | Yes |
 | `/waf_logs` | Recent WAF events | |
 
+Inputs are validated: `/waf_whitelist_add` rejects malformed IPs/CIDRs and overly-wide ranges (e.g. `0.0.0.0/0`) that would effectively disable the WAF, and `/waf_rate` requires both the requests-per-second and burst values to be between **1 and 1,000,000** (a non-positive value that would silently switch rate limiting off is refused).
+
 ## Claude Code
 
 | Command | Description |
