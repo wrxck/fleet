@@ -77,7 +77,9 @@ func TestWebhookAcceptsValidSignature(t *testing.T) {
 	b := NewBlueBubbles("", secret, "", "", "", 0, []string{"+15551234567"}, nil)
 	inbox := make(chan InboundMessage, 1)
 
-	body := `{"type":"new-message","data":{"handle":{"address":"+15551234567"},"text":"/ping"}}`
+	// real bluebubbles "new-message" deliveries always carry a message guid; the
+	// replay guard requires one, so the happy-path payload includes it.
+	body := `{"type":"new-message","data":{"guid":"valid-guid-1","handle":{"address":"+15551234567"},"text":"/ping"}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(webhookSignatureHeader, signBody(secret, body))
@@ -203,6 +205,15 @@ func TestReplayGuardStaleAndDuplicate(t *testing.T) {
 	}
 	if g.admit("c", now.Add(20*time.Minute).UnixMilli(), now) {
 		t.Error("expected far-future timestamp to be rejected")
+	}
+	// fail closed when there is no guid to dedup on: a fresh timestamp alone does
+	// not prevent a replay within the window, so an empty guid must be rejected
+	// regardless of timestamp.
+	if g.admit("", now.UnixMilli(), now) {
+		t.Error("expected empty guid with a fresh timestamp to be rejected")
+	}
+	if g.admit("", 0, now) {
+		t.Error("expected empty guid with no timestamp to be rejected")
 	}
 }
 
