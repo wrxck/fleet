@@ -31,6 +31,14 @@ Fleet is a production management CLI and MCP server for running Docker Compose a
 
 - **Scheduled routines** — `fleet routines` provides a TUI for managing fleet-wide scheduled routines (signals grid + history).
 
+## Security model
+
+Fleet is built for single-operator, self-hosted use, and its bot and MCP daemon run with elevated privileges. Before exposing them, read the repository [`SECURITY.md`](https://github.com/wrxck/fleet/blob/main/SECURITY.md) for the threat model and the documented by-design impacts. In short:
+
+- **The bot sender allowlist is the perimeter** — only trusted user IDs (`allowedSenderIds`) / phone numbers (`allowedNumbers`) should be authorised; the Telegram adapter default-denies and refuses to start on a group with no sender allowlist.
+- **The secrets vault is tamper-evident** — the audit log is root-owned and append-only, never recording secret values.
+- **The MCP daemon socket is group-gated** — membership of the `fleet-guard` group is what grants access.
+
 ## Who it is for
 
 Fleet is for developers who self-host Docker Compose applications on a single server and want a consistent interface for deployment, secrets, monitoring, and GitHub workflows — without reaching for a full orchestration platform.

@@ -18,16 +18,17 @@ The default adapter. Uses the Telegram Bot API with long polling.
 {
   "adapters": {
     "telegram": {
-      "token": "123456:ABC-DEF...",
-      "allowedChatIds": [221714512],
+      "botToken": "123456:ABC-DEF...",
+      "allowedSenderIds": [221714512],
       "alertChatIds": [221714512]
     }
   }
 }
 ```
 
-- `token` — Bot token from [@BotFather](https://t.me/BotFather)
-- `allowedChatIds` — Chat IDs authorised to use the bot
+- `botToken` — Bot token from [@BotFather](https://t.me/BotFather)
+- `allowedSenderIds` — **User** IDs authorised to issue commands. **If you use the bot in a group/channel, this must list the operator's user ID(s).** When empty, the adapter default-denies — only the operator's private (1:1) chat is accepted and the bot **refuses to start** on a configured group/channel chat.
+- `allowedChatIds` — Optional chat-level allowlist: chat IDs the bot will listen to. Independent of `allowedSenderIds` (which gates *who* may run commands).
 - `alertChatIds` — Where to send automated alerts
 
 The adapter polls for updates and routes messages to the command handler. Outbound messages support text, photos, documents, and inline keyboard buttons.
@@ -36,13 +37,14 @@ The adapter polls for updates and routes messages to the command handler. Outbou
 
 Connects to a [BlueBubbles](https://bluebubbles.app/) server running on macOS to send and receive iMessages.
 
-**Config**:
+**Config** (key is `imessage`):
 ```json
 {
   "adapters": {
-    "bluebubbles": {
-      "url": "https://bb.example.com",
+    "imessage": {
+      "serverUrl": "https://bb.example.com",
       "password": "your-api-password",
+      "webhookSecret": "a-strong-random-secret",
       "allowedNumbers": ["+447..."],
       "cfAccessClientId": "...",
       "cfAccessClientSecret": "..."
@@ -51,12 +53,13 @@ Connects to a [BlueBubbles](https://bluebubbles.app/) server running on macOS to
 }
 ```
 
-- `url` — BlueBubbles server URL
+- `serverUrl` — BlueBubbles server URL
 - `password` — API password configured in BlueBubbles
+- `webhookSecret` — Optional dedicated key for verifying inbound webhook signatures. Falls back to `password` when unset; set a distinct value so a leak of the API password can't be used to forge inbound webhooks.
 - `allowedNumbers` — Phone numbers authorised to use the bot
 - `cfAccessClientId` / `cfAccessClientSecret` — Optional Cloudflare Access credentials if the server is behind a Cloudflare tunnel
 
-The adapter registers a webhook with the BlueBubbles server and listens for incoming messages. Outbound messages are sent via the BlueBubbles REST API.
+The adapter registers a webhook with the BlueBubbles server and listens for incoming messages. Each inbound webhook is verified with an HMAC-SHA256 signature (constant-time compared) and rejected if it is a replay or its signed timestamp is outside a 10-minute window. Outbound messages are sent via the BlueBubbles REST API.
 
 <Aside>
 BlueBubbles requires a Mac running the BlueBubbles server app. iMessage must be signed in on that Mac.

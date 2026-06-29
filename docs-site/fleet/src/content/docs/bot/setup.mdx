@@ -38,6 +38,7 @@ Create `/etc/fleet/bot.json`. The bot reads this file at startup from `config.De
       "enabled": true,
       "botToken": "123456:ABC-DEF...",
       "allowedChatIds": [-1001234567890],
+      "allowedSenderIds": [221714512],
       "alertChatIds": [-1001234567890]
     },
     "imessage": {
@@ -45,6 +46,7 @@ Create `/etc/fleet/bot.json`. The bot reads this file at startup from `config.De
       "serverUrl": "https://bb.example.com",
       "port": 1234,
       "password": "your-bb-password",
+      "webhookSecret": "a-strong-random-secret",
       "cfAccessClientId": "abc123.access",
       "cfAccessClientSecret": "secret",
       "webhookPort": 8080,
@@ -69,7 +71,8 @@ Create `/etc/fleet/bot.json`. The bot reads this file at startup from `config.De
 |---|---|---|
 | `enabled` | boolean | Set to `true` to activate the Telegram adapter |
 | `botToken` | string | Bot token from @BotFather |
-| `allowedChatIds` | int64[] | Chat IDs that may send commands. Messages from other chats are silently dropped |
+| `allowedChatIds` | int64[] | Chat IDs the bot will listen to. Messages from other chats are silently dropped |
+| `allowedSenderIds` | int64[] | **User** IDs authorised to issue commands. When set, only these users may run commands (even inside an allowed group). When empty, the bot **default-denies**: only the operator's private 1:1 chat is accepted, and it **refuses to start** if any `allowedChatIds` entry is a group/channel (negative ID). See [Bot Security](/bot/security/) |
 | `alertChatIds` | int64[] | Chat IDs that receive automated health alerts |
 
 #### `adapters.imessage`
@@ -80,6 +83,7 @@ Create `/etc/fleet/bot.json`. The bot reads this file at startup from `config.De
 | `serverUrl` | string | Base URL of the BlueBubbles server (no trailing slash) |
 | `port` | int | BlueBubbles server port (informational — not used directly by the bot) |
 | `password` | string | BlueBubbles API password, appended as `?password=` on REST calls |
+| `webhookSecret` | string | Optional. Dedicated key for verifying inbound webhook HMAC signatures. When omitted it falls back to `password`; setting a distinct value means a leak of the API password (sent to the relay on every outbound call) cannot be used to forge inbound webhooks. Generate with `openssl rand -base64 32` |
 | `cfAccessClientId` | string | Cloudflare Access service token client ID (sent as `CF-Access-Client-Id` header) |
 | `cfAccessClientSecret` | string | Cloudflare Access service token client secret (sent as `CF-Access-Client-Secret` header) |
 | `webhookPort` | int | Local port the bot listens on for incoming BlueBubbles webhook events |

@@ -1,0 +1,94 @@
+---
+title: Deploy Webhook
+description: HTTP trigger that runs fleet deploy for an app, for CI/CD pipelines
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`deploy-webhook.cjs` is a small HTTP server that runs `fleet deploy <app>` when it receives an authenticated request. It lets a CI/CD pipeline (for example a GitHub Actions job that finishes building an app's image) trigger a deployment on the fleet host without granting the pipeline SSH access.
+
+## Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/health` | none | Liveness probe — returns `{"status":"ok"}` |
+| `POST` | `/deploy` | `Authorization: Bearer <token>` | Body `{"app":"<name>"}` — runs `fleet deploy <name>` |
+
+The bearer token is compared in constant time, the request body is capped at 1&nbsp;MB, and the `app` must be in the configured allowlist. A successful deploy returns `{"success":true,"output":"..."}`; failures return HTTP 4xx/5xx with an `error`. Each `fleet deploy` is given a 5-minute timeout.
+
+## Configuration
+
+The server is configured entirely through environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEPLOY_WEBHOOK_PORT` | `9876` | Port to listen on |
+| `DEPLOY_WEBHOOK_HOST` | `127.0.0.1` | Bind address. Keep it on loopback unless a container must reach it |
+| `DEPLOY_WEBHOOK_APPS` | — | **Required.** Comma-separated allowlist of app names this webhook may deploy (e.g. `myapp,myapp-staging`) |
+| `DEPLOY_WEBHOOK_TOKEN_FILE` | — | Path to a file containing the bearer token (takes precedence over the env var) |
+| `DEPLOY_WEBHOOK_TOKEN` | — | The bearer token, inline. Prefer a file/credential so it never lands in the unit's `Environment=` |
+
+The token is resolved in order: `DEPLOY_WEBHOOK_TOKEN_FILE`, then the systemd credential `$CREDENTIALS_DIRECTORY/deploy-webhook-token`, then `DEPLOY_WEBHOOK_TOKEN`. The server refuses to start if no token or no app allowlist is set.
+
+## systemd unit
+
+The token is supplied through systemd's `LoadCredential=` rather than `Environment=`, so it stays out of the world-readable unit file and out of `systemctl show`:
+
+```ini
+# /etc/systemd/system/deploy-webhook.service
+[Unit]
+Description=Deploy Webhook (fleet deploy trigger)
+After=network.target
+
+[Service]
+Type=simple
+User=your-user
+# token stored root-only at /etc/fleet/deploy-webhook.token (chmod 600); systemd
+# exposes it at $CREDENTIALS_DIRECTORY/deploy-webhook-token at runtime.
+LoadCredential=deploy-webhook-token:/etc/fleet/deploy-webhook.token
+Environment=DEPLOY_WEBHOOK_APPS=your-app,your-app-staging
+# loopback by default; only widen if a container must call it (and firewall it).
+Environment=DEPLOY_WEBHOOK_HOST=127.0.0.1
+ExecStart=/usr/bin/node /path/to/fleet/deploy-webhook.cjs
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=300
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create the token file root-only, then start the service:
+
+```bash
+# generate and store the token (root-only)
+openssl rand -hex 32 | install -m 600 /dev/stdin /etc/fleet/deploy-webhook.token
+
+systemctl daemon-reload
+systemctl enable --now deploy-webhook
+```
+
+<Aside type="caution">
+**v1.14.0 upgrade:** earlier setups passed the token inline via `Environment=DEPLOY_WEBHOOK_TOKEN=...`, which is readable by any local user via `systemctl show`. Move it to a root-only file referenced by `LoadCredential=` as shown above.
+
+Heavier sandboxing (`ProtectSystem=strict`, `NoNewPrivileges`) is intentionally omitted because `fleet deploy` may escalate via `sudo` and drive Docker/systemd.
+</Aside>
+
+## Network exposure
+
+The server binds `127.0.0.1:9876` by default. A container **cannot** reach a loopback-bound server across the Docker bridge, so to call it from a container you must set `DEPLOY_WEBHOOK_HOST` to a bridge-reachable address — at which point **every** container on that bridge can reach it. If you do, the server logs a warning at startup; firewall the port and rely on the bearer token as the only other control.
+
+A typical production setup keeps the webhook on loopback and fronts it with nginx (TLS + the bearer token) so external CI can reach it over HTTPS while the process itself stays bound to `127.0.0.1`.
+
+## Triggering a deploy
+
+```bash
+curl -fsS -X POST https://deploy.example.com/deploy \
+  -H "Authorization: Bearer $DEPLOY_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"app":"myapp"}'
+```
+
+From GitHub Actions, store the token as a repository secret and post to the webhook after the build step succeeds.

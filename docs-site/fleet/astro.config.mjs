@@ -111,6 +111,7 @@ export default defineConfig({
             { label: 'Nginx', slug: 'ops/nginx' },
             { label: 'Health Checks', slug: 'ops/health' },
             { label: 'Dependencies', slug: 'ops/deps' },
+            { label: 'Deploy Webhook', slug: 'ops/deploy-webhook' },
             { label: 'Troubleshooting', slug: 'ops/troubleshooting' },
           ],
         },

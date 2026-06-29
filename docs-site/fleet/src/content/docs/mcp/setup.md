@@ -71,6 +71,29 @@ Every tool has a **tier** that determines whether the privilege-separated daemon
 
 > **`fleet_secrets_get` is `secret` tier.** Unlike all other listing/status tools, it returns a decrypted plaintext value and is **denied by default** under the daemon. Add it to `mcp-policy.json` to enable it.
 
+## Privilege-separated daemon (socket activation)
+
+The tier policy is enforced by a privilege-separated daemon installed with:
+
+```bash
+sudo fleet mcp install
+```
+
+This installs two systemd units:
+
+- `fleet-mcp.socket` — owns the listening socket at `/run/fleet-mcp/mcp.sock`. systemd creates it with `root:fleet-guard` ownership and mode `0660`, so **only members of the `fleet-guard` group can connect**. This ACL is the access boundary, and systemd owns it (there is no listen-then-`chmod` race).
+- `fleet-mcp.service` — the daemon itself, started via the socket (`Requires=`/`After=fleet-mcp.socket`).
+
+Enable and start it with:
+
+```bash
+sudo systemctl enable --now fleet-mcp.socket
+```
+
+A client connects over `/run/fleet-mcp/mcp.sock` (see the `connect` hint if the daemon is not running: `sudo systemctl start fleet-mcp.socket`).
+
+> **Upgrading from before v1.14.0:** re-run `sudo fleet mcp install` to install the new `fleet-mcp.socket` unit. This is distinct from `fleet install-mcp` above, which only registers fleet as an MCP server in `~/.claude.json`.
+
 ## Policy file (`/etc/fleet/mcp-policy.json`)
 
 Create `/etc/fleet/mcp-policy.json` to override default tier behaviour. A partial file is valid — unspecified keys inherit the defaults shown above.

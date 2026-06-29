@@ -7,34 +7,43 @@ import { Aside } from '@astrojs/starlight/components';
 
 fleet-bot has access to powerful commands (shell execution, deployments, secret management). The security model ensures only authorised users can interact with it.
 
+<Aside type="caution">
+The bot container is root-equivalent by design (`network_mode: host`, Docker socket and systemd bus mounted), so the sender allowlist is the entire perimeter. See the repository [`SECURITY.md`](https://github.com/wrxck/fleet/blob/main/SECURITY.md) for the full threat model and documented by-design impacts.
+</Aside>
+
 ## Authentication
 
 ### Telegram
 
-Messages are authenticated by **chat ID**. The `allowedChatIds` array in `bot.json` lists the Telegram chat IDs that are allowed to use the bot.
+Commands are authorised by **sender (user) ID**, gated by `allowedSenderIds` in `bot.json`:
 
 ```json
 {
   "adapters": {
     "telegram": {
-      "allowedChatIds": [221714512]
+      "allowedSenderIds": [221714512]
     }
   }
 }
 ```
 
-The bot checks every incoming message against this list. Unauthorised messages are silently dropped with a log entry — no response is sent.
+- When `allowedSenderIds` is set, only those user IDs may issue commands — even inside a group the bot is a member of.
+- When `allowedSenderIds` is **empty, the bot default-denies**: only a private 1:1 chat (where the chat ID equals the sender's user ID) is accepted, and the bot **refuses to start** if any `allowedChatIds` entry is a group or channel (a negative ID). This prevents *any member of an allowlisted group* from issuing commands.
 
-Additionally, the Go code has a hardcoded `AuthorizedChatID` in `bot/bot/auth.go` that provides a second layer of authorisation.
+`allowedChatIds` is an independent, optional chat-level filter (which chats the bot listens to at all); it does not by itself authorise senders. Unauthorised messages are dropped with a log entry — no response is sent.
 
 ### BlueBubbles (iMessage)
 
-Messages are authenticated by **phone number**. The `allowedNumbers` array lists permitted phone numbers.
+Two layers apply:
+
+1. **Inbound webhook signature.** Every webhook delivery must carry a valid HMAC-SHA256 signature over the raw body, keyed by `webhookSecret` (or `password` when `webhookSecret` is unset). The signature is constant-time compared, and replayed or stale deliveries (signed timestamp outside a 10-minute window, keyed on the message guid) are rejected. Configure a dedicated `webhookSecret` so a leak of the API password — which is sent to the relay on every outbound call — cannot be used to forge inbound webhooks.
+2. **Sender allowlist.** After signature verification, the sender's phone number is checked against `allowedNumbers`.
 
 ```json
 {
   "adapters": {
-    "bluebubbles": {
+    "imessage": {
+      "webhookSecret": "a-strong-random-secret",
       "allowedNumbers": ["+447123456789"]
     }
   }
@@ -53,11 +62,11 @@ The confirmation is tied to the requesting user — other users cannot confirm s
 
 The `/sh` command executes arbitrary shell commands on the host. It is:
 - Marked as destructive (requires confirmation)
-- Only available to authorised chat IDs
+- Only available to authorised sender IDs
 - Logged with the full command text
 
 <Aside type="danger">
-The `/sh` command has full root access. Only authorise trusted chat IDs.
+The `/sh` command has full root access. Only authorise trusted sender IDs.
 </Aside>
 
 ## Network security
@@ -76,8 +85,9 @@ If your BlueBubbles server is behind Cloudflare Access, configure the service to
 
 ## Best practices
 
-1. **Limit allowed IDs** — only add chat IDs / phone numbers you control
-2. **Use private chats** — don't add the bot to group chats
-3. **Monitor the logs** — the bot logs all commands and unauthorised attempts
-4. **Rotate the Telegram token** if compromised — revoke via BotFather and update `bot.json`
-5. **Keep the bot updated** — pull the latest image regularly
+1. **Set `allowedSenderIds`** — list only the user IDs (and `allowedNumbers` for iMessage) you control; this is the perimeter
+2. **Prefer private chats** — if you do add the bot to a group, you **must** set `allowedSenderIds`, or the bot refuses to start
+3. **Set a distinct `webhookSecret`** for BlueBubbles so the API password can't forge inbound webhooks
+4. **Monitor the logs** — the bot logs all commands and unauthorised attempts
+5. **Rotate the Telegram token** if compromised — revoke via BotFather and update `bot.json`
+6. **Keep the bot updated** — pull the latest image regularly
