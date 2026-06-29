@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { c, error, heading, info, success, table, warn } from '../ui/output';
+import { sleep } from './args';
 
 // dev mock servers are tracked in a user-writable state file (the /var/lib/fleet
 // paths are root-owned and `fleet mock` runs unprivileged).
@@ -56,8 +57,6 @@ const flagValue = (args: string[], name: string): string | undefined => {
 };
 
 const firstPositional = (args: string[]): string | undefined => args.find(a => !a.startsWith('-'));
-
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 const waitForHealth = async (baseUrl: string): Promise<boolean> => {
   for (let attempt = 0; attempt < 50; attempt += 1) {

@@ -58,16 +58,29 @@ $ fleet watchdog --motd
 
 ### Notification configuration
 
-Watchdog reads notify config from `/etc/fleet/notify.json`. It supports Telegram:
+Watchdog reads notify config from `/etc/fleet/notify.json`. It supports Telegram and BlueBubbles iMessage via an `adapters` array:
 
 ```json
 {
-  "telegram": {
-    "botToken": "123456:ABC-DEF...",
-    "chatId": "-100..."
-  }
+  "adapters": [
+    {
+      "type": "telegram",
+      "botToken": "123456:ABC-DEF...",
+      "chatId": "-100..."
+    },
+    {
+      "type": "bluebubbles",
+      "serverUrl": "https://your-bluebubbles-server",
+      "password": "your-password",
+      "chatGuid": "iMessage;-;+15551234567",
+      "cfAccessClientId": "...",
+      "cfAccessClientSecret": "..."
+    }
+  ]
 }
 ```
+
+`cfAccessClientId` and `cfAccessClientSecret` are optional — only needed if the BlueBubbles server sits behind Cloudflare Access.
 
 ### Running on a cron schedule
 

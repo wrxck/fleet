@@ -17,6 +17,7 @@ creds: /etc/fleet/guard.cf.json (root:fleet-guard 640)
 snapshots: /var/lib/cf-snapshots (git-tracked, populated by cf-snapshot)
 """
 
+import ipaddress
 import json
 import sys
 import urllib.parse
@@ -133,6 +134,13 @@ def kind_cf_block_ip(payload, api_key, email, account_id):
     zone = payload["zone"]
     ip = payload["ip"]
     note = payload.get("note") or "fleet-guard auto-block"
+
+    # validate the ip before interpolating it into the cloudflare ruleset
+    # expression — an unvalidated value could otherwise inject expression syntax
+    # (e.g. broaden or disable the rule). ip_address accepts v4 and v6 and
+    # raises ValueError on anything else.
+    ip = str(ipaddress.ip_address(ip))
+
     zid = find_zone_id(zone, api_key, email)
 
     rule = {

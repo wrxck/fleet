@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -42,6 +42,12 @@ describe('loadCache', () => {
     const loaded = loadCache(path);
     expect(loaded).not.toBeNull();
     expect(loaded!.scanDurationMs).toBe(9999);
+  });
+
+  it('returns null (rather than throwing) for a corrupt cache file', () => {
+    const path = join(tmpDir, 'cache.json');
+    writeFileSync(path, '{ not valid json');
+    expect(loadCache(path)).toBeNull();
   });
 });
 

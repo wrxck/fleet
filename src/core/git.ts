@@ -6,11 +6,19 @@ import { GitError } from './errors';
 import { detectProjectType, generateGitignore } from '../templates/gitignore';
 import { assertBranch, assertFilePath } from './validate';
 
-// Use SSH_AUTH_SOCK from environment, or check for fleet-specific socket
-const SSH_AGENT_SOCK = process.env.FLEET_SSH_SOCK || '/tmp/fleet-ssh-agent.sock';
-if (!process.env.SSH_AUTH_SOCK && existsSync(SSH_AGENT_SOCK)) {
-  process.env.SSH_AUTH_SOCK = SSH_AGENT_SOCK;
+// fleet's ssh key is passphrase-protected and held by an agent at a known
+// socket. point SSH_AUTH_SOCK at it (without overriding an existing one) so git
+// over ssh — and any tool that inherits this process's env, like gh — can
+// authenticate. exported so it can be invoked and reset explicitly in tests;
+// also called once at import for the common case where importing git wires it up.
+export function ensureGitAuthSock(): void {
+  const sock = process.env.FLEET_SSH_SOCK || '/tmp/fleet-ssh-agent.sock';
+  if (!process.env.SSH_AUTH_SOCK && existsSync(sock)) {
+    process.env.SSH_AUTH_SOCK = sock;
+  }
 }
+
+ensureGitAuthSock();
 
 export interface GitStatus {
   initialised: boolean;

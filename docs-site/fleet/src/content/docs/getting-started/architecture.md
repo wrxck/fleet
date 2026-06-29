@@ -12,7 +12,7 @@ graph TD
     CLI --> status["status / list"]
     CLI --> lifecycle["deploy / start / stop\nrestart / add / remove"]
     CLI --> health["health / logs / watchdog"]
-    CLI --> secrets["secrets (14 subcommands)"]
+    CLI --> secrets["secrets (13 subcommands)"]
     CLI --> nginx["nginx add / remove / list"]
     CLI --> git["git onboard / branch\ncommit / push / pr / release"]
     CLI --> deps["deps / deps scan / deps fix\ndeps config / deps ignore / deps init"]
@@ -49,7 +49,7 @@ graph TD
 | `vault/*.age` | Encrypted secrets, one file per app |
 | `/etc/fleet/age.key` | age private key (root-owned, mode 600) |
 | `/run/fleet-secrets/` | Decrypted secrets at runtime (tmpfs, lost on reboot) |
-| `/etc/fleet/notify.json` | Watchdog alert configuration (Telegram) |
+| `/etc/fleet/notify.json` | Watchdog alert configuration (Telegram or BlueBubbles) |
 | `/etc/systemd/system/<app>.service` | Generated systemd unit for each app |
 | `/etc/nginx/sites-available/<domain>.conf` | Generated nginx server blocks |
 
@@ -75,18 +75,20 @@ sequenceDiagram
     vault->>vault: age encrypt (backup first)
 ```
 
-## fleet-bot (Go Telegram bot)
+## fleet-bot (Go — multi-adapter)
 
-The `bot/` directory contains a separate Go program that provides remote server management through Telegram chat. It runs Claude Code sessions with access to fleet's MCP tools.
+The `bot/` directory contains a separate Go program that provides remote server management through Telegram or iMessage (BlueBubbles). It runs Claude Code sessions with access to fleet's MCP tools.
 
 ```mermaid
 graph LR
     telegram["Telegram"]
+    bluebubbles["iMessage\n(BlueBubbles)"]
     bot["fleet-bot\n(Go)"]
     claude["Claude Code\n(subprocess)"]
     mcp["fleet MCP server"]
 
     telegram --> bot
+    bluebubbles --> bot
     bot --> claude
     claude --> mcp
     mcp --> |"systemctl / docker\nnginx / age"| server["Linux server"]

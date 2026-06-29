@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { FleetError } from './errors';
+import { writeJsonAtomic } from './fs-json';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -57,13 +58,6 @@ export function saveOperator(cfg: OperatorConfig): void {
       throw new FleetError(`operator config: ${field} must be a non-empty string`);
     }
   }
-  const path = operatorPath();
-  const dir = dirname(path);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  const tmp = path + '.tmp';
-  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + '\n', { mode: 0o600 });
-  // rename is atomic on the same filesystem; covers the crash-mid-write race
-  // a plain writeFileSync exposes.
-  renameSync(tmp, path);
+  writeJsonAtomic(operatorPath(), cfg, { mode: 0o600 });
   cache = null;
 }

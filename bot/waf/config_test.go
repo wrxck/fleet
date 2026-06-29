@@ -154,6 +154,23 @@ func TestAddWhitelistIP_RejectsMalformedWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestSetRateLimit_RejectsNonPositive(t *testing.T) {
+	// the bounds check short-circuits before any file/reload, so no config
+	// fixture is needed: a non-positive value would disable rate limiting for
+	// every proxied site.
+	for _, tc := range []struct{ rps, burst int }{{0, 10}, {-1, 10}, {10, 0}, {10, -5}} {
+		if err := SetRateLimit(tc.rps, tc.burst); err == nil {
+			t.Errorf("SetRateLimit(%d, %d) = nil err, want error", tc.rps, tc.burst)
+		}
+	}
+}
+
+func TestSetRateLimit_RejectsAbsurdlyLarge(t *testing.T) {
+	if err := SetRateLimit(2_000_000, 10); err == nil {
+		t.Error("SetRateLimit(2000000, 10) = nil err, want error")
+	}
+}
+
 func TestAddWhitelistIP_AcceptsValidSingleIP(t *testing.T) {
 	withTempConfig(t, nil)
 

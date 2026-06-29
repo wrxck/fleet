@@ -5,6 +5,14 @@ export class FleetError extends Error {
   }
 }
 
+// safely turn an unknown caught value into a message string. prefer this over
+// `(e as Error).message` (which yields undefined when a non-Error is thrown —
+// a string, a rejected non-error, etc.) and over the inline
+// `e instanceof Error ? e.message : String(e)` idiom repeated across the tree.
+export function messageOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 export class AppNotFoundError extends FleetError {
   constructor(app: string) {
     super(`App not found: ${app}`);

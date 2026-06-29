@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -47,5 +47,20 @@ describe('runner registry store', () => {
     // overwrite with junk
     rmSync(path);
     expect(loadRunners(path)).toEqual({});
+  });
+
+  it('drops a tampered entry whose destination would inject ssh flags (fail closed)', () => {
+    // a registry edited directly on disk (bypassing upsert's validation) must
+    // not be able to feed an option-injecting destination into the ssh command
+    // line — loadRunners re-validates every entry and drops the bad ones.
+    writeFileSync(
+      path,
+      JSON.stringify({
+        good: { destination: 'matt@host' },
+        evil: { destination: '-oProxyCommand=touch /tmp/pwned' },
+      }),
+      { mode: 0o600 },
+    );
+    expect(loadRunners(path)).toEqual({ good: { destination: 'matt@host' } });
   });
 });
