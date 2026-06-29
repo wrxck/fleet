@@ -573,6 +573,8 @@ Register or update a remote build host. Stored in the runner registry (`FLEET_RU
 | `identityFile` | string | No | Path to the private key fleet authenticates with |
 | `defaultCwd` | string | No | Remote working directory used when a task omits one |
 
+Every connection-bearing field is validated to prevent SSH option injection: `destination` must be a `user@host`, bare alias, or IPv6 literal and **must not start with `-`** (a literal `--` is also placed before it on the ssh command line); `identityFile` and `defaultCwd` reject a leading `-` and control characters; `port` must be 1–65535. The same checks run again when the registry is **loaded** — an entry tampered with directly on disk is dropped (fail closed) rather than passed to ssh.
+
 ---
 
 ### `fleet_runner_list` *(read)*
