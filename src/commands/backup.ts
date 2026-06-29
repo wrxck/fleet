@@ -41,7 +41,7 @@ import {
   generateAndStorePassword,
   vaultPath,
 } from '../core/backup/unlock';
-import { FleetError } from '../core/errors';
+import { FleetError, messageOf } from '../core/errors';
 import { execSafe } from '../core/exec';
 import { loadOperator } from '../core/operator';
 import { c, heading, table, info, success, error, warn } from '../ui/output';
@@ -181,7 +181,7 @@ function cmdRegisterAll(args: string[]): void {
         `paths=${cfg.paths.length} vols=${cfg.volumes?.length ?? 0} dump=${cfg.preDump?.type ?? '-'} sched=${cfg.schedule}`,
       ]);
     } catch (e) {
-      rows.push([app.name, 'FAIL', (e as Error).message]);
+      rows.push([app.name, 'FAIL', messageOf(e)]);
     }
   }
   table(['app', 'status', 'plan'], rows);
@@ -251,7 +251,7 @@ function cmdSnapshot(args: string[]): void {
         info(`cloudflare zones snapshot ${snap.shortId} (${humanBytes(snap.sizeBytes ?? 0)} added)`);
         snapCount++;
       } catch (e) {
-        warn(`cloudflare zone export failed: ${(e as Error).message}`);
+        warn(`cloudflare zone export failed: ${messageOf(e)}`);
       }
     }
   }
@@ -283,7 +283,7 @@ function cmdSnapshotAll(args: string[]): void {
     try {
       cmdSnapshot([app, ...(dryRun ? ['--dry-run'] : [])]);
     } catch (e) {
-      error(`${app}: ${(e as Error).message}`);
+      error(`${app}: ${messageOf(e)}`);
     }
   }
 }
@@ -388,7 +388,7 @@ function cmdScheduleAll(args: string[]): void {
       if (!dryRun) installScheduleUnits(cfg.app, cfg.schedule, { apply: true });
       rows.push([app, dryRun ? 'plan' : 'enabled', `OnCalendar=${cfg.schedule}`]);
     } catch (e) {
-      rows.push([app, 'FAIL', (e as Error).message]);
+      rows.push([app, 'FAIL', messageOf(e)]);
     }
   }
   table(['app', 'status', 'schedule'], rows);
@@ -524,7 +524,7 @@ function cmdServe(args: string[]): void {
   startServer({ port, totpSecret, sessionSecret })
     .then(() => info(`backup explorer listening on 127.0.0.1:${port}`))
     .catch((e: unknown) => {
-      error(`backup explorer failed to start: ${(e as Error).message}`);
+      error(`backup explorer failed to start: ${messageOf(e)}`);
       process.exitCode = 1;
     });
 }

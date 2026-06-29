@@ -1,22 +1,50 @@
 #!/usr/bin/env node
-/**
- * Deploy Webhook — lightweight HTTP server that triggers fleet deploys.
- * Runs on 127.0.0.1:9876 (localhost only, not internet-exposed).
- * Next.js reaches it via Docker bridge: http://172.17.0.1:9876
+/*
+ * deploy webhook — lightweight http server that triggers fleet deploys.
  *
- * Protected by DEPLOY_WEBHOOK_TOKEN env var.
- * Only accepts whitelisted app names.
+ * binds 127.0.0.1:9876 by default. NOTE: a container cannot reach a
+ * loopback-bound server via the docker bridge (172.17.0.1); to let a container
+ * call this you must bind a bridge-reachable address (DEPLOY_WEBHOOK_HOST), at
+ * which point EVERY container on that bridge can reach it — firewall the port
+ * and rely on the bearer token. the server warns at startup on a non-loopback
+ * bind.
+ *
+ * the bearer token is read from (in order): DEPLOY_WEBHOOK_TOKEN_FILE, the
+ * systemd credential $CREDENTIALS_DIRECTORY/deploy-webhook-token, then the
+ * DEPLOY_WEBHOOK_TOKEN env var. prefer a file/credential so the token is not
+ * baked into the unit file. only whitelisted app names are accepted.
  */
 
 const http = require("http");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const { spawnSync } = require("child_process");
 
-const MAX_BODY = 1024 * 1024; // 1MB
+const MAX_BODY = 1024 * 1024; // 1mb
 
 const PORT = parseInt(process.env.DEPLOY_WEBHOOK_PORT ?? "9876", 10);
 const HOST = process.env.DEPLOY_WEBHOOK_HOST ?? "127.0.0.1";
-const TOKEN = process.env.DEPLOY_WEBHOOK_TOKEN;
+
+// read the bearer token from a file/credential when available, else the env
+// var. a file keeps the secret out of the unit's Environment= (world-readable).
+function readToken() {
+  const credFile = process.env.CREDENTIALS_DIRECTORY
+    ? path.join(process.env.CREDENTIALS_DIRECTORY, "deploy-webhook-token")
+    : null;
+  const file = process.env.DEPLOY_WEBHOOK_TOKEN_FILE ?? credFile;
+  if (file) {
+    try {
+      return fs.readFileSync(file, "utf-8").trim();
+    } catch (err) {
+      console.error(`failed to read deploy webhook token file ${file}: ${err.message}`);
+      process.exit(1);
+    }
+  }
+  return process.env.DEPLOY_WEBHOOK_TOKEN;
+}
+
+const TOKEN = readToken();
 
 // Comma-separated list of app names allowed to be deployed via this webhook.
 // e.g. DEPLOY_WEBHOOK_APPS=myapp,myapp-staging
@@ -116,6 +144,16 @@ const server = http.createServer((req, res) => {
   });
 });
 
+const LOOPBACK = HOST === "127.0.0.1" || HOST === "::1" || HOST === "localhost";
+
 server.listen(PORT, HOST, () => {
-  console.log(`Deploy webhook listening on ${HOST}:${PORT}`);
+  console.log(`deploy webhook listening on ${HOST}:${PORT}`);
+  if (!LOOPBACK) {
+    console.warn(
+      `[deploy] warning: bound to ${HOST} (not loopback) — every host that can ` +
+        `route here, including all containers on the docker bridge, can reach ` +
+        `this webhook. ensure a firewall restricts access; the bearer token is ` +
+        `the only other control.`
+    );
+  }
 });

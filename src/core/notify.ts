@@ -1,5 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 
+import { sendTelegram } from './telegram';
+
 const NOTIFY_CONFIG_PATH = '/etc/fleet/notify.json';
 
 export interface NotifyAdapterConfig {
@@ -47,8 +49,14 @@ export async function sendNotification(config: NotifyConfig, message: string): P
     try {
       const ok = adapter.type === 'bluebubbles'
         ? await sendBlueBubbles(adapter, message)
-        : await sendTelegram(adapter, message);
-      if (ok) anySuccess = true;
+        : await sendTelegram({ botToken: adapter.botToken ?? '', chatId: adapter.chatId ?? '' }, message);
+      if (ok) {
+        anySuccess = true;
+      } else if (adapter.type === 'telegram') {
+        // sendTelegram swallows its own fetch error and returns false; surface a
+        // line so a misconfigured/unreachable telegram is still visible in logs.
+        console.error('notify (telegram): send failed');
+      }
     } catch (err) {
       const msg = scrubSecrets(String(err), [adapter.password, adapter.botToken, adapter.cfAccessClientSecret]);
       console.error(`notify (${adapter.type}): ${msg}`);
@@ -85,14 +93,3 @@ async function sendBlueBubbles(cfg: NotifyAdapterConfig, message: string): Promi
   return res.ok;
 }
 
-async function sendTelegram(cfg: NotifyAdapterConfig, message: string): Promise<boolean> {
-  const res = await fetch(
-    `https://api.telegram.org/bot${cfg.botToken}/sendMessage`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: cfg.chatId, text: message, parse_mode: 'HTML' }),
-    }
-  );
-  return res.ok;
-}

@@ -1,14 +1,17 @@
 /**
  * Append-only audit log of every sensitive secret operation.
  *
- * Stored at ~/.local/share/fleet/audit.jsonl with mode 0600. Each line is a
- * JSON object — never the secret VALUE, only its name. Flushed synchronously
- * so a crash mid-rotation still leaves a trail.
+ * Stored under a fixed, root-owned directory (FLEET_AUDIT_DIR, default
+ * /var/log/fleet) at mode 0600 — not the invoking user's home — so the trail
+ * does not fragment across users and a non-root user cannot rewrite their own
+ * history. Each line is a JSON object — never the secret VALUE, only its name —
+ * and carries a trusted `uid` (the real login/process uid) alongside the
+ * human-readable, environment-derived `actor`. Flushed synchronously so a crash
+ * mid-rotation still leaves a trail.
  */
 
-import { existsSync, mkdirSync, appendFileSync, chmodSync, statSync, openSync, closeSync } from 'node:fs';
+import { existsSync, mkdirSync, appendFileSync, chmodSync, statSync, openSync, closeSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 
 export type AuditOp =
   | 'init'
@@ -29,55 +32,79 @@ export interface AuditEntry {
   ts: string;
   op: AuditOp;
   actor: string;
+  uid?: number;
   app?: string;
   secret?: string;
   ok: boolean;
   details?: string;
 }
 
-const AUDIT_DIR = join(homedir(), '.local', 'share', 'fleet');
-const AUDIT_PATH = join(AUDIT_DIR, 'audit.jsonl');
+// resolved at call time so FLEET_AUDIT_DIR can be set per-process (and by tests).
+function auditDir(): string {
+  return process.env.FLEET_AUDIT_DIR ?? '/var/log/fleet';
+}
+
+function auditPath(): string {
+  return join(auditDir(), 'secrets-audit.jsonl');
+}
 
 function getActor(): string {
   return process.env.SUDO_USER || process.env.USER || process.env.LOGNAME || 'unknown';
 }
 
-function ensureLog(): void {
-  if (!existsSync(AUDIT_DIR)) {
-    mkdirSync(AUDIT_DIR, { recursive: true, mode: 0o700 });
+// the real, non-spoofable uid: the audit `actor` is derived from environment
+// variables a caller controls, so we pair it with the kernel-reported login uid
+// (surviving su/sudo) or, failing that, the process uid.
+function trustedUid(): number | undefined {
+  try {
+    const raw = readFileSync('/proc/self/loginuid', 'utf-8').trim();
+    const n = Number(raw);
+    if (Number.isInteger(n) && n >= 0 && n !== 0xffffffff) return n;
+  } catch {
+    /* not linux / loginuid unavailable */
   }
-  if (!existsSync(AUDIT_PATH)) {
-    // Atomic create with the desired mode in a single syscall — closes the
-    // TOCTOU window where the file briefly existed at the umask default
+  return typeof process.getuid === 'function' ? process.getuid() : undefined;
+}
+
+function ensureLog(): void {
+  const dir = auditDir();
+  const path = auditPath();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  if (!existsSync(path)) {
+    // atomic create with the desired mode in a single syscall — closes the
+    // toctou window where the file briefly existed at the umask default
     // (typically 0o644) before the chmod.
-    const fd = openSync(AUDIT_PATH, 'a', 0o600);
+    const fd = openSync(path, 'a', 0o600);
     closeSync(fd);
     return;
   }
   try {
-    const mode = statSync(AUDIT_PATH).mode & 0o777;
-    if (mode !== 0o600) chmodSync(AUDIT_PATH, 0o600);
+    const mode = statSync(path).mode & 0o777;
+    if (mode !== 0o600) chmodSync(path, 0o600);
   } catch {
     /* ignore */
   }
 }
 
-export function auditLog(entry: Omit<AuditEntry, 'ts' | 'actor'> & { actor?: string }): void {
-  // Auditing must never block the actual operation. If the FS isn't writable
+export function auditLog(entry: Omit<AuditEntry, 'ts' | 'actor' | 'uid'> & { actor?: string }): void {
+  // auditing must never block the actual operation. if the fs isn't writable
   // (read-only mount, missing dir, mocked-out tests, etc.), surface a single
-  // stderr warning and continue. The op succeeds; we just lose this audit line.
+  // stderr warning and continue. the op succeeds; we just lose this audit line.
   try {
     ensureLog();
     const line: AuditEntry = {
       ts: new Date().toISOString(),
       actor: entry.actor ?? getActor(),
+      uid: trustedUid(),
       op: entry.op,
       app: entry.app,
       secret: entry.secret,
       ok: entry.ok,
       details: entry.details,
     };
-    appendFileSync(AUDIT_PATH, JSON.stringify(line) + '\n');
+    appendFileSync(auditPath(), JSON.stringify(line) + '\n');
   } catch (err) {
     process.stderr.write(
       `[fleet audit] WARNING: failed to write audit entry (${err instanceof Error ? err.message : err})\n`,
@@ -86,5 +113,5 @@ export function auditLog(entry: Omit<AuditEntry, 'ts' | 'actor'> & { actor?: str
 }
 
 export function getAuditPath(): string {
-  return AUDIT_PATH;
+  return auditPath();
 }

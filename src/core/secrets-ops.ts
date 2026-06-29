@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, readdirSync, chmodSync, mkdirSync, rmSync, statSync, copyFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, chmodSync, chownSync, mkdirSync, rmSync, statSync, copyFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 
@@ -8,7 +8,7 @@ import { assertAppName, assertFilePath, assertSecretKey } from './validate';
 import { SecretsError } from './errors';
 import { auditLog } from './secrets-audit';
 import { checkEntropy } from './secrets-rotation';
-import { chownSync } from 'node:fs';
+import { scrubSecrets } from './redact';
 import { load as loadRegistry } from './registry';
 
 /**
@@ -483,7 +483,7 @@ export async function rotateKey(): Promise<{ oldPubkey: string; newPubkey: strin
     const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
     if (!keygen.ok) {
       rmSync(backupPath, { force: true });
-      throw new SecretsError(`Failed to generate new key: ${keygen.stderr}`);
+      throw new SecretsError(`Failed to generate new key: ${scrubSecrets(keygen.stderr)}`);
     }
     chmodSync(KEY_PATH, 0o600);
     const newPubkey = getPublicKey();

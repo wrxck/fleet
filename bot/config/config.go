@@ -13,6 +13,7 @@ type BlueBubblesConfig struct {
 	ServerURL            string   `json:"serverUrl"`
 	Port                 int      `json:"port"`
 	Password             string   `json:"password"`
+	WebhookSecret        string   `json:"webhookSecret"`
 	CfAccessClientID     string   `json:"cfAccessClientId"`
 	CfAccessClientSecret string   `json:"cfAccessClientSecret"`
 	WebhookPort          int      `json:"webhookPort"`

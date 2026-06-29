@@ -23,9 +23,8 @@ vi.mock('./github.js', () => ({
 }));
 
 vi.mock('./registry.js', () => ({
-  load: vi.fn().mockReturnValue({ apps: [] }),
   findApp: vi.fn().mockReturnValue(null),
-  save: vi.fn(),
+  withRegistry: vi.fn(async (fn: (reg: { apps: unknown[] }) => unknown) => { fn({ apps: [] }); }),
 }));
 
 import { detectScenario, describeOnboardPlan, executeOnboard } from './git-onboard';
@@ -112,8 +111,8 @@ describe('executeOnboard', () => {
     vi.clearAllMocks();
   });
 
-  it('returns result with scenario, steps, repoUrl, branches', () => {
-    const result = executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
+  it('returns result with scenario, steps, repoUrl, branches', async () => {
+    const result = await executeOnboard('fresh', '/app', 'myapp', 'myapp', makeStatus({ initialised: false }));
     expect(result.scenario).toBe('fresh');
     expect(Array.isArray(result.steps)).toBe(true);
     expect(result.repoUrl).toContain('myapp');
