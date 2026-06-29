@@ -184,7 +184,9 @@ export function registryPath(): string {
  * The mutator may return a different Registry object (e.g. one returned by
  * `addApp` / `removeApp`, which mutate in place but also return the registry
  * for chaining) or simply mutate the input and return it. The returned value
- * is what gets persisted.
+ * is what gets persisted. Returning `null` signals "no change" and skips the
+ * save entirely, so a no-op pass doesn't needlessly rewrite the registry (and
+ * its `.bak`).
  *
  * Returns void: callers needing the post-save state should re-load. Keeping
  * this side-effecting matches how `load()` + `save()` are used today.
@@ -193,12 +195,12 @@ export function registryPath(): string {
  * same process — proper-lockfile is not reentrant and will deadlock.
  */
 export async function withRegistry(
-  fn: (reg: Registry) => Registry | Promise<Registry>,
+  fn: (reg: Registry) => Registry | null | Promise<Registry | null>,
 ): Promise<void> {
   const path = resolveRegistryPath();
   await withFileLock(path, async () => {
     const reg = load();
     const next = await fn(reg);
-    save(next);
+    if (next) save(next);
   });
 }

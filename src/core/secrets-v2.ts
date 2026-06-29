@@ -4,6 +4,7 @@ import { existsSync, unlinkSync, chmodSync } from 'node:fs';
 
 import { execSafe } from './exec';
 import { SecretsError } from './errors';
+import { scrubSecrets } from './redact';
 import { parseRequest, writeResponse, ProtocolError } from './secrets-v2-protocol';
 
 export const IDLE_TIMEOUT_MS = 30_000;
@@ -35,7 +36,7 @@ export function decryptVaultBlob(privateKeyPath: string, blobPath: string): Reco
   if (!existsSync(blobPath)) throw new SecretsError(`vault blob not found: ${blobPath}`);
   if (!existsSync(privateKeyPath)) throw new SecretsError(`private key not found: ${privateKeyPath}`);
   const r = execSafe('age', ['-d', '-i', privateKeyPath, blobPath]);
-  if (!r.ok) throw new SecretsError(`age decrypt failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age decrypt failed: ${scrubSecrets(r.stderr)}`);
   return parseEnvFormat(r.stdout);
 }
 

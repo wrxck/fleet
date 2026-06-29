@@ -95,7 +95,7 @@ export function initVault(): string {
   }
 
   const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
-  if (!keygen.ok) throw new SecretsError(`Failed to generate key: ${keygen.stderr}`);
+  if (!keygen.ok) throw new SecretsError(`Failed to generate key: ${scrubSecrets(keygen.stderr)}`);
   chmodSync(KEY_PATH, 0o600);
 
   if (!existsSync(VAULT_DIR)) {

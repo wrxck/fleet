@@ -178,12 +178,11 @@ export async function executeOnboard(
   // add/init/register (all of which lock) cannot lose this write.
   await withRegistry(reg => {
     const app = findApp(reg, appName);
-    if (app) {
-      app.gitRepo = `${github.githubOrg()}/${repoName}`;
-      app.gitRemoteUrl = repoUrl;
-      app.gitOnboardedAt = new Date().toISOString();
-      steps.push('updated fleet registry');
-    }
+    if (!app) return null; // app not registered: nothing to persist, skip the write + .bak churn
+    app.gitRepo = `${github.githubOrg()}/${repoName}`;
+    app.gitRemoteUrl = repoUrl;
+    app.gitOnboardedAt = new Date().toISOString();
+    steps.push('updated fleet registry');
     return reg;
   });
 

@@ -1,17 +1,16 @@
-import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { writeJsonAtomic } from '../fs-json';
+import { readJson, writeJsonAtomic } from '../fs-json';
 import type { DepsCache } from './types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CACHE_PATH = join(__dirname, '..', '..', '..', 'data', 'deps-cache.json');
 
 export function loadCache(path: string = DEFAULT_CACHE_PATH): DepsCache | null {
-  if (!existsSync(path)) return null;
-  const raw = readFileSync(path, 'utf-8');
-  return JSON.parse(raw) as DepsCache;
+  // a missing OR corrupt cache yields null, which callers treat as "no cache"
+  // and re-scan — a torn cache file must never crash the deps scanner.
+  return readJson<DepsCache>(path);
 }
 
 export function saveCache(cache: DepsCache, path: string = DEFAULT_CACHE_PATH): void {
