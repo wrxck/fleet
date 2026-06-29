@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { execSafe } from './exec';
 import { GitError } from './errors';
 import { loadOperator } from './operator';
-import { assertAppName } from './validate';
+import { assertAppName, assertBranch } from './validate';
 
 /** the GitHub org this fleet instance publishes to — from operator config,
  *  with no default: guessing another operator's org is never correct. */
@@ -52,6 +52,12 @@ export function createPullRequest(
   opts: { title: string; body?: string; head: string; base: string },
 ): PullRequest {
   requireGhAuth();
+  // validate repo/refs here rather than relying on callers — the same guard
+  // gitPush/gitCheckout already apply (assertBranch forbids a leading dash, so
+  // a ref can never be read as a flag, and assertAppName confines the repo).
+  assertAppName(repo);
+  assertBranch(opts.head);
+  assertBranch(opts.base);
   const r = execSafe('gh', [
     'pr', 'create',
     '--repo', `${githubOrg()}/${repo}`,
@@ -82,6 +88,7 @@ export function createPullRequest(
 
 export function listPullRequests(repo: string, state: 'open' | 'closed' | 'all' = 'open'): PullRequest[] {
   requireGhAuth();
+  assertAppName(repo);
   const r = execSafe('gh', [
     'pr', 'list',
     '--repo', `${githubOrg()}/${repo}`,
@@ -106,6 +113,9 @@ export function listPullRequests(repo: string, state: 'open' | 'closed' | 'all' 
 
 export function protectBranch(repo: string, branch: string): boolean {
   requireGhAuth();
+  // repo and branch are interpolated into the api path and the temp filename.
+  assertAppName(repo);
+  assertBranch(branch);
   const protection = JSON.stringify({
     required_pull_request_reviews: {
       dismiss_stale_reviews: true,

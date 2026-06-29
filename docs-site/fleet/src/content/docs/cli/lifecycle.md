@@ -13,19 +13,19 @@ All lifecycle commands require root privileges because they interact with system
 
 ## fleet deploy
 
-Full deployment pipeline: register the app if needed, build the Docker image, then start or restart the systemd service.
+Full deployment pipeline: build the Docker image, then start or restart the systemd service. Accepts either a registered app name or a directory path.
 
 ### Usage
 
 ```bash
-fleet deploy <app-dir> [--dry-run] [-y]
+fleet deploy <app|dir> [--dry-run] [-y]
 ```
 
 ### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `app-dir` | Yes | Path to the directory containing `docker-compose.yml` |
+| `app\|dir` | Yes | Registered app name OR path to directory containing `docker-compose.yml` |
 
 ### Flags
 
@@ -35,6 +35,15 @@ fleet deploy <app-dir> [--dry-run] [-y]
 | `-y`, `--yes` | Skip confirmation prompts |
 
 ### Examples
+
+```bash
+$ fleet deploy myapp
+Deploy Pipeline
+Building myapp...
+✓ Build complete
+Starting myapp...
+✓ Deployed myapp
+```
 
 ```bash
 $ fleet deploy /srv/myapp
@@ -54,7 +63,7 @@ Would build and deploy myapp
 
 ### What deploy does
 
-1. If the app is not registered, runs `fleet add <app-dir>` first
+1. If the argument is an app name, looks it up in the registry; if it is a directory path that is not yet registered, runs `fleet add <dir>` first
 2. Runs `docker compose build` in the compose directory
 3. If the systemd service is already active, restarts it; otherwise starts it
 

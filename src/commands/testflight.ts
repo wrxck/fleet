@@ -5,6 +5,7 @@ import {
 import { listBuilds, expireBuild, setWhatsNew, verifyApp } from '../core/testflight/asc';
 import { resolveTestflightTarget, appSecretsEnv } from '../core/testflight/resolve';
 import { heading, success, error, info, warn, table } from '../ui/output';
+import { extractFlag, sleep } from './args';
 
 // the build workflow this command dispatches by default — a macos-runner
 // workflow committed to the app's repo at .github/workflows/.
@@ -14,8 +15,6 @@ const DEFAULT_WORKFLOW = 'ios-testflight.yml';
 const REQUIRED_REPO_SECRETS = [
   'ASC_API_KEY_ID', 'ASC_API_KEY_ISSUER_ID', 'ASC_API_KEY_B64', 'APPLE_TEAM_ID',
 ];
-
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 // `fleet testflight` — publish a mobile app to TestFlight by dispatching its
 // repo's macOS build workflow, and manage its builds through the App Store
@@ -32,12 +31,6 @@ export async function testflightCommand(args: string[]): Promise<void> {
       error('Usage: fleet testflight <doctor|publish|builds|update|delete>');
       process.exit(1);
   }
-}
-
-function extractFlag(args: string[], flag: string): string | undefined {
-  const idx = args.indexOf(flag);
-  if (idx === -1 || idx + 1 >= args.length) return undefined;
-  return args[idx + 1];
 }
 
 async function tfDoctor(args: string[]): Promise<void> {

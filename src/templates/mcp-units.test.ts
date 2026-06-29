@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, it, expect, afterEach } from 'vitest';
 
-import { isInsideGitCheckout, resolveDaemonEntry, generateMcpService } from './mcp-units';
+import { isInsideGitCheckout, resolveDaemonEntry, generateMcpService, generateMcpSocket } from './mcp-units';
 
 describe('isInsideGitCheckout', () => {
   const made: string[] = [];
@@ -37,5 +37,32 @@ describe('resolveDaemonEntry / generateMcpService', () => {
     const { entry, fromCheckout } = resolveDaemonEntry();
     expect(fromCheckout).toBeTruthy();
     expect(generateMcpService()).toContain(`ExecStart=/usr/bin/node ${entry} mcp daemon`);
+  });
+
+  it('service requires the socket unit', () => {
+    expect(generateMcpService()).toContain('Requires=fleet-mcp.socket');
+  });
+
+  it('does NOT declare RuntimeDirectory on the service (the socket owns it)', () => {
+    // a second RuntimeDirectory= would let a service restart remove the dir +
+    // live socket the .socket unit owns.
+    expect(generateMcpService()).not.toContain('RuntimeDirectory');
+  });
+});
+
+describe('generateMcpSocket', () => {
+  it('binds the socket with a guard-group 0660 acl that systemd owns', () => {
+    const unit = generateMcpSocket();
+    expect(unit).toContain('ListenStream=/run/fleet-mcp/mcp.sock');
+    expect(unit).toContain('SocketGroup=fleet-guard');
+    expect(unit).toContain('SocketMode=0660');
+    expect(unit).toContain('WantedBy=sockets.target');
+  });
+
+  it('does NOT couple the socket to the service via PartOf', () => {
+    // coupling the socket lifecycle to the service would restart the socket
+    // whenever the service restarts, dropping the listening fd and defeating
+    // socket activation.
+    expect(generateMcpSocket()).not.toContain('PartOf');
   });
 });

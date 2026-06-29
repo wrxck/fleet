@@ -5,6 +5,8 @@ import { SecretsError, VaultNotInitializedError } from './errors';
 import { execSafe } from './exec';
 import { assertAppName, assertFilePath } from './validate';
 import { withFileLock } from './file-lock';
+import { scrubSecrets } from './redact';
+import { writeJsonAtomic } from './fs-json';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // vault dir resolves from FLEET_VAULT_DIR if set; otherwise falls back to
@@ -93,7 +95,7 @@ export function initVault(): string {
   }
 
   const keygen = execSafe('age-keygen', ['-o', KEY_PATH]);
-  if (!keygen.ok) throw new SecretsError(`Failed to generate key: ${keygen.stderr}`);
+  if (!keygen.ok) throw new SecretsError(`Failed to generate key: ${scrubSecrets(keygen.stderr)}`);
   chmodSync(KEY_PATH, 0o600);
 
   if (!existsSync(VAULT_DIR)) {
@@ -115,10 +117,10 @@ export function loadManifest(): Manifest {
 }
 
 export function saveManifest(manifest: Manifest): void {
-  // 0600: the manifest holds key names, recipients and metadata — not secret
-  // values, but there's no reason for it to be world-readable. Match the
-  // vault's root-only posture explicitly rather than relying on umask.
-  writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 });
+  // atomic write (tmp + fsync + rename) so a crash or a concurrent reader never
+  // sees a torn manifest. 0600: the manifest holds key names, recipients and
+  // metadata — not secret values, but there's no reason for it to be readable.
+  writeJsonAtomic(MANIFEST_PATH, manifest, { mode: 0o600 });
 }
 
 /**
@@ -230,20 +232,20 @@ export function removeBackup(app: string, bakPath?: string): void {
 export function ageEncrypt(plaintext: string): string {
   const pubkey = getPublicKey();
   const r = execSafe('age', ['-r', pubkey, '--armor'], { input: plaintext });
-  if (!r.ok) throw new SecretsError(`age encrypt failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age encrypt failed: ${scrubSecrets(r.stderr)}`);
   return r.stdout;
 }
 
 export function ageDecrypt(ciphertext: string | Buffer): string {
   const r = execSafe('age', ['-d', '-i', KEY_PATH], { input: ciphertext.toString() });
-  if (!r.ok) throw new SecretsError(`age decrypt failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age decrypt failed: ${scrubSecrets(r.stderr)}`);
   return r.stdout;
 }
 
 export function ageDecryptFile(filePath: string): string {
   assertFilePath(filePath);
   const r = execSafe('age', ['-d', '-i', KEY_PATH, filePath]);
-  if (!r.ok) throw new SecretsError(`age decrypt file failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age decrypt file failed: ${scrubSecrets(r.stderr)}`);
   return r.stdout;
 }
 

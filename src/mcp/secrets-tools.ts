@@ -6,6 +6,7 @@ import { restoreVaultFile } from '../core/secrets';
 import {
   setSecret, getSecret, sealFromRuntime, detectDrift,
 } from '../core/secrets-ops';
+import { auditLog } from '../core/secrets-audit';
 
 function text(msg: string) {
   return { content: [{ type: 'text' as const, text: msg }] };
@@ -48,6 +49,9 @@ export function registerSecretsTools(server: McpServer): void {
     async ({ app, key }) => {
       requireVault();
       const val = getSecret(app, key);
+      // a decrypted-value read is the most sensitive operation; record it
+      // (name only, never the value) so it leaves a first-party audit trail.
+      auditLog({ op: 'get', app, secret: key, ok: val !== null });
       if (val === null) return text(`Key not found: ${key}`);
       return text(val);
     },

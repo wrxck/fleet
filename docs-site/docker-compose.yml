@@ -9,7 +9,9 @@ services:
     ports:
       - "127.0.0.1:4321:8080"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      # use 127.0.0.1, not localhost: in-container localhost resolves to IPv6 ::1
+      # but nginx listens on IPv4 0.0.0.0:8080 only, so localhost → connection refused.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

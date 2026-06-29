@@ -171,6 +171,8 @@ function secretsGet(args: string[]): void {
     process.exit(1);
   }
   const val = getSecret(app, key);
+  // record the decrypted-value read (name only) so cli gets leave an audit trail.
+  auditLog({ op: 'get', app, secret: key, ok: val !== null });
   if (val === null) {
     error(`Key not found: ${key}`);
     process.exit(1);

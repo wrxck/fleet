@@ -70,37 +70,6 @@ SECRET_TOKEN   ****...
 
 ---
 
-## fleet secrets set
-
-Set a single secret key/value for an app directly in the encrypted vault.
-
-### Usage
-
-```bash
-fleet secrets set <app> <KEY> <VALUE>
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `app` | Yes | App name |
-| `KEY` | Yes | Secret key name |
-| `VALUE` | Yes | Secret value |
-
-### Examples
-
-```bash
-$ fleet secrets set myapp DATABASE_URL "postgres://user:pass@localhost/db"
-✓ Set DATABASE_URL for myapp
-```
-
-### Related
-
-- **MCP tool:** `fleet_secrets_set`
-
----
-
 ## fleet secrets get
 
 Print a single decrypted secret value to stdout.
@@ -193,6 +162,8 @@ SECRET_TOKEN=...
 
 Re-encrypt the current runtime secrets (`/run/fleet-secrets/`) back to the vault. Backups are created automatically before any seal operation.
 
+`fleet secrets seal-runtime` is an accepted alias for this command.
+
 ### Usage
 
 ```bash
@@ -249,36 +220,6 @@ This overwrites any runtime changes that were not sealed back to the vault. Run 
 ### Related
 
 - **MCP tool:** `fleet_secrets_unseal`
-
----
-
-## fleet secrets rotate
-
-Generate a new age keypair and re-encrypt all vault files with the new key.
-
-### Usage
-
-```bash
-fleet secrets rotate [-y]
-```
-
-### Flags
-
-| Flag | Description |
-|------|-------------|
-| `-y`, `--yes` | Skip confirmation prompt |
-
-### Examples
-
-```bash
-$ fleet secrets rotate
-? Rotate age key? This will re-encrypt all secrets. (y/N) y
-✓ Key rotated
-  Old: age1...
-  New: age1...
-  Re-encrypted 3 apps
-! Run "fleet secrets unseal" to update runtime secrets
-```
 
 ---
 
@@ -524,6 +465,80 @@ fleet secrets rollback <app> --to <TIMESTAMP>
 ```
 
 The rollback itself takes a pre-rollback safety snapshot — the rollback is reversible.
+
+---
+
+## fleet secrets snapshots
+
+List all snapshots for an app, newest first. Snapshots are created automatically before every rotation, seal, or rollback operation.
+
+### Usage
+
+```bash
+fleet secrets snapshots <app> [--json]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `app` | Yes | App name |
+
+### Examples
+
+```bash
+$ fleet secrets snapshots myapp
+Snapshots for myapp (3)
+
+TIMESTAMP             SIZE   PATH
+2026-06-22T14:30:00Z  1.2K   .snapshots/myapp-2026-06-22T14:30:00Z.env.age
+2026-06-21T09:00:00Z  1.1K   .snapshots/myapp-2026-06-21T09:00:00Z.env.age
+2026-06-20T18:15:00Z  1.1K   .snapshots/myapp-2026-06-20T18:15:00Z.env.age
+
+  Restore the newest with: fleet secrets rollback myapp
+  Restore a specific one:  fleet secrets rollback myapp --to <TIMESTAMP>
+```
+
+---
+
+## fleet secrets rollback
+
+Restore an app's vault from a snapshot. Takes a pre-rollback safety snapshot first, so the rollback itself is reversible.
+
+### Usage
+
+```bash
+fleet secrets rollback <app> [-y]
+fleet secrets rollback <app> --to <TIMESTAMP> [-y]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `app` | Yes | App name |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--to <TIMESTAMP>` | Restore from a specific snapshot timestamp (use `fleet secrets snapshots` to list). Defaults to the newest snapshot. |
+| `-y`, `--yes` | Skip the confirmation prompt |
+
+### Examples
+
+```bash
+$ fleet secrets rollback myapp
+Pre-rollback safety snapshot: myapp-2026-06-22T14:35:00Z.env.age
+✓ Restored myapp from 2026-06-22T14:30:00Z
+Re-unsealing vault...
+✓ Runtime updated
+```
+
+```bash
+$ fleet secrets rollback myapp --to 2026-06-20T18:15:00Z -y
+✓ Restored myapp from 2026-06-20T18:15:00Z
+```
 
 ---
 

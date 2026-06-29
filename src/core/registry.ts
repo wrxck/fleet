@@ -76,19 +76,41 @@ function defaultRegistry(): Registry {
   };
 }
 
+// the root daemon uses serviceName to build /etc/systemd/system paths and
+// composePath as a `docker compose` cwd. these are validated at registration,
+// but if the registry file is edited directly (it can live in a user-writable
+// checkout) the daemon would trust the new values. re-check them on load and
+// warn loudly on anything malformed — a serviceName with path separators or a
+// non-absolute composePath is a tamper signal. non-fatal so a legitimate
+// registry is never rejected; callers that act on a flagged entry should treat
+// the warning as a stop sign.
+const SAFE_SERVICE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._@-]*$/;
+
+function checkIntegrity(reg: Registry): Registry {
+  for (const app of reg.apps ?? []) {
+    if (app.serviceName && !SAFE_SERVICE_RE.test(app.serviceName)) {
+      process.stderr.write(`[registry] WARNING: app "${app.name}" has a suspicious serviceName ${JSON.stringify(app.serviceName)} — possible tampering\n`);
+    }
+    if (app.composePath && !app.composePath.startsWith('/')) {
+      process.stderr.write(`[registry] WARNING: app "${app.name}" composePath ${JSON.stringify(app.composePath)} is not absolute — possible tampering\n`);
+    }
+  }
+  return reg;
+}
+
 export function load(): Registry {
   const path = resolveRegistryPath();
   const bakPath = path + '.bak';
   if (existsSync(path)) {
     try {
-      return JSON.parse(readFileSync(path, 'utf-8')) as Registry;
+      return checkIntegrity(JSON.parse(readFileSync(path, 'utf-8')) as Registry);
     } catch {
       process.stderr.write(`[registry] Warning: failed to parse ${path}, trying ${bakPath}\n`);
     }
   }
   if (existsSync(bakPath)) {
     try {
-      return JSON.parse(readFileSync(bakPath, 'utf-8')) as Registry;
+      return checkIntegrity(JSON.parse(readFileSync(bakPath, 'utf-8')) as Registry);
     } catch {
       process.stderr.write(`[registry] Warning: failed to parse ${bakPath}, using default\n`);
     }
@@ -162,7 +184,9 @@ export function registryPath(): string {
  * The mutator may return a different Registry object (e.g. one returned by
  * `addApp` / `removeApp`, which mutate in place but also return the registry
  * for chaining) or simply mutate the input and return it. The returned value
- * is what gets persisted.
+ * is what gets persisted. Returning `null` signals "no change" and skips the
+ * save entirely, so a no-op pass doesn't needlessly rewrite the registry (and
+ * its `.bak`).
  *
  * Returns void: callers needing the post-save state should re-load. Keeping
  * this side-effecting matches how `load()` + `save()` are used today.
@@ -171,12 +195,12 @@ export function registryPath(): string {
  * same process — proper-lockfile is not reentrant and will deadlock.
  */
 export async function withRegistry(
-  fn: (reg: Registry) => Registry | Promise<Registry>,
+  fn: (reg: Registry) => Registry | null | Promise<Registry | null>,
 ): Promise<void> {
   const path = resolveRegistryPath();
   await withFileLock(path, async () => {
     const reg = load();
     const next = await fn(reg);
-    save(next);
+    if (next) save(next);
   });
 }

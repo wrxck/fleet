@@ -23,7 +23,7 @@ func signBody(secret, body string) string {
 // an unauthenticated POST (no X-BlueBubbles-Signature header) must NOT be
 // accepted, and must NOT enqueue any inbound message.
 func TestWebhookRejectsUnauthenticatedPOST(t *testing.T) {
-	b := NewBlueBubbles("", "shared-secret", "", "", 0, []string{"+15551234567"}, nil)
+	b := NewBlueBubbles("", "shared-secret", "", "", "", 0, []string{"+15551234567"}, nil)
 	inbox := make(chan InboundMessage, 1)
 
 	body := `{"type":"new-message","data":{"handle":{"address":"+15551234567"},"text":"/sh rm -rf /"}}`
@@ -47,7 +47,7 @@ func TestWebhookRejectsUnauthenticatedPOST(t *testing.T) {
 
 // TestWebhookRejectsBadSignature ensures a forged signature is rejected.
 func TestWebhookRejectsBadSignature(t *testing.T) {
-	b := NewBlueBubbles("", "shared-secret", "", "", 0, []string{"+15551234567"}, nil)
+	b := NewBlueBubbles("", "shared-secret", "", "", "", 0, []string{"+15551234567"}, nil)
 	inbox := make(chan InboundMessage, 1)
 
 	body := `{"type":"new-message","data":{"handle":{"address":"+15551234567"},"text":"/sh id"}}`
@@ -74,10 +74,12 @@ func TestWebhookRejectsBadSignature(t *testing.T) {
 // enqueued as before.
 func TestWebhookAcceptsValidSignature(t *testing.T) {
 	const secret = "shared-secret"
-	b := NewBlueBubbles("", secret, "", "", 0, []string{"+15551234567"}, nil)
+	b := NewBlueBubbles("", secret, "", "", "", 0, []string{"+15551234567"}, nil)
 	inbox := make(chan InboundMessage, 1)
 
-	body := `{"type":"new-message","data":{"handle":{"address":"+15551234567"},"text":"/ping"}}`
+	// real bluebubbles "new-message" deliveries always carry a message guid; the
+	// replay guard requires one, so the happy-path payload includes it.
+	body := `{"type":"new-message","data":{"guid":"valid-guid-1","handle":{"address":"+15551234567"},"text":"/ping"}}`
 	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(webhookSignatureHeader, signBody(secret, body))
@@ -104,7 +106,7 @@ func TestWebhookAcceptsValidSignature(t *testing.T) {
 // dropped (existing behaviour, reconfirmed).
 func TestWebhookRejectsSignedButUnauthorizedSender(t *testing.T) {
 	const secret = "shared-secret"
-	b := NewBlueBubbles("", secret, "", "", 0, []string{"+15551234567"}, nil)
+	b := NewBlueBubbles("", secret, "", "", "", 0, []string{"+15551234567"}, nil)
 	inbox := make(chan InboundMessage, 1)
 
 	body := `{"type":"new-message","data":{"handle":{"address":"+19999999999"},"text":"/sh id"}}`
@@ -122,19 +124,112 @@ func TestWebhookRejectsSignedButUnauthorizedSender(t *testing.T) {
 	}
 }
 
+// TestWebhookSeparateSigningSecret verifies that when a dedicated webhookSecret
+// is configured it — not the API password — is the inbound signing key, so a
+// leak of the API password (sent to the relay on every outbound call) does not
+// let an attacker forge inbound webhooks.
+func TestWebhookSeparateSigningSecret(t *testing.T) {
+	const password = "api-password"
+	const webhookSecret = "distinct-webhook-secret"
+	b := NewBlueBubbles("", password, webhookSecret, "", "", 0, []string{"+15551234567"}, nil)
+	inbox := make(chan InboundMessage, 1)
+
+	body := `{"type":"new-message","data":{"guid":"g1","handle":{"address":"+15551234567"},"text":"/ping"}}`
+
+	// signed with the api password — must be rejected now that a webhook secret exists.
+	req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	req.Header.Set(webhookSignatureHeader, signBody(password, body))
+	rec := httptest.NewRecorder()
+	b.webhookHandler(inbox).ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when signed with api password, got %d", rec.Code)
+	}
+
+	// signed with the dedicated webhook secret — accepted.
+	req = httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+	req.Header.Set(webhookSignatureHeader, signBody(webhookSecret, body))
+	rec = httptest.NewRecorder()
+	b.webhookHandler(inbox).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 when signed with webhook secret, got %d", rec.Code)
+	}
+	select {
+	case <-inbox:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected webhook-secret-signed request to enqueue a message")
+	}
+}
+
+// TestWebhookRejectsReplay confirms a correctly-signed delivery is processed
+// once and a byte-identical replay (same message guid) is dropped.
+func TestWebhookRejectsReplay(t *testing.T) {
+	const secret = "shared-secret"
+	b := NewBlueBubbles("", secret, "", "", "", 0, []string{"+15551234567"}, nil)
+	inbox := make(chan InboundMessage, 2)
+
+	body := `{"type":"new-message","data":{"guid":"dup-guid","handle":{"address":"+15551234567"},"text":"/ping"}}`
+	sig := signBody(secret, body)
+
+	send := func() int {
+		req := httptest.NewRequest(http.MethodPost, "/webhook", strings.NewReader(body))
+		req.Header.Set(webhookSignatureHeader, sig)
+		rec := httptest.NewRecorder()
+		b.webhookHandler(inbox).ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := send(); code != http.StatusOK {
+		t.Fatalf("expected 200 on first delivery, got %d", code)
+	}
+	if code := send(); code != http.StatusOK {
+		t.Fatalf("expected 200 (ack) on replay, got %d", code)
+	}
+	if len(inbox) != 1 {
+		t.Fatalf("expected exactly 1 enqueued message after a replay, got %d", len(inbox))
+	}
+}
+
+// TestReplayGuardStaleAndDuplicate unit-tests the replay guard directly.
+func TestReplayGuardStaleAndDuplicate(t *testing.T) {
+	g := newReplayGuard(10 * time.Minute)
+	now := time.UnixMilli(1_700_000_000_000)
+
+	if !g.admit("a", now.UnixMilli(), now) {
+		t.Error("expected fresh delivery to be admitted")
+	}
+	if g.admit("a", now.UnixMilli(), now) {
+		t.Error("expected duplicate guid to be rejected")
+	}
+	if g.admit("b", now.Add(-20*time.Minute).UnixMilli(), now) {
+		t.Error("expected stale timestamp to be rejected")
+	}
+	if g.admit("c", now.Add(20*time.Minute).UnixMilli(), now) {
+		t.Error("expected far-future timestamp to be rejected")
+	}
+	// fail closed when there is no guid to dedup on: a fresh timestamp alone does
+	// not prevent a replay within the window, so an empty guid must be rejected
+	// regardless of timestamp.
+	if g.admit("", now.UnixMilli(), now) {
+		t.Error("expected empty guid with a fresh timestamp to be rejected")
+	}
+	if g.admit("", 0, now) {
+		t.Error("expected empty guid with no timestamp to be rejected")
+	}
+}
+
 // TestIsAuthorizedSender sanity-checks the SenderAuthorizer implementation
 // used by the router to gate dispatch.
 func TestIsAuthorizedSender(t *testing.T) {
-	b := NewBlueBubbles("", "s", "", "", 0, []string{"+15551234567"}, nil)
+	b := NewBlueBubbles("", "s", "", "", "", 0, []string{"+15551234567"}, nil)
 	var _ SenderAuthorizer = b // compile-time assertion
 
-	if !b.IsAuthorizedSender("+15551234567") {
+	if !b.IsAuthorizedSender("+15551234567", "iMessage;-;+15551234567") {
 		t.Error("expected allowlisted sender to be authorized")
 	}
-	if b.IsAuthorizedSender("+19999999999") {
+	if b.IsAuthorizedSender("+19999999999", "iMessage;-;+19999999999") {
 		t.Error("expected non-allowlisted sender to be rejected")
 	}
-	if b.IsAuthorizedSender("") {
+	if b.IsAuthorizedSender("", "") {
 		t.Error("expected empty sender to be rejected")
 	}
 }

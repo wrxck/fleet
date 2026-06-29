@@ -217,6 +217,42 @@ $ fleet deps ignore some-pkg --reason "False positive" --until 2026-06-01
 
 ---
 
+## fleet deps unignore
+
+Remove an existing ignore rule for a package.
+
+### Usage
+
+```bash
+fleet deps unignore <package> [--app <name>]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `package` | Yes | Package name to remove the ignore rule for |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--app <name>` | Remove only the ignore rule scoped to this app (leave global rules intact) |
+
+### Examples
+
+```bash
+$ fleet deps unignore lodash --app myapp
+✓ Removed ignore rule for lodash
+```
+
+```bash
+$ fleet deps unignore some-pkg
+✓ Removed ignore rule for some-pkg
+```
+
+---
+
 ## fleet deps init
 
 Install automated dependency scanning: writes a cron job, installs a MOTD script for SSH login banners, and runs an initial scan.

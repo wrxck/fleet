@@ -4,7 +4,7 @@ import {
   branchExists, hasCommits,
 } from './git';
 import * as github from './github';
-import { load, findApp, save } from './registry';
+import { findApp, withRegistry } from './registry';
 
 export type OnboardScenario = 'fresh' | 'migrate' | 'no-remote' | 'resume';
 
@@ -80,13 +80,13 @@ function ensureDevelop(cwd: string, steps: string[]): void {
   }
 }
 
-export function executeOnboard(
+export async function executeOnboard(
   scenario: OnboardScenario,
   cwd: string,
   repoName: string,
   appName: string,
   status: GitStatus,
-): OnboardResult {
+): Promise<OnboardResult> {
   const repoUrl = github.getRepoUrl(repoName);
   const steps: string[] = [];
 
@@ -174,15 +174,17 @@ export function executeOnboard(
     steps.push('branch protection skipped (requires github pro for private repos)');
   }
 
-  const reg = load();
-  const app = findApp(reg, appName);
-  if (app) {
+  // update the registry under the inter-process lock so a concurrent
+  // add/init/register (all of which lock) cannot lose this write.
+  await withRegistry(reg => {
+    const app = findApp(reg, appName);
+    if (!app) return null; // app not registered: nothing to persist, skip the write + .bak churn
     app.gitRepo = `${github.githubOrg()}/${repoName}`;
     app.gitRemoteUrl = repoUrl;
     app.gitOnboardedAt = new Date().toISOString();
-    save(reg);
     steps.push('updated fleet registry');
-  }
+    return reg;
+  });
 
   return { scenario, steps, repoUrl, branches: ['main', 'develop'] };
 }

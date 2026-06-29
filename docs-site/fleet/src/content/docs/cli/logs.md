@@ -35,11 +35,11 @@ Each source gets a stable colour assigned by name hash, so you can keep visual t
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-f`, `--follow` | off | Live tail (passes through to `docker logs -f`). |
-| `-n <N>` | 100 | Number of trailing lines to show. |
+| `-n <N>`, `--tail <N>` | 100 | Number of trailing lines to show. `--tail` is an alias for `-n` accepted in both single-app and multi-source mode. |
 | `-c <container>` | first | Pick a specific container in a multi-service app. |
 | `--since <window>` | — | Only show entries within the given window (e.g. `30m`, `2h`, `1d`). |
 | `--grep <text>` | — | Substring filter applied after `--level`. |
-| `--level <level>` | — | Drop lines below this level (`debug` < `info` < `warn` < `error`). |
+| `--level <level>` | — | Drop lines below this level (`debug` < `info` < `warn` < `error`). Applies in both single-app and multi-source mode. |
 
 When `--level`, `--since`, or `--grep` is set in non-follow mode, output is capped at 200 KB; the tool warns if it had to truncate.
 

@@ -1,5 +1,6 @@
 import { execSafe } from './exec';
 import { SecretsError } from './errors';
+import { scrubSecrets } from './redact';
 
 export interface Keypair {
   publicKey: string;
@@ -13,19 +14,19 @@ export function reencryptForRecipient(args: {
 }): string {
   const dec = execSafe('age', ['-d', '-i', args.oldKeyPath], { input: args.ciphertext });
   if (!dec.ok) {
-    throw new SecretsError(`decrypt failed: ${dec.stderr}`);
+    throw new SecretsError(`decrypt failed: ${scrubSecrets(dec.stderr)}`);
   }
   const plaintext = dec.stdout;
   const enc = execSafe('age', ['-r', args.newRecipient, '--armor'], { input: plaintext });
   if (!enc.ok) {
-    throw new SecretsError(`encrypt failed: ${enc.stderr}`);
+    throw new SecretsError(`encrypt failed: ${scrubSecrets(enc.stderr)}`);
   }
   return enc.stdout;
 }
 
 export function generateKeypair(): Keypair {
   const r = execSafe('age-keygen', []);
-  if (!r.ok) throw new SecretsError(`age-keygen failed: ${r.stderr}`);
+  if (!r.ok) throw new SecretsError(`age-keygen failed: ${scrubSecrets(r.stderr)}`);
   const lines = r.stdout.split('\n');
   const pub = lines.find(l => l.startsWith('# public key: '))?.slice('# public key: '.length).trim();
   const priv = lines.find(l => l.startsWith('AGE-SECRET-KEY-'))?.trim();

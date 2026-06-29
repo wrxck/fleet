@@ -200,8 +200,23 @@ func RemoveWhitelistIP(ip string) error {
 	return Reload()
 }
 
+// rate-limit bounds: a non-positive rps/burst would disable rate limiting for
+// every proxied site (a self-inflicted dos), and an absurd value is almost
+// certainly a typo. enforced in SetRateLimit so the bot command and any other
+// caller share the check.
+const (
+	minRate = 1
+	maxRate = 1_000_000
+)
+
 // SetRateLimit updates the rate limit settings, writes config, and reloads.
 func SetRateLimit(rps, burst int) error {
+	if rps < minRate || rps > maxRate {
+		return fmt.Errorf("rps must be between %d and %d, got %d", minRate, maxRate, rps)
+	}
+	if burst < minRate || burst > maxRate {
+		return fmt.Errorf("burst must be between %d and %d, got %d", minRate, maxRate, burst)
+	}
 	cfg, err := Read()
 	if err != nil {
 		return err

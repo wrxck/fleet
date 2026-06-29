@@ -60,28 +60,56 @@ func TestTelegramIsAuthorizedSender(t *testing.T) {
 	// Compile-time assertion: TelegramAdapter implements SenderAuthorizer.
 	var _ SenderAuthorizer = (*TelegramAdapter)(nil)
 
-	// With an explicit sender allowlist, only those IDs are authorised.
+	// with an explicit sender allowlist, only those ids are authorised
+	// (chat id is irrelevant once a sender allowlist is present).
 	tg := NewTelegram("token", []int64{100}, []int64{42, 99}, nil)
-	if !tg.IsAuthorizedSender("42") {
+	if !tg.IsAuthorizedSender("42", "100") {
 		t.Error("expected sender 42 to be authorised")
 	}
-	if !tg.IsAuthorizedSender("99") {
+	if !tg.IsAuthorizedSender("99", "100") {
 		t.Error("expected sender 99 to be authorised")
 	}
-	if tg.IsAuthorizedSender("7") {
+	if tg.IsAuthorizedSender("7", "100") {
 		t.Error("expected sender 7 to be rejected (not in allowlist)")
 	}
-	if tg.IsAuthorizedSender("not-a-number") {
+	if tg.IsAuthorizedSender("not-a-number", "100") {
 		t.Error("expected non-numeric sender ID to be rejected")
 	}
-	if tg.IsAuthorizedSender("") {
+	if tg.IsAuthorizedSender("", "100") {
 		t.Error("expected empty sender ID to be rejected")
 	}
 
-	// With no allowlist configured, fall back to chat-level allow
-	// (single-user installs continue to work).
-	tgOpen := NewTelegram("token", []int64{100}, nil, nil)
-	if !tgOpen.IsAuthorizedSender("anything") {
-		t.Error("expected open install (empty allowlist) to allow any sender")
+	// With no allowlist configured we default-deny: only a private chat
+	// (chat id == sender id) is accepted. group chats (negative ids that never
+	// equal a sender id) and any sender!=chat are rejected.
+	tgOpen := NewTelegram("token", []int64{42}, nil, nil)
+	if !tgOpen.IsAuthorizedSender("42", "42") {
+		t.Error("expected private chat (sender==chat) to be authorised with no allowlist")
+	}
+	if tgOpen.IsAuthorizedSender("500", "-1001234567890") {
+		t.Error("expected group-chat member to be rejected with no sender allowlist")
+	}
+	if tgOpen.IsAuthorizedSender("42", "-1001234567890") {
+		t.Error("expected sender!=chat to be rejected with no sender allowlist")
+	}
+	if tgOpen.IsAuthorizedSender("", "") {
+		t.Error("expected empty sender id to be rejected even when it equals chat id")
+	}
+}
+
+// TestValidateTelegramAuth locks in the startup guard that refuses an
+// allowlisted group/channel chat with no per-sender allowlist.
+func TestValidateTelegramAuth(t *testing.T) {
+	// private-chat-only install (positive chat id, no sender list) is fine.
+	if err := ValidateTelegramAuth([]int64{42}, nil); err != nil {
+		t.Errorf("expected private-chat install to validate, got %v", err)
+	}
+	// a group chat (negative id) with no sender allowlist must be refused.
+	if err := ValidateTelegramAuth([]int64{-1001234567890}, nil); err == nil {
+		t.Error("expected group chat without sender allowlist to be rejected")
+	}
+	// a group chat is allowed once an explicit sender allowlist is present.
+	if err := ValidateTelegramAuth([]int64{-1001234567890}, []int64{42}); err != nil {
+		t.Errorf("expected group chat with sender allowlist to validate, got %v", err)
 	}
 }

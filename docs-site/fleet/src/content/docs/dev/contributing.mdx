@@ -29,7 +29,9 @@ The TypeScript CLI lives in `src/`:
 
 - `src/cli.ts` — argument parser and command routing
 - `src/commands/` — one file per CLI command
-- `src/core/` — business logic (docker, systemd, nginx, secrets, health, deps)
+- `src/core/` — business logic (docker, systemd, nginx, secrets, health, deps, runners, backup, audit, notify)
+- `src/registry/` — registry-driven command definitions, argument schema parsing (Zod), output rendering, and CLI context factory. New commands should use `defineCommand()` from this layer.
+- `src/adapters/` — fleet adapter interfaces and runner adapters (remote SSH build hosts, scheduler, signals, notifier, detector)
 - `src/mcp/` — MCP server for Claude Code integration
 - `src/tui/` — Ink/React terminal dashboard
 - `src/templates/` — systemd, nginx, and unseal service templates
