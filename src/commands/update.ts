@@ -11,6 +11,11 @@ export interface UpdateData {
   available: boolean;
   behind: number;
   latestSubject: string;
+  /** set for non-git installs ('npm' | 'unknown'); absent means git checkout. */
+  kind?: string;
+  /** installed / latest published versions (npm mode only). */
+  localVersion?: string;
+  remoteVersion?: string;
   /** populated only when an apply actually ran. */
   pulled?: number;
   buildOk?: boolean;
@@ -51,8 +56,12 @@ export const updateCommand = defineCommand({
         available: info.available,
         behind: info.behind,
         latestSubject: info.latestSubject,
+        ...(info.kind ? { kind: info.kind } : {}),
+        ...(info.localVersion ? { localVersion: info.localVersion } : {}),
+        ...(info.remoteVersion ? { remoteVersion: info.remoteVersion } : {}),
         ...(info.error ? { error: info.error } : {}),
       };
+      const isNpm = info.kind === 'npm';
 
       if (info.error) {
         return {
@@ -65,12 +74,21 @@ export const updateCommand = defineCommand({
       if (!info.available) {
         return {
           ok: true,
-          summary: `up to date (channel=${channelInfo.channel}, branch=${channelInfo.branch})`,
+          summary: isNpm
+            ? `up to date (npm, v${info.localVersion})`
+            : `up to date (channel=${channelInfo.channel}, branch=${channelInfo.branch})`,
           data: base,
         };
       }
 
       if (args.check) {
+        if (isNpm) {
+          return {
+            ok: true,
+            summary: `update available (npm): v${info.localVersion} -> v${info.remoteVersion}`,
+            data: base,
+          };
+        }
         const subject = info.latestSubject ? ` — ${info.latestSubject}` : '';
         return {
           ok: true,
@@ -93,6 +111,9 @@ export const updateCommand = defineCommand({
           summary: `update failed: ${result.output}`,
           data,
         };
+      }
+      if (isNpm) {
+        return { ok: true, summary: result.output, data };
       }
       return {
         ok: true,

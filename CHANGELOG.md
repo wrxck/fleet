@@ -2,6 +2,19 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.15.0 — 2026-07-14
+
+### Fixes
+
+- fix(deploy): exact app name wins over cwd-relative path resolution
+
+### Other
+
+- chore(release): bump version to 1.15.0
+- docs(site): document deploy webhook, runner validation, and WAF input bounds
+- docs(site): update for v1.14.0 bot auth, webhook signing, audit log, MCP socket
+- chore(release): regenerate CHANGELOG for v1.14.0
+
 ## v1.14.0 — 2026-06-29
 
 ### Fixes
