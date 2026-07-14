@@ -27,14 +27,24 @@ export async function deployCommand(args: string[]): Promise<void> {
   let reg = load();
   const fullPath = resolve(target);
   const isPath = existsSync(fullPath);
-  // accept either a registered app name or a path to an app directory. a name is
-  // only tried when the argument is not an existing path, so directory deploys
-  // (including auto-registering a new dir) keep working exactly as before.
-  // resolving by name is exact, so apps that share a directory but differ by
-  // compose file stay unambiguous.
-  let app = isPath
-    ? reg.apps.find(a => a.composePath.startsWith(fullPath))
-    : findApp(reg, target);
+  // an exact registry name always wins, even when the argument also happens to
+  // resolve to a directory relative to the cwd — otherwise running
+  // `fleet deploy <name>` from the checkout's parent dir silently switches to
+  // path resolution and can pick a different app registered on the same
+  // directory. path resolution is the fallback for directory deploys, and
+  // refuses to guess when several apps share the path.
+  let app = findApp(reg, target);
+  if (!app && isPath) {
+    const sharing = reg.apps.filter(a => a.composePath.startsWith(fullPath));
+    if (sharing.length > 1) {
+      throw new FleetError(
+        `Multiple apps are registered under ${fullPath}: ` +
+          `${sharing.map(a => a.name).join(', ')}. Deploy one by name instead ` +
+          `(see 'fleet list').`
+      );
+    }
+    app = sharing[0];
+  }
 
   if (!app) {
     if (!isPath) {
