@@ -125,3 +125,52 @@ describe('fleet update', () => {
     if (previous) process.env.FLEET_UPDATE_BRANCH = previous;
   });
 });
+
+// npm-install mode surfaces versions, not branches/commit counts.
+describe('fleet update — npm install', () => {
+  const npmInfo = (overrides = {}) => ({
+    available: true,
+    behind: 1,
+    latestSubject: 'v1.15.1',
+    branch: 'v1.15.0',
+    remoteBranch: 'npm:latest',
+    channel: 'stable' as const,
+    kind: 'npm' as const,
+    localVersion: '1.15.0',
+    remoteVersion: '1.15.1',
+    ...overrides,
+  });
+
+  it('with --check, reports the version jump', async () => {
+    mockCheck.mockResolvedValue(npmInfo());
+    const args = updateCommand.args.parse({ check: true });
+    const r = await updateCommand.run(args, ctx);
+    expect(r.ok).toBeTruthy();
+    expect(r.summary).toBe('update available (npm): v1.15.0 -> v1.15.1');
+    expect(r.data.kind).toBe('npm');
+    expect(mockApply).not.toHaveBeenCalled();
+  });
+
+  it('reports up-to-date with the installed version', async () => {
+    mockCheck.mockResolvedValue(
+      npmInfo({ available: false, behind: 0, latestSubject: '', localVersion: '1.15.1', branch: 'v1.15.1' }),
+    );
+    const r = await updateCommand.run(updateCommand.args.parse({}), ctx);
+    expect(r.ok).toBeTruthy();
+    expect(r.summary).toBe('up to date (npm, v1.15.1)');
+    expect(mockApply).not.toHaveBeenCalled();
+  });
+
+  it('applies and uses the install output as the summary', async () => {
+    mockCheck.mockResolvedValue(npmInfo());
+    mockApply.mockResolvedValue({
+      ok: true,
+      pulled: 1,
+      buildOk: true,
+      output: 'Updated @matthesketh/fleet v1.15.0 -> v1.15.1.',
+    });
+    const r = await updateCommand.run(updateCommand.args.parse({}), ctx);
+    expect(r.ok).toBeTruthy();
+    expect(r.summary).toBe('Updated @matthesketh/fleet v1.15.0 -> v1.15.1.');
+  });
+});

@@ -2,15 +2,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./exec.js', () => ({ execSafe: vi.fn() }));
 
-import { checkForUpdate, applyUpdate, resolveChannel } from './self-update';
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
+  return { ...actual, existsSync: vi.fn(), readFileSync: vi.fn() };
+});
+
+import { existsSync, readFileSync } from 'node:fs';
+
+import {
+  checkForUpdate,
+  applyUpdate,
+  resolveChannel,
+  detectInstallKind,
+  compareVersions,
+} from './self-update';
 import { execSafe } from './exec';
 
 const ok = (stdout: string) => ({ ok: true, stdout, stderr: '', exitCode: 0 });
 const fail = (stderr: string) => ({ ok: false, stdout: '', stderr, exitCode: 1 });
 
 const m = vi.mocked(execSafe);
+const mockExists = vi.mocked(existsSync);
+const mockRead = vi.mocked(readFileSync);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // default to the git-checkout install kind every pre-existing test assumes.
+  mockExists.mockReturnValue(true);
+});
 
 // channel selection covers the three documented routes: default, env-opt-in,
 // explicit branch override (for forks / custom workflows).
@@ -199,5 +218,134 @@ describe('applyUpdate', () => {
       const ranVerify = m.mock.calls.some(c => Array.isArray(c[1]) && (c[1] as string[]).includes('verify-commit'));
       expect(ranVerify).toBe(false);
     });
+  });
+});
+
+describe('compareVersions', () => {
+  it('orders plain x.y.z versions', () => {
+    expect(compareVersions('1.15.1', '1.15.0')).toBeGreaterThan(0);
+    expect(compareVersions('1.15.0', '1.15.1')).toBeLessThan(0);
+    expect(compareVersions('1.15.0', '1.15.0')).toBe(0);
+    expect(compareVersions('2.0.0', '1.99.99')).toBeGreaterThan(0);
+    expect(compareVersions('v1.16.0', '1.15.9')).toBeGreaterThan(0);
+  });
+});
+
+// npm-install mode: no .git at the package root, path under node_modules.
+describe('npm-install mode', () => {
+  const NPM_ROOT = '/usr/lib/node_modules/@matthesketh/fleet';
+  const pkg = (version: string) => JSON.stringify({ version });
+
+  beforeEach(() => {
+    process.env.FLEET_REPO_PATH = NPM_ROOT;
+    mockExists.mockReturnValue(false);
+  });
+  afterEach(() => {
+    delete process.env.FLEET_REPO_PATH;
+    delete process.env.FLEET_UPDATE_CHANNEL;
+    delete process.env.FLEET_UPDATE_BRANCH;
+  });
+
+  it('detects a global npm install', () => {
+    expect(detectInstallKind()).toBe('npm');
+  });
+
+  it('detects a git checkout when .git exists', () => {
+    mockExists.mockReturnValue(true);
+    expect(detectInstallKind()).toBe('git');
+  });
+
+  it('detects an unknown install (no .git, not under node_modules)', () => {
+    process.env.FLEET_REPO_PATH = '/opt/fleet';
+    expect(detectInstallKind()).toBe('unknown');
+  });
+
+  it('check reports an available update from the registry', async () => {
+    mockRead.mockReturnValue(pkg('1.15.0'));
+    m.mockReturnValueOnce(ok('1.15.1'));
+    const info = await checkForUpdate();
+    expect(m).toHaveBeenCalledWith(
+      'npm', ['view', '@matthesketh/fleet', 'version'], { timeout: 15_000 },
+    );
+    expect(info.kind).toBe('npm');
+    expect(info.available).toBeTruthy();
+    expect(info.localVersion).toBe('1.15.0');
+    expect(info.remoteVersion).toBe('1.15.1');
+    expect(info.latestSubject).toBe('v1.15.1');
+  });
+
+  it('check reports up to date when the registry matches', async () => {
+    mockRead.mockReturnValue(pkg('1.15.1'));
+    m.mockReturnValueOnce(ok('1.15.1'));
+    const info = await checkForUpdate();
+    expect(info.available).toBeFalsy();
+    expect(info.error).toBeUndefined();
+  });
+
+  it('check surfaces a registry failure without throwing', async () => {
+    mockRead.mockReturnValue(pkg('1.15.0'));
+    m.mockReturnValueOnce(fail('network down'));
+    const info = await checkForUpdate();
+    expect(info.available).toBeFalsy();
+    expect(info.error).toMatch(/registry/);
+  });
+
+  it('refuses channel overrides in npm mode without hitting the registry', async () => {
+    process.env.FLEET_UPDATE_CHANNEL = 'prerelease';
+    mockRead.mockReturnValue(pkg('1.15.0'));
+    const info = await checkForUpdate();
+    expect(info.available).toBeFalsy();
+    expect(info.error).toMatch(/git checkout/);
+    expect(m).not.toHaveBeenCalled();
+  });
+
+  it('check on an unknown install fails with reinstall guidance', async () => {
+    process.env.FLEET_REPO_PATH = '/opt/fleet';
+    mockRead.mockReturnValue(pkg('1.15.0'));
+    const info = await checkForUpdate();
+    expect(info.kind).toBe('unknown');
+    expect(info.available).toBeFalsy();
+    expect(info.error).toMatch(/npm install -g @matthesketh\/fleet/);
+    expect(m).not.toHaveBeenCalled();
+  });
+
+  it('apply installs the latest package and reports the version change', async () => {
+    mockRead.mockReturnValueOnce(pkg('1.15.0')).mockReturnValueOnce(pkg('1.15.1'));
+    m.mockReturnValueOnce(ok(''));
+    const r = await applyUpdate();
+    expect(m).toHaveBeenCalledWith(
+      'npm', ['install', '-g', '@matthesketh/fleet@latest'], { timeout: 300_000 },
+    );
+    expect(r).toEqual({
+      ok: true,
+      pulled: 1,
+      buildOk: true,
+      output: 'Updated @matthesketh/fleet v1.15.0 -> v1.15.1.',
+    });
+  });
+
+  it('apply reports already-up-to-date when the version does not change', async () => {
+    mockRead.mockReturnValue(pkg('1.15.1'));
+    m.mockReturnValueOnce(ok(''));
+    const r = await applyUpdate();
+    expect(r.ok).toBeTruthy();
+    expect(r.pulled).toBe(0);
+    expect(r.output).toMatch(/Already up to date/);
+  });
+
+  it('apply surfaces npm failure output', async () => {
+    mockRead.mockReturnValue(pkg('1.15.0'));
+    m.mockReturnValueOnce(fail('EACCES: permission denied'));
+    const r = await applyUpdate();
+    expect(r.ok).toBeFalsy();
+    expect(r.output).toMatch(/EACCES/);
+  });
+
+  it('refuses to apply on an unknown install with reinstall guidance', async () => {
+    process.env.FLEET_REPO_PATH = '/opt/fleet';
+    const r = await applyUpdate();
+    expect(r.ok).toBeFalsy();
+    expect(r.output).toMatch(/npm install -g @matthesketh\/fleet/);
+    expect(m).not.toHaveBeenCalled();
   });
 });
