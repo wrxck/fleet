@@ -220,6 +220,63 @@ describe('deployCommand — by app name', () => {
     await expect(deployCommand(['ghost'])).rejects.toThrow(/No registered app named 'ghost'/);
     expect(mockAddCommandRun).not.toHaveBeenCalled();
   });
+
+  it('prefers an exact name match even when the argument is also a directory', async () => {
+    // regression: `fleet deploy we-teach-academy` run from the checkout's
+    // parent dir resolved as a path and picked the first app sharing that
+    // composePath (the staging entry) instead of the app actually named.
+    const prod = makeApp({
+      name: 'web',
+      serviceName: 'web-svc',
+      composeFile: null,
+      registeredAt: '2026-01-02T00:00:00.000Z',
+    });
+    const staging = makeApp({
+      name: 'web-staging',
+      serviceName: 'web-staging-svc',
+      composeFile: 'docker-compose.staging.yml',
+    });
+    mockExistsSync.mockReturnValue(true);
+    mockLoad.mockReturnValue(makeRegistry([staging, prod]));
+    mockFindApp.mockReturnValue(prod);
+    mockGetServiceStatus.mockReturnValue({ state: 'active', active: true });
+
+    await deployCommand(['web', '-y']);
+
+    expect(mockComposeBuild).toHaveBeenCalledWith('/apps/myapp', null, 'web');
+    expect(mockRestartService).toHaveBeenCalledWith('web-svc');
+    expect(mockAddCommandRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('deployCommand — ambiguous path', () => {
+  it('refuses a directory argument that several apps are registered under', async () => {
+    const staging = makeApp({
+      name: 'web-staging',
+      serviceName: 'web-staging-svc',
+      composeFile: 'docker-compose.staging.yml',
+    });
+    const prod = makeApp({ name: 'web', serviceName: 'web-svc' });
+    mockExistsSync.mockReturnValue(true);
+    mockLoad.mockReturnValue(makeRegistry([staging, prod]));
+    mockFindApp.mockReturnValue(undefined);
+
+    await expect(deployCommand(['/apps/myapp', '-y'])).rejects.toThrow(
+      /Multiple apps are registered under \/apps\/myapp: web-staging, web/
+    );
+    expect(mockComposeBuild).not.toHaveBeenCalled();
+    expect(mockAddCommandRun).not.toHaveBeenCalled();
+  });
+
+  it('still deploys by path when exactly one app matches', async () => {
+    mockExistsSync.mockReturnValue(true);
+    mockFindApp.mockReturnValue(undefined);
+
+    await deployCommand(['/apps/myapp', '-y']);
+
+    expect(mockComposeBuild).toHaveBeenCalledWith('/apps/myapp', null, 'myapp');
+    expect(mockAddCommandRun).not.toHaveBeenCalled();
+  });
 });
 
 describe('deploy records lastBuiltCommit', () => {
