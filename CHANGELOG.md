@@ -2,6 +2,17 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.16.0 — 2026-08-01
+
+### Features
+
+- feat(onboard): app readiness checks, unit scaffolder, deploy preflight
+
+### Other
+
+- chore(release): bump version to 1.16.0
+- chore(release): regenerate CHANGELOG for v1.15.3
+
 ## v1.15.3 — 2026-08-01
 
 ### Fixes
