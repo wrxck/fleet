@@ -2,6 +2,19 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.15.2 — 2026-08-01
+
+### Fixes
+
+- fix(secrets): allow seeding a brand-new app via secrets set
+
+### Other
+
+- chore(release): bump version to 1.15.2
+- chore(deps): raise the fast-uri override to the patched 3.1.5
+- chore(deps): bump fast-uri past the host-confusion advisories
+- chore(release): regenerate CHANGELOG for v1.15.1
+
 ## v1.15.1 — 2026-07-14
 
 ### Fixes
