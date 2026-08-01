@@ -83,8 +83,17 @@ export function ViewRouter(): React.JSX.Element {
 
 const CHROME_ROWS = 6;
 
-function UpdateBanner({ info, inProgress }: { info: UpdateInfo | null; inProgress: boolean }): React.JSX.Element | null {
-  if (!info?.available && !inProgress) return null;
+export interface UpdateOutcome {
+  ok: boolean;
+  text: string;
+}
+
+export function UpdateBanner({ info, inProgress, result }: {
+  info: UpdateInfo | null;
+  inProgress: boolean;
+  result?: UpdateOutcome | null;
+}): React.JSX.Element | null {
+  if (!info?.available && !inProgress && !result) return null;
   if (inProgress) {
     return (
       <Box paddingX={1}>
@@ -94,19 +103,35 @@ function UpdateBanner({ info, inProgress }: { info: UpdateInfo | null; inProgres
       </Box>
     );
   }
-  const ahead = info!.behind;
-  const subject = info!.latestSubject ? ` — ${info!.latestSubject}` : '';
-  // channel label only surfaces on prerelease so the stable case stays
-  // visually identical to what operators have seen for several releases.
-  const channelLabel = info!.channel === 'prerelease' ? ' (prerelease)' : '';
-  return (
+  // the outcome of the last attempt renders first so a refusal or failure is
+  // never invisible; the press-U line stays alongside it while an update is
+  // still available, so the operator can retry after fixing the cause.
+  const outcome = result ? (
     <Box paddingX={1}>
-      <Box borderStyle="round" borderColor="cyan" paddingX={1}>
-        <Text color="cyan">↑ Update available{channelLabel}: {ahead} commit{ahead === 1 ? '' : 's'} ahead{subject}. Press </Text>
-        <Text color="cyan" bold>U</Text>
-        <Text color="cyan"> to install.</Text>
+      <Box borderStyle="round" borderColor={result.ok ? 'green' : 'red'} paddingX={1}>
+        <Text color={result.ok ? 'green' : 'red'}>{result.text}</Text>
       </Box>
     </Box>
+  ) : null;
+
+  if (!info?.available) return outcome;
+
+  const ahead = info.behind;
+  const subject = info.latestSubject ? ` — ${info.latestSubject}` : '';
+  // channel label only surfaces on prerelease so the stable case stays
+  // visually identical to what operators have seen for several releases.
+  const channelLabel = info.channel === 'prerelease' ? ' (prerelease)' : '';
+  return (
+    <>
+      {outcome}
+      <Box paddingX={1}>
+        <Box borderStyle="round" borderColor="cyan" paddingX={1}>
+          <Text color="cyan">↑ Update available{channelLabel}: {ahead} commit{ahead === 1 ? '' : 's'} ahead{subject}. Press </Text>
+          <Text color="cyan" bold>U</Text>
+          <Text color="cyan"> to install.</Text>
+        </Box>
+      </Box>
+    </>
   );
 }
 
@@ -116,6 +141,7 @@ export function App(): React.JSX.Element {
   const [showHelp, setShowHelp] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateInProgress, setUpdateInProgress] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateOutcome | null>(null);
   const confirmRef = useRef(state.confirmAction);
   const updateInfoRef = useRef<UpdateInfo | null>(null);
   const updateInProgressRef = useRef(false);
@@ -207,6 +233,7 @@ export function App(): React.JSX.Element {
       const info = updateInfoRef.current;
       if (info?.available && !updateInProgressRef.current) {
         setUpdateInProgress(true);
+        setUpdateResult(null);
         applyUpdate().then(result => {
           setUpdateInProgress(false);
           if (result.ok) {
@@ -215,11 +242,17 @@ export function App(): React.JSX.Element {
               branch: info.branch, remoteBranch: info.remoteBranch, channel: info.channel,
             });
           }
-          // Result reported via UpdateBanner below.
-          (App as any).__lastUpdateOutput = result.output;
+          // the running process is still the old build after a successful
+          // pull + rebuild, so tell the operator how to pick it up.
+          setUpdateResult({
+            ok: result.ok,
+            text: result.ok && result.pulled === 1
+              ? `${result.output} Restart the tui to run the new build.`
+              : result.output,
+          });
         }).catch(err => {
           setUpdateInProgress(false);
-          (App as any).__lastUpdateOutput = err instanceof Error ? err.message : String(err);
+          setUpdateResult({ ok: false, text: err instanceof Error ? err.message : String(err) });
         });
         return true;
       }
@@ -249,7 +282,7 @@ export function App(): React.JSX.Element {
           <InputDispatcher globalHandler={globalHandler}>
             <Viewport chrome={CHROME_ROWS}>
               <Header vaultSealed={vaultSealed} />
-              <UpdateBanner info={updateInfo} inProgress={updateInProgress} />
+              <UpdateBanner info={updateInfo} inProgress={updateInProgress} result={updateResult} />
               <Box flexGrow={1} flexDirection="column">
                 {showHelp ? (
                   <KeyBindingHelp
