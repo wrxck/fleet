@@ -7,6 +7,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 
 import { load, findApp, addApp, withRegistry, type AppEntry } from '../core/registry';
+import { checkApp, summarizeUnresolved } from '../core/onboarding';
+import { preflightDeploy, formatPreflightFailures } from '../core/deploy-preflight';
+import { installServiceForApp } from '../core/service-install';
 import { restartServiceResult } from '../core/systemd';
 import { getContainerLogs, getContainersByCompose } from '../core/docker';
 import { listSites, installConfig, testConfig, reload, removeConfig } from '../core/nginx';
@@ -258,6 +261,18 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
           `MCP daemon (fleet mcp install) or, for the CLI, via sudo.`,
         );
       }
+      // conservative preflight: catch the certain-failure setups (missing
+      // unit, compose-required env with no vault entry / no unsealed runtime
+      // env) and return the exact fix commands, so a failed deploy explains
+      // itself instead of surfacing as a bare build error.
+      const pre = preflightDeploy(entry);
+      if (!pre.ok) {
+        return fail(
+          `Preflight failed for ${entry.name} — this deploy cannot succeed yet:\n` +
+          formatPreflightFailures(pre).join('\n') +
+          `\nUse fleet_onboard { app: "${entry.name}" } for the full checklist.`,
+        );
+      }
       const build = composeBuildResult(entry.composePath, entry.composeFile, entry.name);
       if (!build.ok) return fail(`Build failed for ${entry.name}: ${build.error}`);
       const restart = restartServiceResult(entry.serviceName);
@@ -400,8 +415,51 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
         return addApp(reg, entry);
       });
 
+      // registration is step one, not the finish line — append the unresolved
+      // onboarding items so the remaining steps (unit, vault keys, unseal,
+      // nginx) are advertised right here. best-effort: never fail the
+      // registration because a hint check could not run.
+      let hint = '';
+      try {
+        const unresolved = summarizeUnresolved(await checkApp(params.name));
+        hint = unresolved.length > 0
+          ? `\n\nOnboarding — remaining steps (fleet_onboard for detail):\n` + unresolved.join('\n')
+          : '\n\nOnboarding: all checks pass.';
+      } catch { /* best-effort hint only */ }
+
       const action = existed ? 'Updated' : 'Registered';
-      return text(`${action} app "${params.name}":\n${JSON.stringify(entry, null, 2)}`);
+      return text(`${action} app "${params.name}":\n${JSON.stringify(entry, null, 2)}${hint}`);
+    }
+  );
+
+  server.tool(
+    'fleet_onboard',
+    'Readiness checklist for a registered app: registry entry, compose env analysis (required vs defaulted vars, build args, port clashes, project-name collisions), systemd unit, vault key-name coverage, materialised runtime env, nginx per domain, and whether the port answers. Read-only; returns the structured report with a fix command per failed check and who can run it (mcp / cli / operator-root).',
+    { app: z.string().describe('App name') },
+    async ({ app }) => {
+      try {
+        const report = await checkApp(app);
+        return text(JSON.stringify(report, null, 2));
+      } catch (err) {
+        return fail(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  server.tool(
+    'fleet_service_install',
+    'Generate and install the systemd unit for a REGISTERED app from its trusted registry fields (workingDirectory = composePath, composeFile, database dependency). Template-only — no caller-supplied unit content. Refuses to overwrite an existing unit unless force is true. This is the path for apps registered with a custom name or composeFile, which fleet add never scaffolds.',
+    {
+      app: z.string().describe('Registered app name'),
+      force: z.boolean().optional().default(false).describe('Overwrite an existing unit'),
+    },
+    async ({ app, force }) => {
+      try {
+        const result = installServiceForApp(app, { force });
+        return result.ok ? text(result.message) : fail(result.message);
+      } catch (err) {
+        return fail(err instanceof Error ? err.message : String(err));
+      }
     }
   );
 

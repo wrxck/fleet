@@ -14,8 +14,8 @@ export interface CompletionsData {
 // from the registry so completions stay accurate during the migration;
 // shrinks toward [] as each migration commit lands.
 const LEGACY_COMMANDS: readonly string[] = [
-  'logs', 'egress', 'deps', 'audit', 'testflight', 'deploy', 'nginx', 'secrets',
-  'git', 'watchdog', 'guard', 'backup', 'routines', 'routine-run',
+  'logs', 'egress', 'deps', 'audit', 'testflight', 'deploy', 'onboard', 'service',
+  'nginx', 'secrets', 'git', 'watchdog', 'guard', 'backup', 'routines', 'routine-run',
   'tui', 'dashboard', 'mcp',
 ];
 
