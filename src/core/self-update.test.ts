@@ -127,11 +127,24 @@ describe('checkForUpdate', () => {
 });
 
 describe('applyUpdate', () => {
-  it('refuses when working tree is dirty', async () => {
+  it('refuses when tracked files have uncommitted changes', async () => {
     m.mockReturnValueOnce(ok(' M src/foo.ts'));    // dirty status
     const r = await applyUpdate();
-    expect(r.ok).toBe(false);
-    expect(r.output).toMatch(/dirty/);
+    expect(r.ok).toBeFalsy();
+    expect(r.output).toMatch(/uncommitted changes to tracked files/);
+  });
+
+  it('asks git to ignore untracked files in the dirtiness check', async () => {
+    // untracked scratch (logs, backups) must not block self-update — an
+    // ff-only pull cannot clobber it. the flag makes porcelain exclude it.
+    m.mockReturnValueOnce(ok(''));            // status clean of tracked changes
+    m.mockReturnValueOnce(ok('aaa1111'));     // pre HEAD
+    m.mockReturnValueOnce(ok(''));            // pull
+    m.mockReturnValueOnce(ok('aaa1111'));     // post HEAD
+    m.mockReturnValueOnce(ok('built'));       // build
+    const r = await applyUpdate();
+    expect(r.ok).toBeTruthy();
+    expect(m.mock.calls[0][1]).toContain('--untracked-files=no');
   });
 
   it('pulls + rebuilds when clean and updates land', async () => {
