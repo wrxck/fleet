@@ -2,6 +2,17 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.15.1 — 2026-07-14
+
+### Fixes
+
+- fix(update): support global npm installs in self-update
+
+### Other
+
+- chore(release): bump version to 1.15.1
+- chore(release): regenerate CHANGELOG for v1.15.0
+
 ## v1.15.0 — 2026-07-14
 
 ### Fixes
