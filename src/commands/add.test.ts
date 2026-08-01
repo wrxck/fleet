@@ -36,9 +36,15 @@ vi.mock('../core/validate.js', () => ({
   assertComposeFile: vi.fn(),
 }));
 
+vi.mock('../core/onboarding.js', () => ({
+  checkApp: vi.fn(),
+  summarizeUnresolved: vi.fn(),
+}));
+
 import { existsSync } from 'node:fs';
 
 import { addApp, withRegistry } from '../core/registry';
+import { checkApp, summarizeUnresolved } from '../core/onboarding';
 import { getContainersByCompose } from '../core/docker';
 import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
 import { generateServiceFile } from '../templates/systemd';
@@ -52,12 +58,16 @@ const mockReadServiceFile = vi.mocked(readServiceFile);
 const mockInstallServiceFile = vi.mocked(installServiceFile);
 const mockEnableService = vi.mocked(enableService);
 const mockGenerateServiceFile = vi.mocked(generateServiceFile);
+const mockCheckApp = vi.mocked(checkApp);
+const mockSummarizeUnresolved = vi.mocked(summarizeUnresolved);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetContainers.mockReturnValue(['myapp']);
   mockReadServiceFile.mockReturnValue(null);
   mockGenerateServiceFile.mockReturnValue('[Unit]\nDescription=test');
+  mockCheckApp.mockResolvedValue({ app: 'myapp', checks: [], ok: true });
+  mockSummarizeUnresolved.mockReturnValue([]);
   mockExistsSync.mockImplementation((p: unknown) => {
     const path = String(p);
     return path === '/apps/myapp' || path.endsWith('docker-compose.yml');
@@ -178,6 +188,40 @@ describe('addCommand — happy path with yes: true', () => {
       makeMcpContext(false),
     );
     expect(capturedName).toMatch(/^[a-z0-9-]+$/);
+  });
+});
+
+describe('addCommand — onboarding hint', () => {
+  it('appends unresolved onboarding items to the summary after registering', async () => {
+    mockSummarizeUnresolved.mockReturnValue([
+      '[missing] Systemd unit: myapp.service does not exist -> mcp: fleet_service_install { app: "myapp" }',
+    ]);
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: true },
+      makeMcpContext(false),
+    );
+    expect(result.ok).toBeTruthy();
+    expect(result.summary).toMatch(/remaining steps/i);
+    expect(result.summary).toMatch(/fleet_service_install/);
+  });
+
+  it('says all checks pass when nothing is unresolved', async () => {
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: true },
+      makeMcpContext(false),
+    );
+    expect(result.summary).toMatch(/all checks pass/i);
+  });
+
+  it('still registers when the hint check itself throws', async () => {
+    mockCheckApp.mockRejectedValue(new Error('vault unreadable'));
+    const result = await addCommand.run(
+      { dir: '/apps/myapp', 'dry-run': false, yes: true },
+      makeMcpContext(false),
+    );
+    expect(result.ok).toBeTruthy();
+    expect(mockAddApp).toHaveBeenCalled();
+    expect(result.summary).toMatch(/registered/i);
   });
 });
 

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { load, save, findApp } from '../core/registry';
+import { preflightDeploy, formatPreflightFailures } from '../core/deploy-preflight';
 import { composeBuild, composeUp, composeDown } from '../core/docker';
 import { startService, restartService, getServiceStatus } from '../core/systemd';
 import { FleetError } from '../core/errors';
@@ -64,6 +65,17 @@ export async function deployCommand(args: string[]): Promise<void> {
     info('Would build and deploy ' + app.name);
     warn('Dry run - no changes made');
     return;
+  }
+
+  // conservative preflight: catch the certain-failure setups (missing unit,
+  // compose-required env with no vault entry / no unsealed runtime env) and
+  // say exactly what to run, instead of dying later in the build or start.
+  const pre = preflightDeploy(app);
+  if (!pre.ok) {
+    error(`Preflight failed for ${app.name} — this deploy cannot succeed yet:`);
+    for (const line of formatPreflightFailures(pre)) error(line);
+    error(`Run 'fleet onboard ${app.name}' for the full checklist.`);
+    process.exit(1);
   }
 
   info(`Building ${app.name}...`);

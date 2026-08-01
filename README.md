@@ -37,6 +37,7 @@ Manage Docker Compose apps on a single server -- systemd orchestration, nginx ro
   - [TestFlight publishing](#testflight-publishing)
   - [App Store compliance audit](#app-store-compliance-audit)
 - [Cloudflare guard](#cloudflare-guard)
+- [App onboarding](#app-onboarding)
 - [Deployment Flow](#deployment-flow)
 - [Boot Refresh](#boot-refresh)
 - [MCP Server](#mcp-server)
@@ -333,6 +334,16 @@ Components installed under `/usr/local/sbin`:
 - **`dns-drift-watch`** — detects when DNS records drift from the snapshot (cron, alerts via the same channels as `fleet watchdog`)
 - **`cert-expiry-watch`** — flags certs approaching expiry across all protected hosts
 - **`fleet-guard` / `fleet-guard-execute`** — the orchestrator + executor pair, run as the `fleet-guard` system user with no shell
+
+## App onboarding
+
+Registering an app is step one, not the finish line — a registered app still needs a systemd unit, vault keys for anything its compose file interpolates or feeds into build args, an unsealed runtime env, and nginx configs for its domains. Two commands close that gap:
+
+**`fleet onboard <app> [--json]`** prints the full readiness checklist: registry entry, compose analysis (required vs defaulted env vars, build args, host-port clashes with other registered apps, project-name collisions on a shared compose directory), systemd unit, vault key-name coverage (names only — values are never read), the materialised runtime env file, nginx per domain, and whether the app's port answers locally. Every failed check comes with the exact fix command and who can run it (`mcp-callable`, `cli`, or `operator, root shell`). Exits non-zero when a blocking check is missing, so scripts and agents can gate on it. Also available as the read-only `fleet_onboard` MCP tool, and both `fleet add` and `fleet_register` append the unresolved items to their output.
+
+**`fleet service install <app> [--force]`** scaffolds the systemd unit for a registered app from its trusted registry fields (working directory, compose file, database dependency) — the path for apps registered under a custom name or compose file, which `fleet add` never covers. Template-only generation, refuses to overwrite an existing unit without `--force`. Also available as the `fleet_service_install` MCP tool.
+
+`fleet deploy` runs the blocking subset as a preflight before the build (unit exists; compose-required env vars have a vault entry and an unsealed runtime env file), so a doomed deploy fails immediately with the fix commands instead of dying mid-build with a bare npm/docker error. Apps whose compose needs nothing deploy exactly as before.
 
 ## Deployment Flow
 
