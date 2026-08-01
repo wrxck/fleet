@@ -57,6 +57,11 @@ export const TOOL_TIERS: Readonly<Record<string, Tier>> = {
   // registry mutation
   fleet_register: 'mutate',
 
+  // onboarding (read-only report) + unit scaffolding (template-only, same
+  // non-secret action tier as fleet_nginx_add)
+  fleet_onboard: 'read',
+  fleet_service_install: 'mutate',
+
   // git (push / pr / release reach outside the host, so destructive)
   fleet_git_status: 'read',
   fleet_git_pr_list: 'read',
