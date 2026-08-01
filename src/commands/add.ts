@@ -4,6 +4,7 @@ import { resolve, basename } from 'node:path';
 import { z } from 'zod';
 
 import { addApp, withRegistry } from '../core/registry';
+import { checkApp, summarizeUnresolved } from '../core/onboarding';
 import { getContainersByCompose } from '../core/docker';
 import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
 import { generateServiceFile } from '../templates/systemd';
@@ -89,7 +90,21 @@ export const addCommand = defineCommand({
     }
 
     await withRegistry(reg => addApp(reg, app));
-    return { ok: true, summary: `registered ${name}`, data: app };
+
+    // registration is step one, not the finish line — surface everything the
+    // app still needs (unit, vault keys, unsealed runtime env, nginx) so the
+    // next step is never a mystery deploy failure. best-effort: a hint failure
+    // must never fail the registration itself.
+    let summary = `registered ${name}`;
+    try {
+      const unresolved = summarizeUnresolved(await checkApp(name));
+      summary += unresolved.length > 0
+        ? `\nOnboarding — remaining steps (fleet onboard ${name} for detail):\n` +
+          unresolved.map(l => `  ${l}`).join('\n')
+        : '\nOnboarding: all checks pass.';
+    } catch { /* best-effort hint only */ }
+
+    return { ok: true, summary, data: app };
   },
 });
 

@@ -16,6 +16,14 @@ describe('tool tiers', () => {
     expect(TOOL_TIERS.fleet_secrets_validate).toBe('read');
   });
 
+  it('classifies onboarding as read and unit scaffolding as mutate', () => {
+    // fleet_onboard reports state only (key NAMES at most, never values).
+    expect(TOOL_TIERS.fleet_onboard).toBe('read');
+    // fleet_service_install writes a template-only unit from trusted registry
+    // fields — recoverable state change, same tier as fleet_nginx_add.
+    expect(TOOL_TIERS.fleet_service_install).toBe('mutate');
+  });
+
   it('fails closed to destructive for unmapped tools', () => {
     expect(tierOf('fleet_some_new_tool')).toBe('destructive');
     expect(isUnmapped('fleet_some_new_tool')).toBe(true);

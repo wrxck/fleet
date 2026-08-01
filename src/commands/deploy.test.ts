@@ -52,6 +52,11 @@ vi.mock('../core/boot-refresh.js', () => ({
   recordBuiltCommit: vi.fn(),
 }));
 
+vi.mock('../core/deploy-preflight.js', () => ({
+  preflightDeploy: vi.fn(),
+  formatPreflightFailures: vi.fn().mockReturnValue([]),
+}));
+
 import { existsSync } from 'node:fs';
 import { deployCommand } from './deploy';
 import { load, save, findApp } from '../core/registry';
@@ -61,6 +66,7 @@ import { addCommand } from './add';
 import { execSafe, execGit } from '../core/exec';
 import { getProjectRoot } from '../core/git';
 import { recordBuiltCommit } from '../core/boot-refresh';
+import { preflightDeploy, formatPreflightFailures } from '../core/deploy-preflight';
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockLoad = vi.mocked(load);
@@ -74,6 +80,8 @@ const mockExecSafe = vi.mocked(execSafe);
 const mockExecGit = vi.mocked(execGit);
 const mockGetProjectRoot = vi.mocked(getProjectRoot);
 const mockRecordBuiltCommit = vi.mocked(recordBuiltCommit);
+const mockPreflightDeploy = vi.mocked(preflightDeploy);
+const mockFormatPreflightFailures = vi.mocked(formatPreflightFailures);
 
 function makeApp(overrides = {}) {
   return {
@@ -116,6 +124,10 @@ beforeEach(() => {
   mockGetProjectRoot.mockReturnValue('/apps/myapp');
   mockExecSafe.mockReturnValue({ ok: true, stdout: 'abc1234', stderr: '', exitCode: 0 });
   mockRecordBuiltCommit.mockReturnValue(undefined);
+  // clearAllMocks keeps implementations but wipes return-value queues — re-prime
+  // the preflight to pass so only the preflight-specific tests make it fail.
+  mockPreflightDeploy.mockReturnValue({ ok: true, failures: [] });
+  mockFormatPreflightFailures.mockReturnValue([]);
 });
 
 describe('deployCommand — argument validation', () => {
@@ -276,6 +288,43 @@ describe('deployCommand — ambiguous path', () => {
 
     expect(mockComposeBuild).toHaveBeenCalledWith('/apps/myapp', null, 'myapp');
     expect(mockAddCommandRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('deployCommand — onboarding preflight', () => {
+  it('blocks the deploy (no build, no start) when the preflight fails', async () => {
+    mockPreflightDeploy.mockReturnValue({
+      ok: false,
+      failures: [{
+        id: 'unit', title: 'Systemd unit', status: 'missing', blocking: true,
+        detail: 'myapp.service does not exist',
+        fix: { runner: 'mcp', command: 'fleet_service_install { app: "myapp" }' },
+      }],
+    });
+    mockFormatPreflightFailures.mockReturnValue(['  [unit] myapp.service does not exist']);
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+    await expect(deployCommand(['/apps/myapp', '-y'])).rejects.toThrow('exit');
+
+    expect(mockComposeBuild).not.toHaveBeenCalled();
+    expect(mockStartService).not.toHaveBeenCalled();
+    expect(mockRestartService).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
+  });
+
+  it('deploys exactly as before when the preflight passes (no regression)', async () => {
+    mockPreflightDeploy.mockReturnValue({ ok: true, failures: [] });
+
+    await deployCommand(['/apps/myapp', '-y']);
+
+    expect(mockPreflightDeploy).toHaveBeenCalledWith(expect.objectContaining({ name: 'myapp' }));
+    expect(mockComposeBuild).toHaveBeenCalledWith('/apps/myapp', null, 'myapp');
+    expect(mockStartService).toHaveBeenCalledWith('myapp');
+  });
+
+  it('does not run the preflight on a dry run', async () => {
+    await deployCommand(['/apps/myapp', '--dry-run', '-y']);
+    expect(mockPreflightDeploy).not.toHaveBeenCalled();
   });
 });
 

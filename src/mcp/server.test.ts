@@ -156,6 +156,17 @@ vi.mock('../commands/freeze.js', async (importOriginal) => {
     unfreezeApp: vi.fn(),
   };
 });
+vi.mock('../core/onboarding.js', () => ({
+  checkApp: vi.fn().mockResolvedValue({ app: 'demo', checks: [], ok: true }),
+  summarizeUnresolved: vi.fn().mockReturnValue([]),
+}));
+vi.mock('../core/deploy-preflight.js', () => ({
+  preflightDeploy: vi.fn().mockReturnValue({ ok: true, failures: [] }),
+  formatPreflightFailures: vi.fn().mockReturnValue([]),
+}));
+vi.mock('../core/service-install.js', () => ({
+  installServiceForApp: vi.fn().mockReturnValue({ ok: true, message: 'installed demo.service' }),
+}));
 vi.mock('./git-tools.js', () => ({
   registerGitTools: vi.fn(),
 }));
@@ -190,6 +201,8 @@ describe('MCP server tool registration', () => {
     'fleet_secrets_unseal',
     'fleet_secrets_validate',
     'fleet_register',
+    'fleet_onboard',
+    'fleet_service_install',
     'fleet_freeze',
     'fleet_unfreeze',
     'fleet_rollback',
@@ -228,5 +241,84 @@ describe('fleet_deploy surfaces the real reason', () => {
     } finally {
       process.getuid = getuid;
     }
+  });
+
+  it('returns the preflight failures (with fix commands) instead of a bare build error', async () => {
+    const registry = await import('../core/registry.js');
+    vi.mocked(registry.findApp).mockReturnValue({
+      name: 'demo', serviceName: 'demo', composePath: '/srv/demo', composeFile: null,
+      containers: ['demo'],
+    } as unknown as ReturnType<typeof registry.findApp>);
+
+    const preflight = await import('../core/deploy-preflight.js');
+    vi.mocked(preflight.preflightDeploy).mockReturnValue({
+      ok: false,
+      failures: [{
+        id: 'runtime-env', title: 'Runtime env file', status: 'missing', blocking: true,
+        detail: '/run/fleet-secrets/demo/.env does not exist',
+        fix: { runner: 'mcp', command: 'fleet_secrets_unseal' },
+      }],
+    });
+    vi.mocked(preflight.formatPreflightFailures).mockReturnValue([
+      '  [runtime-env] /run/fleet-secrets/demo/.env does not exist\n    fix (mcp): fleet_secrets_unseal',
+    ]);
+
+    const getuid = process.getuid;
+    process.getuid = () => 0;
+    try {
+      const result = await capturedHandlers.get('fleet_deploy')!({ app: 'demo' }) as {
+        isError?: boolean; content: Array<{ text: string }>;
+      };
+      expect(result.isError).toBeTruthy();
+      expect(result.content[0].text).toMatch(/Preflight failed/);
+      expect(result.content[0].text).toMatch(/fleet_secrets_unseal/);
+      const docker = await import('../core/docker.js');
+      expect(vi.mocked(docker.composeBuildResult)).not.toHaveBeenCalled();
+    } finally {
+      process.getuid = getuid;
+      vi.mocked(preflight.preflightDeploy).mockReturnValue({ ok: true, failures: [] });
+      vi.mocked(preflight.formatPreflightFailures).mockReturnValue([]);
+    }
+  });
+});
+
+describe('fleet_onboard and fleet_service_install handlers', () => {
+  beforeEach(async () => {
+    capturedTools.length = 0;
+    capturedHandlers.clear();
+    await startMcpServer();
+  });
+
+  it('fleet_onboard returns the structured report as json', async () => {
+    const onboarding = await import('../core/onboarding.js');
+    vi.mocked(onboarding.checkApp).mockResolvedValue({
+      app: 'demo',
+      ok: false,
+      checks: [{
+        id: 'unit', title: 'Systemd unit', status: 'missing', blocking: true,
+        detail: 'demo.service does not exist',
+        fix: { runner: 'mcp', command: 'fleet_service_install { app: "demo" }' },
+      }],
+    });
+    const result = await capturedHandlers.get('fleet_onboard')!({ app: 'demo' }) as {
+      isError?: boolean; content: Array<{ text: string }>;
+    };
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.ok).toBeFalsy();
+    expect(parsed.checks[0].fix.runner).toBe('mcp');
+  });
+
+  it('fleet_service_install surfaces a refusal as an error result', async () => {
+    const serviceInstall = await import('../core/service-install.js');
+    vi.mocked(serviceInstall.installServiceForApp).mockReturnValue({
+      ok: false, message: 'demo.service already exists — pass force to overwrite it.',
+    });
+    const result = await capturedHandlers.get('fleet_service_install')!({ app: 'demo', force: false }) as {
+      isError?: boolean; content: Array<{ text: string }>;
+    };
+    expect(result.isError).toBeTruthy();
+    expect(result.content[0].text).toMatch(/already exists/);
+    expect(vi.mocked(serviceInstall.installServiceForApp)).toHaveBeenCalledWith('demo', { force: false });
   });
 });

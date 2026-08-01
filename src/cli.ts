@@ -10,6 +10,8 @@ import { makeCliContext } from './registry/context';
 import { logsCommand } from './commands/logs';
 import { egressCommand } from './commands/egress';
 import { deployCommand } from './commands/deploy';
+import { onboardCommand } from './commands/onboard';
+import { serviceCommand } from './commands/service';
 import { nginxCommand } from './commands/nginx';
 import { secretsCommand } from './commands/secrets';
 import { gitCommand } from './commands/git';
@@ -59,6 +61,8 @@ Commands:
   testflight delete <app> --build <id>   Expire a TestFlight build
   testflight doctor <app>      Check gh + App Store Connect credentials
   add <app-dir>       Register existing app
+  onboard <app>       Readiness checklist: unit, vault keys, runtime env, nginx
+  service install <app> [--force]  Scaffold the systemd unit for a registered app
   remove <app>        Stop, disable, deregister
   nginx add <domain> --port <port> [--type proxy|spa|nextjs]
   nginx remove <domain>
@@ -192,7 +196,7 @@ export async function run(argv: string[]): Promise<void> {
   const ROOT_COMMANDS = new Set([
     'start', 'stop', 'restart', 'deploy', 'freeze', 'unfreeze',
     'nginx', 'secrets', 'patch-systemd', 'init', 'watchdog', 'backup',
-    'testflight',
+    'testflight', 'onboard', 'service',
   ]);
 
   if (ROOT_COMMANDS.has(command) && process.getuid && process.getuid() !== 0) {
@@ -209,6 +213,8 @@ export async function run(argv: string[]): Promise<void> {
     case 'audit': return auditCommand(rest);
     case 'testflight': return testflightCommand(rest);
     case 'deploy': return deployCommand(rest);
+    case 'onboard': return onboardCommand(rest);
+    case 'service': return serviceCommand(rest);
     case 'nginx': return nginxCommand(rest);
     case 'secrets': return secretsCommand(rest);
     case 'git': return gitCommand(rest);
