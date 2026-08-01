@@ -2,6 +2,17 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.15.3 — 2026-08-01
+
+### Fixes
+
+- fix(tui): surface update results, ignore untracked in dirty check
+
+### Other
+
+- chore(release): bump version to 1.15.3
+- chore(release): regenerate CHANGELOG for v1.15.2
+
 ## v1.15.2 — 2026-08-01
 
 ### Fixes
