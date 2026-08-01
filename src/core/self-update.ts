@@ -283,11 +283,14 @@ export async function applyUpdate(): Promise<UpdateResult> {
 
   const { branch: remoteBranch } = resolveChannel();
 
-  const dirty = execSafe('git', ['-C', fleetRepo(), 'status', '--porcelain']);
+  // untracked files don't block: an ff-only pull never rewrites them, and if
+  // a pulled file would collide with one, git refuses the pull itself and that
+  // error is surfaced. only modifications to tracked files are clobber risks.
+  const dirty = execSafe('git', ['-C', fleetRepo(), 'status', '--porcelain', '--untracked-files=no']);
   if (dirty.ok && dirty.stdout.length > 0) {
     return {
       ok: false, pulled: 0, buildOk: false,
-      output: 'Refusing to update: working tree is dirty. Commit or stash first.',
+      output: 'Refusing to update: working tree has uncommitted changes to tracked files.',
     };
   }
 
