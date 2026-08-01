@@ -164,12 +164,15 @@ export async function setSecret(
   // and our seal. safeSealApp does its own loadManifest/saveManifest inside —
   // those reads/writes happen under our lock.
   await lockManifest(() => {
-    const plaintext = decryptApp(app);
     const manifest = loadManifest();
     const entry = manifest.apps[app];
-    if (entry.type !== 'env') throw new SecretsError(`Cannot set key/value on secrets-dir type for ${app}`);
+    if (entry && entry.type !== 'env') throw new SecretsError(`Cannot set key/value on secrets-dir type for ${app}`);
+    // no manifest entry means this is the app's first secret. bootstrap an
+    // empty env vault instead of refusing — before this, a brand-new app
+    // could never be seeded via `secrets set` (cli or mcp) at all.
+    const plaintext = entry ? decryptApp(app) : '';
 
-    const lines = plaintext.split('\n');
+    const lines = plaintext ? plaintext.split('\n') : [];
     let found = false;
     const updated = lines.map(line => {
       const eqIdx = line.indexOf('=');
@@ -181,8 +184,15 @@ export async function setSecret(
     });
     if (!found) updated.push(`${key}=${value}`);
 
-    safeSealApp(app, updated.join('\n'), entry.sourceFile);
-    auditLog({ op: 'set', app, secret: key, ok: true });
+    // for a bootstrapped app the runtime path is the natural provenance —
+    // it's where unseal materialises the env and where seal-from-runtime
+    // reads it back.
+    const sourceFile = entry ? entry.sourceFile : join(RUNTIME_DIR, app, '.env');
+    safeSealApp(app, updated.join('\n'), sourceFile);
+    auditLog({
+      op: 'set', app, secret: key, ok: true,
+      ...(entry ? {} : { details: 'bootstrapped new app vault' }),
+    });
   });
 }
 

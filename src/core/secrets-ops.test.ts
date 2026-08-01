@@ -62,6 +62,12 @@ vi.mock('./file-lock.js', () => ({
   withFileLock: vi.fn(async (_path: string, fn: () => unknown) => fn()),
 }));
 
+// audit lines are appended with the real fs (appendFileSync isn't in the
+// node:fs mock above) — keep test runs from touching the real audit log.
+vi.mock('./secrets-audit.js', () => ({
+  auditLog: vi.fn(),
+}));
+
 import { existsSync, readFileSync, readdirSync, chmodSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
 
 import {
@@ -69,7 +75,7 @@ import {
   ageEncrypt, backupVaultFile, restoreVaultFile, removeBackup,
 } from './secrets';
 import { execSafe } from './exec';
-import { validateBeforeSeal, detectDrift, safeSealApp, unsealAll, rotateKey } from './secrets-ops';
+import { validateBeforeSeal, detectDrift, safeSealApp, setSecret, unsealAll, rotateKey } from './secrets-ops';
 
 const mockLoadManifest = vi.mocked(loadManifest);
 const mockDecryptApp = vi.mocked(decryptApp);
@@ -470,5 +476,68 @@ describe('rotateKey rollback', () => {
     // KEY_PATH.old sidecar is cleaned up so a future retry isn't confused.
     const rmCalls = vi.mocked(rmSync).mock.calls.map(c => String(c[0]));
     expect(rmCalls).toContain('/etc/fleet/age.key.old');
+  });
+});
+
+describe('setSecret', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // an earlier safeSealApp test installs a throwing sealApp implementation
+    // and clearAllMocks does not remove implementations — restore a no-op.
+    mockSealApp.mockImplementation(() => undefined);
+  });
+
+  it('bootstraps a fresh env vault for an app with no manifest entry', async () => {
+    // regression: setting the FIRST secret for a brand-new app used to throw
+    // 'No secrets found for app' because setSecret decrypted before checking
+    // whether the app existed at all.
+    mockLoadManifest.mockReturnValue({ version: 1, apps: {} });
+    mockBackupVaultFile.mockReturnValue(null);
+
+    await setSecret('newapp', 'API_KEY', 'v8Zq3xLpT0kW9rYd', { allowWeak: true });
+
+    expect(mockDecryptApp).not.toHaveBeenCalled();
+    expect(mockSealApp).toHaveBeenCalledTimes(1);
+    const [app, content, sourceFile] = mockSealApp.mock.calls[0];
+    expect(app).toBe('newapp');
+    expect(content).toBe('API_KEY=v8Zq3xLpT0kW9rYd');
+    expect(sourceFile).toBe('/run/fleet-secrets/newapp/.env');
+  });
+
+  it('updates an existing key in place and keeps the recorded sourceFile', async () => {
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        app1: {
+          type: 'env', encryptedFile: 'app1.env.age',
+          sourceFile: '/home/matt/app1/.env', lastSealedAt: '', keyCount: 2,
+        },
+      },
+    });
+    mockDecryptApp.mockReturnValue('A=1\nB=2');
+    mockBackupVaultFile.mockReturnValue('/etc/fleet/vault/app1.env.age.bak-x');
+
+    await setSecret('app1', 'B', 'q7Nf2wJh5mXcR4Ve', { allowWeak: true });
+
+    const [app, content, sourceFile] = mockSealApp.mock.calls[0];
+    expect(app).toBe('app1');
+    expect(content).toBe('A=1\nB=q7Nf2wJh5mXcR4Ve');
+    expect(sourceFile).toBe('/home/matt/app1/.env');
+  });
+
+  it('still rejects key/value writes for a secrets-dir app', async () => {
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        db1: {
+          type: 'secrets-dir', encryptedFile: 'db1.secrets.age',
+          sourceFile: '/home/matt/db1/secrets', lastSealedAt: '', keyCount: 1,
+        },
+      },
+    });
+
+    await expect(setSecret('db1', 'K', 'p3Dz8sKq1vBn6tGw', { allowWeak: true }))
+      .rejects.toThrow(/secrets-dir/);
+    expect(mockSealApp).not.toHaveBeenCalled();
   });
 });
