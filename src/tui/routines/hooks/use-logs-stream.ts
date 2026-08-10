@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { LogLine } from '@matthesketh/ink-log-viewer';
 
+import { createLineRedactor, type RedactionConfig } from '@/core/redaction.js';
+
 const LEVEL_PATTERNS: [RegExp, LogLine['level']][] = [
   [/\b(error|err|failed|fatal)\b/i, 'error'],
   [/\b(warn|warning)\b/i, 'warn'],
@@ -20,6 +22,10 @@ export interface LogsStreamOptions {
   command: string;
   args: string[];
   bufferSize?: number;
+  /** per-app config; omit for the module defaults. this hook drives both
+   *  `journalctl -u <unit> -f` and `docker logs -f`, and both carry app output,
+   *  so both are redacted. */
+  redaction?: RedactionConfig | null;
 }
 
 export interface LogsStream {
@@ -45,6 +51,9 @@ export function useLogsStream(opts: LogsStreamOptions | null): LogsStream {
     lineBufferRef.current = '';
 
     const child = spawn(opts.command, opts.args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // stateful so a multi-line pem block is suppressed as a whole. levels are
+    // classified from the raw line, the buffer only ever holds the redacted one.
+    const redact = createLineRedactor(opts.redaction);
     const append = (chunk: string): void => {
       lineBufferRef.current += chunk;
       let idx: number;
@@ -53,7 +62,9 @@ export function useLogsStream(opts: LogsStreamOptions | null): LogsStream {
         const text = lineBufferRef.current.slice(0, idx);
         lineBufferRef.current = lineBufferRef.current.slice(idx + 1);
         if (!text.trim()) continue;
-        newLines.push({ text, level: classify(text), timestamp: new Date() });
+        const safe = redact(text);
+        if (!safe) continue;
+        newLines.push({ text: safe, level: classify(text), timestamp: new Date() });
       }
       if (newLines.length > 0) {
         setLines(prev => {

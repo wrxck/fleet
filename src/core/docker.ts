@@ -1,5 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
+
 import { execSafe } from './exec';
+import { redactText, type RedactionConfig, type RedactionUserConfig } from './redaction';
 
 const SECRETS_BASE = '/run/fleet-secrets';
 
@@ -55,9 +57,19 @@ export function getContainersByCompose(composePath: string, composeFile: string 
   return result.stdout.split('\n').filter(Boolean);
 }
 
-export function getContainerLogs(container: string, lines = 100): string {
+/**
+ * Plain tail. This is the path `fleet logs <app>` and the deprecated
+ * `fleet_logs` MCP tool take, so it redacts too — otherwise it would be a hole
+ * straight around readContainerLogs' redaction.
+ */
+export function getContainerLogs(
+  container: string,
+  lines = 100,
+  redaction?: RedactionConfig | RedactionUserConfig | null,
+): string {
   const result = execSafe('docker', ['logs', '--tail', String(lines), container], { timeout: 15_000 });
-  return result.ok ? (result.stdout || result.stderr) : result.stderr || 'No logs available';
+  const raw = result.ok ? (result.stdout || result.stderr) : result.stderr || 'No logs available';
+  return redactText(raw, redaction).text;
 }
 
 function resolveImageName(composePath: string, composeFile: string | null): string | null {

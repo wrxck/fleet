@@ -5,6 +5,7 @@ import Spinner from 'ink-spinner';
 import { LogViewer } from '@matthesketh/ink-log-viewer';
 import { useRegisterHandler } from '@matthesketh/ink-input-dispatcher';
 
+import { effectiveRedaction } from '@/core/redaction.js';
 import type { AppEntry } from '@/core/registry.js';
 import { truncate } from '@/tui/routines/format.js';
 import { useLogsStream, type LogsStreamOptions } from '@/tui/routines/hooks/use-logs-stream.js';
@@ -30,10 +31,21 @@ export function LogsTab({ apps }: LogsTabProps): React.JSX.Element {
   const [source, setSource] = useState<Source>({ kind: 'none' });
   const [filter, setFilter] = useState<'' | 'warn' | 'error'>('');
 
+  // resolve the owning app so the tail honours that app's redaction settings.
+  // unmatched sources (the shared databases unit) fall back to the defaults.
+  const redaction = useMemo(() => {
+    const owner = source.kind === 'service'
+      ? apps.find(a => a.serviceName === source.name)
+      : source.kind === 'container'
+        ? apps.find(a => a.containers.includes(source.containerId))
+        : undefined;
+    return owner ? effectiveRedaction(owner) : undefined;
+  }, [apps, source]);
+
   const opts: LogsStreamOptions | null = source.kind === 'service'
-    ? { command: 'journalctl', args: ['-u', source.name, '-f', '-n', '200', '--no-pager'] }
+    ? { command: 'journalctl', args: ['-u', source.name, '-f', '-n', '200', '--no-pager'], redaction }
     : source.kind === 'container'
-      ? { command: 'docker', args: ['logs', '-f', '--tail', '200', source.containerId] }
+      ? { command: 'docker', args: ['logs', '-f', '--tail', '200', source.containerId], redaction }
       : null;
 
   const stream = useLogsStream(opts);

@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { withFileLock } from './file-lock';
+import type { RedactionUserConfig } from './redaction-config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +47,10 @@ export interface AppEntry {
     retentionDays?: number;
     maxSizeMB?: number;
     level?: 'debug' | 'info' | 'warn' | 'error';
+    /** Per-app log redaction. Unset means the built-in defaults are used
+     * (secrets + email/card/NINO/IBAN on, phone + IP off). See
+     * core/redaction.ts for the category list and rationale. */
+    redaction?: RedactionUserConfig;
   };
   /** Per-app outbound egress allowlist. v1 supports `observe` and `shadow` modes
    * only — `enforce` mode (actual drop via nftables) is deferred to Phase E. */
