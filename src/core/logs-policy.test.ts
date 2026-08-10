@@ -10,6 +10,7 @@ import {
 } from './logs-policy';
 import type { AppEntry } from './registry';
 import { execSafe } from './exec';
+import { effectiveRedaction } from './redaction';
 
 function app(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
@@ -105,6 +106,83 @@ describe('readContainerLogs', () => {
     const out = readContainerLogs('m', { maxBytes: 100 });
     expect(out.truncated).toBeTruthy();
     expect(out.text.length).toBe(100);
+  });
+});
+
+describe('readContainerLogs redaction', () => {
+  const TOKEN = 'ghp_1234567890abcdefghijklmnopqrstuvwxyz';
+
+  it('redacts by default', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: true,
+      stdout: `boot ok\nGH_TOKEN=${TOKEN}\nuser alice@example.com signed in`,
+      stderr: '',
+    });
+    const out = readContainerLogs('m');
+    expect(out.text).not.toContain(TOKEN);
+    expect(out.text).not.toContain('alice@example.com');
+    expect(out.text).toContain('boot ok');
+    expect(out.text).toMatch(/GH_TOKEN=\[REDACTED:provider_token#[0-9a-f]{4}\]/);
+    expect(out.redacted).toEqual({ provider_token: 1, email: 1 });
+  });
+
+  it('honours a per-app config that disables redaction', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({ ok: true, stdout: `GH_TOKEN=${TOKEN}`, stderr: '' });
+    const out = readContainerLogs('m', { redaction: effectiveRedaction(app({ logging: { redaction: { enabled: false } } })) });
+    expect(out.text).toBe(`GH_TOKEN=${TOKEN}`);
+  });
+
+  it('honours a per-app allowlist', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({ ok: true, stdout: 'ops@fleet.internal and alice@example.com', stderr: '' });
+    const cfg = effectiveRedaction(app({ logging: { redaction: { allowlist: ['ops@fleet.internal'] } } }));
+    const out = readContainerLogs('m', { redaction: cfg });
+    expect(out.text).toContain('ops@fleet.internal');
+    expect(out.text).not.toContain('alice@example.com');
+  });
+
+  it('greps against the RAW line, then redacts the survivors', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: true,
+      stdout: 'other line\nlogin for alice@example.com from web\ntrailing line',
+      stderr: '',
+    });
+    // the documented ordering: matching on raw text keeps grep useful for
+    // operators, and the value still never reaches the caller.
+    const out = readContainerLogs('m', { grep: 'alice@example.com' });
+    expect(out.text.split('\n').filter(Boolean)).toHaveLength(1);
+    expect(out.text).toContain('login for');
+    expect(out.text).toContain('from web');
+    expect(out.text).not.toContain('alice@example.com');
+  });
+
+  it('greps against raw text even for a level-filtered read', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: true,
+      stdout: 'INFO quiet\nERROR auth failed for alice@example.com\nERROR unrelated',
+      stderr: '',
+    });
+    const out = readContainerLogs('m', { level: 'error', grep: 'alice@' });
+    expect(out.text.split('\n').filter(Boolean)).toHaveLength(1);
+    expect(out.text).toMatch(/ERROR auth failed for \[REDACTED:email#[0-9a-f]{4}\]/);
+  });
+
+  it('redacts BEFORE the size cap so truncation cannot leave half a secret', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({ ok: true, stdout: `${'A'.repeat(20)} ${TOKEN}`, stderr: '' });
+    const out = readContainerLogs('m', { maxBytes: 30 });
+    expect(out.truncated).toBeTruthy();
+    expect(out.text).not.toContain('ghp_');
+    expect(out.text).not.toContain('1234567890');
+  });
+
+  it('redacts docker stderr on the failure path too', () => {
+    vi.mocked(execSafe).mockReturnValueOnce({
+      ok: false,
+      stdout: '',
+      stderr: 'Error response from daemon: bad auth alice@example.com',
+    });
+    const out = readContainerLogs('m');
+    expect(out.text).not.toContain('alice@example.com');
+    expect(out.text).toContain('Error response from daemon');
   });
 });
 

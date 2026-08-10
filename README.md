@@ -222,6 +222,52 @@ MCP tools — all token-conservative with small defaults and `truncated` flags:
 - `fleet_logs_status(app?)` — driver + size per container
 - `fleet_egress_snapshot(app)` — outbound destinations + violations
 
+### Log redaction
+
+Every log read path redacts secrets and PII before the text reaches you — the CLI (`fleet logs`, including `-f`), the TUI log views, and all `fleet_logs_*` MCP tools. Matches are replaced with `[REDACTED:<category>#<fp>]`, where `#<fp>` is four hex chars of a per-process salted hash: the same secret appearing twice looks the same within one output, and the fingerprint is meaningless across runs.
+
+Categories, and whether they are on by default:
+
+| Category | Default | What it catches |
+| --- | --- | --- |
+| `private_key` | on | `-----BEGIN … PRIVATE KEY-----` blocks, whole block |
+| `jwt` | on | three base64url segments whose header decodes to JSON with an `alg` |
+| `aws_key` | on | `AKIA`/`ASIA`/`ABIA`/`ACCA` + 16 uppercase alnum |
+| `aws_secret` | on | 40-char secret, **only** next to an `aws_*_key` name |
+| `provider_token` | on | `ghp_`/`gho_`/`ghs_`/`ghu_`/`github_pat_`, `xox[baprse]-`, `sk_live_`/`rk_live_`, `AIza`, `sk-ant-`, `sk-proj-`, `sk-`, `glpat-`, `npm_` |
+| `auth_header` | on | `Authorization:` values and bare `Bearer`/`Basic` credentials |
+| `uri_credentials` | on | the password in `scheme://user:password@host` — scheme, user and host are kept |
+| `generic_assignment` | on | the value of a key **ending** in `PASSWORD`/`SECRET`/`TOKEN`/`API_KEY`/`PRIVATE_KEY`/`ACCESS_KEY`/`CLIENT_SECRET`/`DSN`/… — the key name is kept |
+| `iban` | on | mod-97 validated IBANs with a registered country code and length |
+| `credit_card` | on | Luhn-valid numbers with a real card-network prefix |
+| `uk_nino` | on | UK National Insurance numbers, invalid prefixes excluded |
+| `email` | on | email addresses |
+| `phone` | **off** | phone numbers — digit runs have no checksum to validate against, and logs are full of them (ports, PIDs, byte counts, epochs). Too noisy to enable by default |
+| `ip` | **off** | public IP addresses — operators need them to debug. When enabled, loopback / RFC1918 / CGNAT / link-local / documentation ranges are still never redacted |
+
+The overriding design rule is **no false positives**. Commit SHAs, UUIDs, `sha256:` digests, semver, ISO timestamps, epoch millis, file paths, credential-free URLs, ports, PIDs, byte counts, hex colours, Stripe *publishable* keys (`pk_live_`/`pk_test_`), SSH *public* keys, image data URIs and bare prose like `Invalid password supplied` all pass through untouched. There is a regression test for each.
+
+**Filter ordering:** `--grep` and `--level` match the **raw** line, and redaction is applied to the survivors. Grepping for a hostname, an account id or a customer email therefore still returns the lines you need, instead of silently returning nothing. The caveat that comes with that: because matching happens pre-redaction, grepping for a literal secret *value* will tell you whether that value appears in the log (you get back a line with a placeholder in it) even though the value itself is never printed. That is an oracle, not a disclosure. Set `redaction.enabled: false` for the app if you would rather have neither.
+
+Per-app configuration lives under `logging.redaction` in the registry:
+
+```jsonc
+{
+  "name": "poolside",
+  "logging": {
+    "redaction": {
+      "enabled": true,
+      "categories": { "ip": true, "email": false },
+      "customPatterns": [{ "name": "employee_id", "pattern": "EMP-\\d{6}" }],
+      "allowlist": ["ops@fleet.internal", "/status-[0-9]+/"]
+    }
+  }
+}
+```
+
+- `allowlist` wins over everything, built-in and custom alike. It is the escape hatch when a false positive turns up in production — literal strings, or `/regex/flags`.
+- `customPatterns` redact capture group 1 when one is present, otherwise the whole match. They are screened for ReDoS shapes at load, capped at 32 patterns and 1000 chars each, not run against lines over 4096 chars, and never allowed to throw: a bad pattern is skipped with a warning and `fleet logs` keeps working.
+
 ### Egress observation (v1.6)
 
 ```

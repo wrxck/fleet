@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, writeFileSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { execSafe } from './exec';
+import { redactText, type RedactionConfig, type RedactionUserConfig } from './redaction';
 import type { AppEntry } from './registry';
 
 export interface LogPolicy {
@@ -165,6 +166,10 @@ export interface LogReadOpts {
   sinceMinutes?: number;
   grep?: string;
   maxBytes?: number;    // hard cap on returned text
+  /** Redaction config. Omit for the built-in defaults (redaction ON); pass an
+   *  effectiveRedaction(app) result for per-app config, or a config with
+   *  enabled:false to opt out entirely. */
+  redaction?: RedactionConfig | RedactionUserConfig | null;
 }
 
 const LEVEL_PATTERNS: Record<string, RegExp> = {
@@ -181,12 +186,34 @@ const LEVEL_PATTERNS: Record<string, RegExp> = {
 // for apps that log without level prefixes.
 const ANY_LEVEL = /\b(debug|trace|verbose|info|warn|warning|error|err|fatal|critical)\b/i;
 
-export function readContainerLogs(container: string, opts: LogReadOpts = {}): { text: string; truncated: boolean } {
+/**
+ * Filter order is deliberate: level and grep run against the RAW text, then
+ * redaction is applied, then the size cap.
+ *
+ * Why grep-on-raw: an operator grepping for a hostname, a customer email or an
+ * account id still gets the lines they need — a grep against already-redacted
+ * text would silently return nothing and read as "no such event", which is the
+ * worse failure. The value is still redacted in the output they get back.
+ *
+ * The caveat, stated plainly: because matching happens pre-redaction, grepping
+ * for a *literal secret value* confirms whether that value appears in the log
+ * (by returning a line with a placeholder in it) even though the value itself
+ * is never printed. That is an oracle, not a disclosure, and it is the price of
+ * grep staying useful. Set `redaction.enabled` per app if you'd rather not have
+ * either.
+ *
+ * Redaction runs BEFORE the maxBytes cap so truncation can never slice a secret
+ * in half and leave the front of it visible.
+ */
+export function readContainerLogs(
+  container: string,
+  opts: LogReadOpts = {},
+): { text: string; truncated: boolean; redacted?: Record<string, number> } {
   const args: string[] = ['logs', '--tail', String(opts.lines ?? 100)];
   if (opts.sinceMinutes) args.push('--since', `${opts.sinceMinutes}m`);
   args.push(container);
   const r = execSafe('docker', args);
-  if (!r.ok) return { text: r.stderr, truncated: false };
+  if (!r.ok) return { text: redactText(r.stderr, opts.redaction).text, truncated: false };
   let text = r.stdout;
   if (opts.level) {
     const pat = LEVEL_PATTERNS[opts.level];
@@ -200,9 +227,11 @@ export function readContainerLogs(container: string, opts: LogReadOpts = {}): { 
     const g = opts.grep;
     text = text.split('\n').filter(l => l.includes(g)).join('\n');
   }
+  const { text: redactedText, counts } = redactText(text, opts.redaction);
+  text = redactedText;
   const cap = opts.maxBytes ?? 200_000;
   if (text.length > cap) {
-    return { text: text.slice(0, cap), truncated: true };
+    return { text: text.slice(0, cap), truncated: true, redacted: counts };
   }
-  return { text, truncated: false };
+  return { text, truncated: false, redacted: counts };
 }

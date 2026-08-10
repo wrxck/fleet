@@ -27,6 +27,7 @@ import { registerGitTools } from './git-tools';
 import { registerSecretsTools } from './secrets-tools';
 import { registerRegistryTools } from './registry-bridge';
 import { readContainerLogs, getLogStatus, effectivePolicy } from '../core/logs-policy';
+import { effectiveRedaction } from '../core/redaction';
 import { snapshotEgress } from '../core/egress';
 import { registerDepsTools } from './deps-tools';
 import { registerAuditTools } from './audit-tools';
@@ -89,7 +90,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
           entry.containers.map(c => `  - ${c}`).join('\n')
         );
       }
-      const logs = getContainerLogs(target, lines);
+      const logs = getContainerLogs(target, lines, effectiveRedaction(entry));
       return text(logs);
     }
   );
@@ -114,7 +115,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
       if (!entry.containers.includes(target)) {
         return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
-      const result = readContainerLogs(target, { lines, level, sinceMinutes, grep, maxBytes: 200_000 });
+      const result = readContainerLogs(target, { lines, level, sinceMinutes, grep, maxBytes: 200_000, redaction: effectiveRedaction(entry) });
       if (result.text.trim() === '') {
         // empty is ambiguous (no logs vs over-tight filter) — say which knobs to
         // loosen rather than returning a blank, which reads as "no output".
@@ -146,7 +147,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
       if (!entry.containers.includes(target)) {
         return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
-      const all = readContainerLogs(target, { lines: 5000, sinceMinutes, maxBytes: 5_000_000 });
+      const all = readContainerLogs(target, { lines: 5000, sinceMinutes, maxBytes: 5_000_000, redaction: effectiveRedaction(entry) });
       const lines = all.text.split('\n').filter(l => l.trim());
       const counts = { error: 0, warn: 0, info: 0, debug: 0, other: 0 };
       const errMsgs = new Map<string, number>();
@@ -195,7 +196,7 @@ export function buildFleetServer(opts: { guard?: Guard } = {}): McpServer {
       if (!entry.containers.includes(target)) {
         return text(`Container "${target}" not in ${entry.name}. Have: ${entry.containers.join(', ')}`);
       }
-      const result = readContainerLogs(target, { lines: 5000, sinceMinutes, grep: query, maxBytes: 1_000_000 });
+      const result = readContainerLogs(target, { lines: 5000, sinceMinutes, grep: query, maxBytes: 1_000_000, redaction: effectiveRedaction(entry) });
       const matches = result.text.split('\n').filter(l => l.trim());
       const slice = matches.slice(0, maxResults);
       const note = matches.length > maxResults

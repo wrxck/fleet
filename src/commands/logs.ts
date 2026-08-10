@@ -13,7 +13,20 @@ import {
   readContainerLogs,
   type LogPolicy,
 } from '../core/logs-policy';
-import { startMultiTail, resolveSources, type LogLine } from '../core/logs-multi';
+import { startMultiTail, resolveSources, type LogLine, type LogSource } from '../core/logs-multi';
+import { effectiveRedaction, type RedactionConfig } from '../core/redaction';
+
+/** surface custom-pattern / allowlist compile problems once, not per line. */
+function reportRedactionWarnings(cfgs: Array<RedactionConfig | null | undefined>): void {
+  const seen = new Set<string>();
+  for (const cfg of cfgs) {
+    for (const w of cfg?.warnings ?? []) {
+      if (seen.has(w)) continue;
+      seen.add(w);
+      warn(w);
+    }
+  }
+}
 
 export function logsCommand(args: string[]): void | Promise<void> {
   const sub = args[0];
@@ -75,6 +88,7 @@ function logsMulti(args: string[]): Promise<void> {
     error('No matching containers found.');
     process.exit(1);
   }
+  reportRedactionWarnings(sources.map(s => s.redaction));
 
   // Width-align the prefix so lines stack readably.
   const maxLabelLen = Math.max(
@@ -113,7 +127,31 @@ function logsMulti(args: string[]): Promise<void> {
   });
 }
 
-function logsTail(args: string[]): void {
+/**
+ * Follow mode with redaction. `docker logs -f` inherits stdio, so there is no
+ * seam to redact at — we have to own the pipe. startMultiTail already splits on
+ * newlines and applies the per-line redactor, so a single source through it
+ * gives the same output with secrets removed.
+ */
+function followRedacted(source: LogSource, tail: number, since: string | undefined): Promise<void> {
+  return new Promise<void>(resolve => {
+    const handle = startMultiTail([source], { tail, since, follow: true }, l => {
+      process.stdout.write(`${l.text}\n`);
+    });
+    const shutdown = async () => {
+      process.removeListener('SIGINT', onSigint);
+      process.removeListener('SIGTERM', onSigterm);
+      await handle.stop();
+      resolve();
+    };
+    const onSigint = () => { void shutdown(); };
+    const onSigterm = () => { void shutdown(); };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+  });
+}
+
+function logsTail(args: string[]): void | Promise<void> {
   const follow = args.includes('-f') || args.includes('--follow');
 
   const nIdx = args.indexOf('-n');
@@ -160,19 +198,26 @@ function logsTail(args: string[]): void {
     process.exit(1);
   }
 
+  const redaction = effectiveRedaction(app);
+  reportRedactionWarnings([redaction]);
+
   if (follow) {
-    // For follow mode we delegate to native docker — filtering would buffer.
-    const dockerArgs = ['logs', '-f', '--tail', lines.toString()];
-    if (since) dockerArgs.push('--since', since);
-    dockerArgs.push(container);
-    const code = execLive('docker', dockerArgs);
-    process.exit(code);
+    if (!redaction.enabled) {
+      // redaction opted out for this app: hand straight to docker, which is a
+      // zero-overhead passthrough and keeps docker's own exit code.
+      const dockerArgs = ['logs', '-f', '--tail', lines.toString()];
+      if (since) dockerArgs.push('--since', since);
+      dockerArgs.push(container);
+      const code = execLive('docker', dockerArgs);
+      process.exit(code);
+    }
+    return followRedacted({ app: app.name, container, redaction }, lines, since);
   }
 
   // Non-follow: use the policy-aware reader so --level / --grep / size cap apply.
   if (since || grep || level) {
     const sinceMinutes = since ? parseSinceMinutes(since) : undefined;
-    const result = readContainerLogs(container, { lines, level, sinceMinutes, grep });
+    const result = readContainerLogs(container, { lines, level, sinceMinutes, grep, redaction });
     process.stdout.write(result.text + '\n');
     if (result.truncated) {
       warn('Output truncated at 200KB. Narrow with --since/--grep/--level/-n.');
@@ -181,7 +226,7 @@ function logsTail(args: string[]): void {
   }
 
   // Plain tail: existing fast path.
-  const output = getContainerLogs(container, lines);
+  const output = getContainerLogs(container, lines, redaction);
   process.stdout.write(output + '\n');
 }
 
