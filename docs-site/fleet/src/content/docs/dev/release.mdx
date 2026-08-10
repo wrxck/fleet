@@ -31,40 +31,48 @@ When enough features have accumulated:
 # On develop, bump the version
 npm version minor  # or major/patch
 
-# This updates package.json and creates a git tag
+# This updates package.json and creates a commit (and a local tag)
+git push origin develop
 ```
 
-### 3. Create a GitHub release
+### 3. Merge to main first
 
-```bash
-# Push the tag
-git push origin v1.5.0
-
-# Create the release on GitHub
-gh release create v1.5.0 --title "v1.5.0" --generate-notes
-```
-
-### 4. npm publish (automated)
-
-The `publish.yml` GitHub Action triggers on release creation:
-
-1. Checks out the tagged commit
-2. Installs dependencies
-3. Builds TypeScript
-4. Publishes to npm as `@matthesketh/fleet`
-
-The action requires the `NPM_TOKEN` secret configured in the repository.
-
-### 5. Merge to main
-
-After the release is published:
+<Aside type="caution">
+Order matters. `publish.yml` starts with a `check-ci` step that looks for a **successful `ci.yml` run for the release commit on `main`**. Tag and release before that commit is on main with green CI and the publish refuses with `Refusing to publish: CI did not succeed for this commit`.
+</Aside>
 
 ```bash
 # Create PR from develop to main
 gh pr create --base main --head develop --title "Release v1.5.0"
+gh pr merge <n> --merge
 ```
 
-Main is updated only through these release PRs.
+Main is updated only through these release PRs. Wait for `ci.yml` to finish green on main before continuing — `build-and-test` **and** `audit` both have to pass, since `check-ci` reads the run's overall conclusion.
+
+### 4. Tag the main commit and create the release
+
+```bash
+git checkout main && git pull
+git tag v1.5.0 && git push origin v1.5.0
+
+gh release create v1.5.0 --title "v1.5.0" --generate-notes
+```
+
+If `npm version` already created the tag on develop, re-point it at the merge commit on main (`git tag -f`, `git push -f origin v1.5.0`) — otherwise `check-ci` looks up a commit that never landed on main.
+
+### 5. npm publish (automated)
+
+The `publish.yml` GitHub Action triggers on release creation:
+
+1. Verifies CI succeeded for the tagged commit on `main`
+2. Checks out the tagged commit
+3. Installs dependencies
+4. Builds TypeScript
+5. Publishes to npm as `@matthesketh/fleet`
+
+The action requires the `NPM_TOKEN` secret configured in the repository.
+
+If the release was created before CI went green, fix the underlying failure and then re-run the publish workflow — the release itself does not need recreating.
 
 ## Package contents
 
