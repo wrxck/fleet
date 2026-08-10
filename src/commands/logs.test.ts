@@ -15,6 +15,14 @@ vi.mock('../core/exec.js', () => ({
   execLive: vi.fn(),
 }));
 
+vi.mock('../core/logs-multi.js', async importOriginal => {
+  const actual = await importOriginal<typeof import('../core/logs-multi')>();
+  return {
+    ...actual,
+    startMultiTail: vi.fn(() => ({ stop: vi.fn(async () => {}), active: () => 1 })),
+  };
+});
+
 vi.mock('../ui/output.js', () => ({
   error: vi.fn(),
   warn: vi.fn(),
@@ -29,8 +37,12 @@ vi.mock('../ui/output.js', () => ({
 import { load, findApp } from '../core/registry';
 import { getContainerLogs } from '../core/docker';
 import { execLive } from '../core/exec';
+import { startMultiTail } from '../core/logs-multi';
 import { error } from '../ui/output';
 import { logsCommand } from './logs';
+
+/** the resolved redaction config the CLI now threads into every read path. */
+const anyRedaction = expect.objectContaining({ resolved: true, enabled: true });
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
   return {
@@ -77,17 +89,36 @@ describe('logsCommand', () => {
 
     logsCommand(['myapp']);
 
-    expect(getContainerLogs).toHaveBeenCalledWith('myapp-web', 100);
+    expect(getContainerLogs).toHaveBeenCalledWith('myapp-web', 100, anyRedaction);
   });
 
-  it('follows logs with -f flag', () => {
+  it('follows logs through the redacting tailer, not raw docker passthrough', async () => {
     const app = makeApp();
+    vi.mocked(load).mockReturnValue(makeRegistry([app]));
+    vi.mocked(findApp).mockReturnValue(app);
+
+    const pending = logsCommand(['myapp', '-f']);
+    // `docker logs -f` inherits stdio, so there is no seam to redact at. follow
+    // mode must own the pipe instead.
+    expect(execLive).not.toHaveBeenCalled();
+    expect(startMultiTail).toHaveBeenCalledWith(
+      [{ app: 'myapp', container: 'myapp-web', redaction: anyRedaction }],
+      expect.objectContaining({ tail: 100, follow: true }),
+      expect.any(Function),
+    );
+    process.emit('SIGINT');
+    await pending;
+  });
+
+  it('falls back to raw docker passthrough when redaction is disabled for the app', () => {
+    const app = makeApp({ logging: { redaction: { enabled: false } } });
     vi.mocked(load).mockReturnValue(makeRegistry([app]));
     vi.mocked(findApp).mockReturnValue(app);
     vi.mocked(execLive).mockReturnValue(0);
 
     expect(() => logsCommand(['myapp', '-f'])).toThrow('exit');
     expect(execLive).toHaveBeenCalledWith('docker', ['logs', '-f', '--tail', '100', 'myapp-web']);
+    expect(startMultiTail).not.toHaveBeenCalled();
   });
 
   it('respects -n flag for line count', () => {
@@ -98,7 +129,7 @@ describe('logsCommand', () => {
 
     logsCommand(['myapp', '-n', '50']);
 
-    expect(getContainerLogs).toHaveBeenCalledWith('myapp-web', 50);
+    expect(getContainerLogs).toHaveBeenCalledWith('myapp-web', 50, anyRedaction);
   });
 
   it('exits with error when no app name provided', () => {
@@ -123,7 +154,7 @@ describe('logsCommand', () => {
 
     logsCommand(['myapp', '-c', 'myapp-worker']);
 
-    expect(getContainerLogs).toHaveBeenCalledWith('myapp-worker', 100);
+    expect(getContainerLogs).toHaveBeenCalledWith('myapp-worker', 100, anyRedaction);
   });
 
   it('does not treat -c value as the app name', () => {
@@ -135,7 +166,7 @@ describe('logsCommand', () => {
     logsCommand(['-c', 'myapp-worker', 'myapp']);
 
     expect(findApp).toHaveBeenCalledWith(expect.anything(), 'myapp');
-    expect(getContainerLogs).toHaveBeenCalledWith('myapp-worker', 100);
+    expect(getContainerLogs).toHaveBeenCalledWith('myapp-worker', 100, anyRedaction);
   });
 
   it('exits when -c container is not in the app', () => {

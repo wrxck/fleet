@@ -147,6 +147,27 @@ describe('getContainerLogs', () => {
       expect.any(Object),
     );
   });
+
+  // this is the plain-tail path used by `fleet logs <app>` and the deprecated
+  // fleet_logs mcp tool. it bypasses readContainerLogs, so it has to redact on
+  // its own or it is a hole straight around log redaction.
+  it('redacts secrets by default', () => {
+    mockedExec.mockReturnValue(makeExecResult('GH_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz'));
+    const result = getContainerLogs('myapp');
+    expect(result).not.toContain('ghp_1234567890');
+    expect(result).toMatch(/^GH_TOKEN=\[REDACTED:provider_token#[0-9a-f]{4}\]$/);
+  });
+
+  it('honours a redaction config that opts out', () => {
+    mockedExec.mockReturnValue(makeExecResult('GH_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz'));
+    const result = getContainerLogs('myapp', 100, { enabled: false });
+    expect(result).toBe('GH_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz');
+  });
+
+  it('redacts the stderr failure path too', () => {
+    mockedExec.mockReturnValue({ stdout: '', stderr: 'auth failed for alice@example.com', exitCode: 1, ok: false });
+    expect(getContainerLogs('myapp')).not.toContain('alice@example.com');
+  });
 });
 
 describe('getContainersByCompose', () => {

@@ -9,6 +9,7 @@ import {
   type LogLine,
   type LogSource,
 } from './logs-multi';
+import { resolveRedaction } from './redaction';
 import type { AppEntry } from './registry';
 
 function makeApp(overrides: Partial<AppEntry> = {}): AppEntry {
@@ -85,11 +86,22 @@ describe('resolveSources', () => {
   });
   it('filters by container glob', () => {
     const r = resolveSources(apps, { containers: ['*-postgres'] });
-    expect(r).toEqual([{ app: 'docker-databases', container: 'shared-postgres' }]);
+    expect(r.map(({ app, container }) => ({ app, container })))
+      .toEqual([{ app: 'docker-databases', container: 'shared-postgres' }]);
   });
   it('intersects apps + containers', () => {
     const r = resolveSources(apps, { apps: ['brewco'], containers: ['*-worker'] });
-    expect(r).toEqual([{ app: 'brewco', container: 'brewco-worker' }]);
+    expect(r.map(({ app, container }) => ({ app, container })))
+      .toEqual([{ app: 'brewco', container: 'brewco-worker' }]);
+  });
+  it('attaches each app resolved redaction config to its sources', () => {
+    const withCfg = [
+      makeApp({ name: 'poolside', containers: ['poolside'] }),
+      makeApp({ name: 'brewco', containers: ['brewco-server'], logging: { redaction: { enabled: false } } }),
+    ];
+    const r = resolveSources(withCfg);
+    expect(r.find(s => s.app === 'poolside')?.redaction?.enabled).toBe(true);
+    expect(r.find(s => s.app === 'brewco')?.redaction?.enabled).toBe(false);
   });
 });
 
@@ -213,5 +225,84 @@ describe('startMultiTail', () => {
     expect(killSpies.every(s => s.mock.calls.length >= 1)).toBe(true);
     // Idempotent
     await handle.stop();
+  });
+});
+
+describe('startMultiTail redaction', () => {
+  const TOKEN = 'ghp_1234567890abcdefghijklmnopqrstuvwxyz';
+
+  async function tail(
+    stdout: string[],
+    opts: Parameters<typeof startMultiTail>[1] = {},
+    source: Partial<LogSource> = {},
+  ): Promise<string[]> {
+    const lines: LogLine[] = [];
+    const fakeSpawn = fakeSpawnFactory(new Map([['x', { stdout }]]));
+    const handle = startMultiTail(
+      [{ app: 'x', container: 'x', ...source }],
+      opts,
+      l => lines.push(l),
+      undefined,
+      fakeSpawn,
+    );
+    await new Promise(r => setTimeout(r, 15));
+    await handle.stop();
+    return lines.map(l => l.text);
+  }
+
+  it('redacts each line as it arrives', async () => {
+    const out = await tail([`boot ok\nGH_TOKEN=${TOKEN}\nmail alice@example.com\n`]);
+    expect(out[0]).toBe('boot ok');
+    expect(out[1]).toMatch(/^GH_TOKEN=\[REDACTED:provider_token#[0-9a-f]{4}\]$/);
+    expect(out[2]).toMatch(/^mail \[REDACTED:email#[0-9a-f]{4}\]$/);
+    expect(out.join('\n')).not.toContain(TOKEN);
+  });
+
+  it('redacts a line reassembled from split chunks', async () => {
+    const out = await tail([`GH_TOKEN=${TOKEN.slice(0, 12)}`, `${TOKEN.slice(12)}\n`]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatch(/^GH_TOKEN=\[REDACTED:provider_token#[0-9a-f]{4}\]$/);
+  });
+
+  it('redacts the final partial line flushed on close', async () => {
+    const out = await tail([`first\n`, `GH_TOKEN=${TOKEN}`]);
+    expect(out[1]).not.toContain(TOKEN);
+  });
+
+  it('suppresses a multi-line pem block across the stream', async () => {
+    const out = await tail([
+      'starting\n',
+      '-----BEGIN RSA PRIVATE KEY-----\n',
+      'MIIEowIBAAKCAQEAy8Dbv8prpJ/0kKhlGeJYozo2t60EG8L0561g13R29LvMR5hy\n',
+      '-----END RSA PRIVATE KEY-----\n',
+      'ready\n',
+    ]);
+    expect(out).toHaveLength(3);
+    expect(out[0]).toBe('starting');
+    expect(out[1]).toMatch(/^\[REDACTED:private_key#[0-9a-f]{4}\]$/);
+    expect(out[2]).toBe('ready');
+    expect(out.join('\n')).not.toContain('MIIEow');
+  });
+
+  it('greps against the raw line, then emits the redacted one', async () => {
+    const out = await tail(
+      ['unrelated\n', 'login alice@example.com ok\n'],
+      { grep: 'alice@example.com' },
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]).not.toContain('alice@example.com');
+    expect(out[0]).toContain('login');
+  });
+
+  it('uses the source own config over the opts fallback', async () => {
+    const off = resolveRedaction({ enabled: false });
+    const out = await tail([`GH_TOKEN=${TOKEN}\n`], {}, { redaction: off });
+    expect(out[0]).toBe(`GH_TOKEN=${TOKEN}`);
+  });
+
+  it('falls back to the opts config when the source carries none', async () => {
+    const off = resolveRedaction({ enabled: false });
+    const out = await tail([`GH_TOKEN=${TOKEN}\n`], { redaction: off });
+    expect(out[0]).toBe(`GH_TOKEN=${TOKEN}`);
   });
 });

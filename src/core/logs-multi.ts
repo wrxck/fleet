@@ -15,6 +15,8 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+
+import { createLineRedactor, effectiveRedaction, type RedactionConfig } from './redaction';
 import type { AppEntry } from './registry';
 
 export interface LogSource {
@@ -22,6 +24,9 @@ export interface LogSource {
   app: string;
   /** Docker container name. */
   container: string;
+  /** Per-app redaction config, populated by resolveSources. Sources built by
+   *  hand fall back to opts.redaction, then to the module defaults. */
+  redaction?: RedactionConfig | null;
 }
 
 export interface LogLine {
@@ -45,6 +50,9 @@ export interface MultiTailOpts {
   grep?: string;
   /** When true, follow new entries forever (default). When false, just dump tail and exit. */
   follow?: boolean;
+  /** Fallback redaction config for sources that carry none of their own.
+   *  Omit for the built-in defaults; pass `{ enabled: false }` to opt out. */
+  redaction?: RedactionConfig | null;
 }
 
 export interface MultiTailHandle {
@@ -106,7 +114,10 @@ export function resolveSources(
       if (containerGlobs && !containerGlobs.some(g => matchesContainerGlob(container, g))) {
         continue;
       }
-      out.push({ app: app.name, container });
+      // redaction config travels with the source so a multi-app tail applies
+      // each app's own settings, including in the TUI which never sees the
+      // AppEntry list again after this call.
+      out.push({ app: app.name, container, redaction: effectiveRedaction(app) });
     }
   }
   return out;
@@ -141,16 +152,30 @@ export function startMultiTail(
 
     let stdoutBuf = '';
     let stderrBuf = '';
+    // one redactor per stream: it is stateful (it tracks whether we are inside
+    // a multi-line PEM block) and stdout/stderr interleave independently.
+    const redactOut = createLineRedactor(src.redaction ?? opts.redaction);
+    const redactErr = createLineRedactor(src.redaction ?? opts.redaction);
 
-    const flushLine = (text: string) => {
+    const flushLine = (text: string, redact: (l: string) => string) => {
       if (!text) return;
+      // redact first and unconditionally: the redactor is stateful, so skipping
+      // it for filtered-out lines would desync the PEM block tracker and let
+      // key material through on the next line that happens to match the filter.
+      const redacted = redact(text);
       const level = inferLevel(text);
       if (minLevelRank >= 0 && level !== 'unknown') {
         const rank = LEVEL_RANK[level as 'debug' | 'info' | 'warn' | 'error'];
         if (rank < minLevelRank) return;
       }
+      // level and grep match the RAW line, redaction is applied after, so an
+      // operator tailing for a hostname still gets their hits. same trade-off
+      // as readContainerLogs, documented there.
       if (opts.grep && !text.includes(opts.grep)) return;
-      onLine({ ts: new Date(), app: src.app, container: src.container, level, text });
+      // a line the redactor swallowed entirely (PEM body) is dropped rather
+      // than emitted as a blank.
+      if (redacted === '') return;
+      onLine({ ts: new Date(), app: src.app, container: src.container, level, text: redacted });
     };
 
     const handleChunk = (which: 'out' | 'err') => (chunk: Buffer) => {
@@ -158,7 +183,8 @@ export function startMultiTail(
       const merged = buf + chunk.toString('utf8');
       const parts = merged.split('\n');
       const remainder = parts.pop() ?? '';
-      for (const p of parts) flushLine(p);
+      const redact = which === 'out' ? redactOut : redactErr;
+      for (const p of parts) flushLine(p, redact);
       if (which === 'out') stdoutBuf = remainder;
       else stderrBuf = remainder;
     };
@@ -167,8 +193,8 @@ export function startMultiTail(
     proc.stderr?.on('data', handleChunk('err'));
     proc.on('close', code => {
       // Flush any unfinished partial line — common when a container dies between newlines.
-      if (stdoutBuf) { flushLine(stdoutBuf); stdoutBuf = ''; }
-      if (stderrBuf) { flushLine(stderrBuf); stderrBuf = ''; }
+      if (stdoutBuf) { flushLine(stdoutBuf, redactOut); stdoutBuf = ''; }
+      if (stderrBuf) { flushLine(stderrBuf, redactErr); stderrBuf = ''; }
       procs.delete(src.container);
       onClose?.(src, code);
     });

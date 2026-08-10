@@ -45,6 +45,67 @@ When `--level`, `--since`, or `--grep` is set in non-follow mode, output is capp
 
 ---
 
+## Redaction
+
+Secrets and PII are redacted on **every** log read path before the text reaches you: `fleet logs` (including `-f`), the TUI log views, and all `fleet_logs_*` MCP tools. Nothing needs enabling — it is on by default.
+
+Matches become `[REDACTED:<category>#<fp>]`. The `#<fp>` suffix is four hex characters of a per-process salted hash, so the same secret appearing twice is visibly the same value within one output, while the fingerprint means nothing across runs and cannot be used to build a lookup table.
+
+### Categories
+
+| Category | Default | What it catches |
+|---|---|---|
+| `private_key` | on | `-----BEGIN … PRIVATE KEY-----` blocks, whole block |
+| `jwt` | on | three base64url segments whose header decodes to JSON with an `alg` |
+| `aws_key` | on | `AKIA`/`ASIA`/`ABIA`/`ACCA` + 16 uppercase alnum |
+| `aws_secret` | on | 40-char secret, **only** when adjacent to an `aws_*_key` name |
+| `provider_token` | on | `ghp_`, `github_pat_`, `xox[baprse]-`, `sk_live_`/`rk_live_`, `AIza`, `sk-ant-`, `sk-proj-`, `glpat-`, `npm_` |
+| `auth_header` | on | `Authorization:` values, bare `Bearer`/`Basic` credentials |
+| `uri_credentials` | on | the password in `scheme://user:password@host` — scheme, user and host are kept |
+| `generic_assignment` | on | the value of a key ending in `PASSWORD`/`SECRET`/`TOKEN`/`API_KEY`/`CLIENT_SECRET`/`DSN`/… — the key name is kept |
+| `iban` | on | mod-97 validated IBANs |
+| `credit_card` | on | Luhn-valid numbers with a real network prefix |
+| `uk_nino` | on | UK National Insurance numbers |
+| `email` | on | email addresses |
+| `phone` | **off** | digit runs have no checksum to validate against, and logs are full of them (ports, PIDs, epochs) |
+| `ip` | **off** | operators need them to debug. When enabled, loopback / RFC1918 / CGNAT / link-local / documentation ranges are still never redacted |
+
+### No false positives
+
+The overriding design rule is that over-redaction is worse than under-redaction — unreadable logs defeat the point of `fleet logs`. No pattern fires on entropy alone; each is anchored on a vendor literal, gated on a key name meaning "secret", or structurally validated (Luhn, mod-97, base64 decode, octet ranges).
+
+These all pass through untouched, each with a regression test: commit SHAs, UUIDs, `sha256:` digests, semver, ISO timestamps, epoch millis, file paths, credential-free URLs, ports, PIDs, byte counts, hex colours, Stripe *publishable* keys (`pk_live_`/`pk_test_`), SSH *public* keys, image data URIs, and prose such as `Invalid password supplied`.
+
+### Filter ordering
+
+`--grep` and `--level` match the **raw** line; redaction is applied to the survivors. Grepping for a hostname, account id or customer email therefore still returns the lines you need rather than silently returning nothing.
+
+The trade-off: because matching happens pre-redaction, grepping a literal secret *value* reveals whether it appears in the log — you get back a line containing a placeholder. That is an oracle, not a disclosure. Set `redaction.enabled: false` for the app if you want neither.
+
+### Per-app configuration
+
+Lives under `logging.redaction` in `data/registry.json`:
+
+```jsonc
+{
+  "name": "poolside",
+  "logging": {
+    "redaction": {
+      "enabled": true,
+      "categories": { "ip": true, "email": false },
+      "customPatterns": [{ "name": "employee_id", "pattern": "EMP-\\d{6}" }],
+      "allowlist": ["ops@fleet.internal", "/status-[0-9]+/"]
+    }
+  }
+}
+```
+
+`allowlist` wins over everything, built-in and custom alike — it is the escape hatch when a false positive appears in production. Entries are literal strings, or `/regex/flags`.
+
+`customPatterns` redact capture group 1 when present, otherwise the whole match. They are screened for ReDoS shapes at load, capped at 32 patterns of 1000 characters, skipped on lines over 4096 characters, and never allowed to throw — a bad pattern is skipped with a warning and `fleet logs` keeps working.
+
+---
+
 ## fleet logs setup
 
 Configure docker's json-file logging driver with rotation for one or every app. Writes a compose override to `<composePath>/.fleet/logging.override.yml`.
