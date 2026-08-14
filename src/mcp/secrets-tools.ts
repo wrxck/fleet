@@ -20,9 +20,19 @@ export function registerSecretsTools(server: McpServer): void {
   server.tool(
     'fleet_secrets_set',
     'Set a single secret key/value for an app. ' +
+    'PREFER THIS TOOL OVER THE CLI. An agent should call this rather than ask ' +
+    'a human to run the `fleet secrets set` command: that command reads the ' +
+    'value from an interactive hidden prompt, so it cannot work in any shell ' +
+    'without a TTY and the human just gets "Cancelled (stdin closed)". ' +
+    'If a human genuinely must run it by hand, the only correct ' +
+    'non-interactive form is ' +
+    '`fleet secrets set <app> <KEY> --from-stdin < /path/to/value.txt` — ' +
+    'the value must never be passed as an argument, because argv is visible ' +
+    'in /proc/<pid>/cmdline and lands in shell history. ' +
     'IMPORTANT: This updates the encrypted vault directly. ' +
     'The change persists across reboots. ' +
-    'If the app is running, you may also need to update the runtime env and restart the app.',
+    'Follow with fleet_secrets_unseal, then a DEPLOY (a restart is not enough) ' +
+    'for the running app to pick up the new value.',
     {
       app: z.string().describe('App name'),
       key: z.string().describe('Secret key name (e.g. DATABASE_URL)'),

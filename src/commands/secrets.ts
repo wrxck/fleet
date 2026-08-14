@@ -152,6 +152,22 @@ async function secretsSet(args: string[]): Promise<void> {
     process.stdin.setEncoding('utf8');
     for await (const chunk of process.stdin) chunks.push(chunk as string);
     value = chunks.join('').replace(/\r?\n$/, '');  // strip trailing newline
+  } else if (!process.stdin.isTTY) {
+    // no terminal: the hidden prompt has nothing to read from, and would
+    // otherwise die with a bare "Cancelled (stdin closed)" that reads like a
+    // permissions or vault fault. every agent, script and non-interactive
+    // shell lands here, so say exactly what to run instead.
+    error('No terminal attached, so the hidden prompt cannot read a value.');
+    error('Not a permissions or vault problem — this command was started');
+    error('without a TTY (an agent, a script, a CI step, or a piped shell).');
+    process.stdout.write('\n');
+    error('Pass the value on stdin instead. It must never go in argv:');
+    error(`  fleet secrets set ${app} ${key} --from-stdin < /path/to/value.txt`);
+    error(`  printf '%s' "$VALUE" | fleet secrets set ${app} ${key} --from-stdin`);
+    process.stdout.write('\n');
+    error('Reading from a file is preferred: a value in argv or in a shell');
+    error('one-liner lands in history and in /proc/<pid>/cmdline.');
+    process.exit(1);
   } else {
     value = await promptHidden(`Paste new value for ${key} (input hidden)`);
   }

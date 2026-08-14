@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { Readable } from 'node:stream';
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs');
@@ -181,6 +183,43 @@ describe('secretsCommand — secrets set', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
     await expect(secretsCommand(['set', 'myapp'])).rejects.toThrow('exit');
     exitSpy.mockRestore();
+  });
+
+  // without a tty the hidden prompt has nothing to read and used to die with a
+  // bare "Cancelled (stdin closed)", which reads like a vault or permissions
+  // fault. agents and scripts always land here, so the failure has to name the
+  // fix. see docs/secrets.md "setting a secret without a terminal".
+  describe('without a TTY', () => {
+    const realIsTTY = process.stdin.isTTY;
+    afterEach(() => { process.stdin.isTTY = realIsTTY; });
+
+    it('explains --from-stdin instead of hanging on the prompt', async () => {
+      process.stdin.isTTY = false;
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
+
+      await expect(secretsCommand(['set', 'myapp', 'MY_KEY'])).rejects.toThrow('exit');
+
+      const said = mockError.mock.calls.map(call => String(call[0])).join('\n');
+      expect(said).toContain('--from-stdin');
+      expect(said).toContain('fleet secrets set myapp MY_KEY --from-stdin');
+      // the value must never be suggested as an argument
+      expect(mockSetSecret).not.toHaveBeenCalled();
+      exitSpy.mockRestore();
+    });
+
+    it('still accepts a piped value with --from-stdin', async () => {
+      process.stdin.isTTY = false;
+      const piped = Readable.from(['piped-value\n']) as unknown as typeof process.stdin;
+      const realStdin = Object.getOwnPropertyDescriptor(process, 'stdin')!;
+      Object.defineProperty(process, 'stdin', { value: piped, configurable: true });
+
+      try {
+        await secretsCommand(['set', 'myapp', 'MY_KEY', '--from-stdin']);
+        expect(mockSetSecret).toHaveBeenCalledWith('myapp', 'MY_KEY', 'piped-value', { allowWeak: false });
+      } finally {
+        Object.defineProperty(process, 'stdin', realStdin);
+      }
+    });
   });
 });
 
