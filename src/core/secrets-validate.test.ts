@@ -17,7 +17,7 @@ vi.mock('./registry.js', () => ({
 
 import { loadManifest } from './secrets';
 import { load } from './registry';
-import { validateApp } from './secrets-validate';
+import { composeFileSecrets, validateApp } from './secrets-validate';
 
 const mockedReadFileSync = vi.mocked(readFileSync);
 const mockedExistsSync = vi.mocked(existsSync);
@@ -69,6 +69,28 @@ services:
     ports:
       - "3000:3000"
 `;
+
+describe('composeFileSecrets', () => {
+  it('names the compose-declared file secrets for an app', () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(composeWithSecrets);
+
+    expect(composeFileSecrets('myapp')).toEqual(['db_password', 'api_key']);
+  });
+
+  it('returns empty for an unknown app, a bare compose, or a broken registry', () => {
+    mockedExistsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(composeNoSecrets);
+    expect(composeFileSecrets('myapp')).toEqual([]);
+
+    expect(composeFileSecrets('no-such-app')).toEqual([]);
+
+    mockedLoad.mockImplementation(() => {
+      throw new Error('registry unreadable');
+    });
+    expect(composeFileSecrets('myapp')).toEqual([]);
+  });
+});
 
 describe('validateApp', () => {
   it('extracts secret names from compose secrets block', () => {

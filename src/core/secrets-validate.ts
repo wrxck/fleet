@@ -91,6 +91,26 @@ export function validateApp(appName: string): ValidationResult {
   };
 }
 
+/** which secret names an app's compose declares as top-level file secrets.
+ *  used by setSecret to route a value into the secrets-dir bundle instead of
+ *  an env line — the compose file is the authority on how a secret is
+ *  delivered. any failure reads as "no file secrets": a broken registry must
+ *  not block an ordinary env set, and the env path's newline guard still
+ *  stops a file secret being silently mangled into env lines. */
+export function composeFileSecrets(appName: string): string[] {
+  try {
+    const reg = load();
+    if (appName === 'docker-databases') {
+      return extractComposeSecrets(reg.infrastructure.databases.composePath, null);
+    }
+    const app = reg.apps.find(a => a.name === appName);
+    if (!app) return [];
+    return extractComposeSecrets(app.composePath, app.composeFile);
+  } catch {
+    return [];
+  }
+}
+
 export function validateAll(): ValidationResult[] {
   const results: ValidationResult[] = [];
 
