@@ -33,6 +33,7 @@ function makeFailure(overrides: Partial<Failure> = {}): Failure {
     reason: 'no running container (systemd: failed)',
     systemdFailed: true,
     remediable: true,
+    allContainersDown: true,
     ...overrides,
   };
 }
@@ -185,6 +186,14 @@ describe('selectRemediationTargets', () => {
 
   it('never restarts an entry marked not remediable, such as the shared databases', () => {
     const f = makeFailure({ remediable: false });
+    expect(selectRemediationTargets([f], emptyState())).toHaveLength(0);
+  });
+
+  it('never restarts an app that still has a container running', () => {
+    // severity 'down' is raised as soon as ONE listed container is missing. a
+    // registry that names a container the app no longer has makes a serving app
+    // look down, and a restart there is an outage the watchdog caused itself.
+    const f = makeFailure({ allContainersDown: false });
     expect(selectRemediationTargets([f], emptyState())).toHaveLength(0);
   });
 

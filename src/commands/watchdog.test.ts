@@ -347,6 +347,35 @@ describe('watchdogCommand — databases listed as an app', () => {
   });
 });
 
+describe('watchdogCommand — a stale container list', () => {
+  const partial = makeResult({
+    containers: [
+      { name: 'macpool', running: true, health: 'healthy' },
+      { name: 'macpool-gone', running: false, health: 'not found' },
+    ],
+  });
+
+  it('never restarts an app whose other container is still serving', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry([makeApp()]) as never);
+    vi.mocked(checkAllHealth).mockReturnValue([partial]);
+
+    await watchdogCommand([]);
+
+    expect(restartServiceResult).not.toHaveBeenCalled();
+  });
+
+  it('names the container that is missing instead of claiming nothing runs', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry([makeApp()]) as never);
+    vi.mocked(checkAllHealth).mockReturnValue([partial]);
+
+    await watchdogCommand([]);
+
+    const message = vi.mocked(sendNotification).mock.calls[0][1] as string;
+    expect(message).toContain('macpool-gone not running');
+    expect(message).not.toContain('no running container');
+  });
+});
+
 describe('watchdogCommand — force alert', () => {
   it('sends a healthy report on a quiet box, so notify can be tested', async () => {
     vi.mocked(load).mockReturnValue(makeRegistry([]) as never);
