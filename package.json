@@ -97,9 +97,9 @@
   },
   "overrides": {
     "ws": "8.21.0",
-    "qs": "6.15.2",
+    "qs": "6.16.0",
     "ip-address": "10.5.0",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.7",
     "hono": "4.13.1",
     "@hono/node-server": "2.1.0"
   }
