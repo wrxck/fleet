@@ -31,6 +31,7 @@ function makeFailure(overrides: Partial<Failure> = {}): Failure {
     severity: 'down',
     reason: 'no running container (systemd: failed)',
     systemdFailed: true,
+    remediable: true,
     ...overrides,
   };
 }
@@ -178,6 +179,11 @@ describe('selectRemediationTargets', () => {
 
   it('never restarts a unit that is merely inactive — that can be a deliberate stop', () => {
     const f = makeFailure({ systemdFailed: false });
+    expect(selectRemediationTargets([f], emptyState())).toHaveLength(0);
+  });
+
+  it('never restarts an entry marked not remediable, such as the shared databases', () => {
+    const f = makeFailure({ remediable: false });
     expect(selectRemediationTargets([f], emptyState())).toHaveLength(0);
   });
 

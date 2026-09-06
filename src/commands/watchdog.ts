@@ -47,6 +47,7 @@ function toFailure(app: AppEntry, r: HealthResult): Failure | null {
       severity: 'down',
       reason: `no running container (systemd: ${r.systemd.state})`,
       systemdFailed,
+      remediable: true,
     };
   }
   if (r.overall === 'degraded') {
@@ -61,6 +62,7 @@ function toFailure(app: AppEntry, r: HealthResult): Failure | null {
       severity: 'degraded',
       reason: reasons.join('; '),
       systemdFailed,
+      remediable: true,
     };
   }
   return null;
@@ -106,6 +108,10 @@ export async function watchdogCommand(args: string[]): Promise<void> {
       severity: 'down',
       reason: `systemd ${dbStatus.state}`,
       systemdFailed: dbStatus.state === 'failed',
+      // the shared databases are reported from systemd alone, with no container
+      // check, so the watchdog must not restart them. every app on the box
+      // depends on them and a needless restart would be an outage of its own.
+      remediable: false,
     });
   }
 

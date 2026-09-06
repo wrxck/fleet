@@ -19,6 +19,12 @@ export interface Failure {
   /** true when systemd itself reports the unit as failed — the only case the
    *  watchdog will try to restart. an inactive unit may be deliberate. */
   systemdFailed: boolean;
+  /**
+   * whether the watchdog may restart this entry at all. false for anything
+   * whose containers were not inspected: a unit can be failed while its
+   * containers still serve, and a restart runs ExecStop first.
+   */
+  remediable: boolean;
 }
 
 export interface WatchdogState {
@@ -121,6 +127,7 @@ export function selectRemediationTargets(
   maxPerWindow: number = MAX_RESTARTS_PER_WINDOW,
 ): Failure[] {
   return failures.filter(f => {
+    if (!f.remediable) return false;
     if (f.severity !== 'down') return false;
     if (!f.systemdFailed) return false;
     const attempts = state.restarts[f.app]?.length ?? 0;
