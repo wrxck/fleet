@@ -2,6 +2,18 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.18.1 — 2026-09-06
+
+### Fixes
+
+- fix(watchdog): never restart an app that still has a container running (#165)
+
+### Other
+
+- chore(deps): clear every fixable vulnerability across all workspaces (#166)
+- chore(release): 1.18.1
+- chore(release): regenerate CHANGELOG for v1.18.0
+
 ## v1.18.0 — 2026-09-06
 
 ### Fixes
