@@ -256,6 +256,13 @@ describe('remediate', () => {
     expect(second.outcomes[0].attempt).toBe(2);
   });
 
+  it('records a throwing restart as a failed attempt instead of crashing the run', () => {
+    const restart = vi.fn(() => { throw new Error('invalid service name'); });
+    const { state, outcomes } = remediate([makeFailure()], emptyState(), now, restart);
+    expect(outcomes[0]).toMatchObject({ ok: false, error: 'invalid service name' });
+    expect(state.restarts.macpool).toHaveLength(1);
+  });
+
   it('does nothing when no failure is eligible', () => {
     const restart = vi.fn(() => ({ ok: true }));
     const { outcomes } = remediate([makeFailure({ severity: 'degraded' })], emptyState(), now, restart);

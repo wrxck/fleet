@@ -167,7 +167,14 @@ export function remediate(
   const outcomes: RemediationOutcome[] = [];
   for (const f of selectRemediationTargets(failures, state, maxPerWindow)) {
     const attempt = (next.restarts[f.app]?.length ?? 0) + 1;
-    const result = restart(f.serviceName);
+    // a throwing restart must not take the whole watchdog run down with it —
+    // the name validator rejects a malformed serviceName by throwing
+    let result: { ok: boolean; error?: string };
+    try {
+      result = restart(f.serviceName);
+    } catch (err) {
+      result = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
     next = recordRestart(next, f.app, now);
     outcomes.push({ app: f.app, serviceName: f.serviceName, ok: result.ok, error: result.error, attempt });
   }
