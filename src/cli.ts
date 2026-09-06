@@ -94,7 +94,8 @@ Commands:
   routine-run --id <id> [--target <repo>] [--trigger scheduled]
                       Headless entrypoint for systemd-timer units. JSON mode: --json.
   init                Auto-discover all existing apps
-  watchdog            Health check all services, alert on failure
+  watchdog [--motd] [--no-remediate] [--force-alert]
+                      Health check all services, restart a failed app, alert on change
   install-mcp         Install fleet as Claude Code MCP server
   mcp                 Start the stdio MCP server (runs as the calling user)
   mcp install         Install the privilege-separated root MCP daemon (root)

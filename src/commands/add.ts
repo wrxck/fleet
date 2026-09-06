@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { addApp, withRegistry } from '../core/registry';
 import { checkApp, summarizeUnresolved } from '../core/onboarding';
 import { getContainersByCompose } from '../core/docker';
-import { installServiceFile, readServiceFile, enableService } from '../core/systemd';
+import { installServiceFile, readServiceFile, enableService, unsealUnitExists } from '../core/systemd';
 import { generateServiceFile } from '../templates/systemd';
 import { assertComposeFile } from '../core/validate';
 import { defineCommand } from '../registry/registry';
@@ -66,6 +66,7 @@ export const addCommand = defineCommand({
         workingDirectory: composePath.path,
         composeFile: composePath.file,
         dependsOnDatabases: false,
+        requiresUnseal: unsealUnitExists(),
       });
       installServiceFile(name, content);
       enableService(name);
