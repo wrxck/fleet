@@ -17,6 +17,8 @@ vi.mock('../core/registry.js', () => ({
 
 vi.mock('../core/systemd.js', () => ({
   readServiceFile: vi.fn(),
+  unsealUnitExists: vi.fn(() => false),
+  UNSEAL_SERVICE: 'fleet-unseal',
 }));
 
 vi.mock('../core/exec.js', () => ({
@@ -26,7 +28,7 @@ vi.mock('../core/exec.js', () => ({
 import { writeFileSync, copyFileSync, existsSync, renameSync } from 'node:fs';
 
 import { load } from '../core/registry';
-import { readServiceFile } from '../core/systemd';
+import { readServiceFile, unsealUnitExists } from '../core/systemd';
 import { execSafe } from '../core/exec';
 import { patchSystemdCommand } from './patch-systemd';
 import { makeMcpContext } from '../registry/context';
@@ -120,7 +122,7 @@ describe('patchSystemdCommand run() — patch happy path', () => {
     vi.mocked(load).mockReturnValue(makeRegistry());
     // already has StartLimitBurst but lacks the boot-start ExecStart.
     vi.mocked(readServiceFile).mockReturnValue(
-      '[Service]\nStartLimitBurst=5\nStartLimitIntervalSec=300\nExecStart=/usr/bin/docker compose up\nTimeoutStartSec=300',
+      '[Unit]\nDescription=app\nStartLimitBurst=5\nStartLimitIntervalSec=300\n\n[Service]\nExecStart=/usr/bin/docker compose up\nTimeoutStartSec=300',
     );
     vi.mocked(copyFileSync).mockImplementation(() => undefined);
     vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
@@ -141,7 +143,7 @@ describe('patchSystemdCommand run() — nothing to do', () => {
     vi.mocked(load).mockReturnValue(reg);
     // return fully-patched content for every service
     vi.mocked(readServiceFile).mockImplementation((name: string) =>
-      `[Service]\nExecStart=/usr/bin/env fleet boot-start ${name}\nTimeoutStartSec=900\nStartLimitBurst=5\nStartLimitIntervalSec=300`,
+      `[Unit]\nDescription=${name}\nStartLimitIntervalSec=300\nStartLimitBurst=5\n\n[Service]\nExecStart=/usr/bin/env fleet boot-start ${name}\nTimeoutStartSec=900`,
     );
 
     const result = await patchSystemdCommand.run(
@@ -202,6 +204,7 @@ describe('patchSystemdCommand run() — backup path', () => {
     const reg = makeRegistry({ appServiceNames: ['fleet-app1'], dbServiceName: 'docker-databases' });
     vi.mocked(load).mockReturnValue(reg);
     vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
     vi.mocked(copyFileSync).mockImplementation(() => undefined);
     vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
 
@@ -211,6 +214,142 @@ describe('patchSystemdCommand run() — backup path', () => {
       '/etc/systemd/system/fleet-app1.service',
       '/etc/systemd/system/fleet-app1.service.bak',
     );
+  });
+
+  it('keeps an existing .bak so a second patch cannot overwrite the original', async () => {
+    const reg = makeRegistry({ appServiceNames: ['fleet-app1'], dbServiceName: 'docker-databases' });
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    expect(copyFileSync).not.toHaveBeenCalled();
+    expect(writeFileSync).toHaveBeenCalled();
+  });
+});
+
+describe('patchSystemdCommand run() — unseal dependency', () => {
+  it('adds the unseal dependency to every unit when the unseal unit is installed', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry());
+    vi.mocked(unsealUnitExists).mockReturnValue(true);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).toContain('Requires=fleet-unseal.service');
+    expect(written).toContain('After=fleet-unseal.service');
+    vi.mocked(unsealUnitExists).mockReturnValue(false);
+  });
+
+  it('leaves the unseal dependency off when the unseal unit is absent', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry());
+    vi.mocked(unsealUnitExists).mockReturnValue(false);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).not.toContain('fleet-unseal.service');
+  });
+});
+
+describe('patchSystemdCommand run() — databases dependency repair', () => {
+  it('adds the databases dependency when the registry says the app needs it', async () => {
+    const reg = makeRegistry();
+    reg.apps[0].dependsOnDatabases = true;
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const appWrite = vi.mocked(writeFileSync).mock.calls.find(
+      call => typeof call[0] === 'string' && (call[0] as string).includes('fleet-app1.service'),
+    );
+    const written = appWrite![1] as string;
+    expect(written).toContain('Requires=docker-databases.service');
+    expect(written).toContain('After=docker-databases.service');
+  });
+
+  it('leaves the dependency off when the registry says the app does not need it', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry());
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const appWrite = vi.mocked(writeFileSync).mock.calls.find(
+      call => typeof call[0] === 'string' && (call[0] as string).includes('fleet-app1.service'),
+    );
+    expect(appWrite![1] as string).not.toContain('docker-databases.service');
+  });
+
+  it('does not add the dependency when the databases unit is not installed', async () => {
+    // systemd refuses to start a unit that hard-depends on a missing target, so
+    // a registry flag alone would take a working app down at the next boot.
+    const reg = makeRegistry();
+    reg.apps[0].dependsOnDatabases = true;
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockImplementation((name: string) =>
+      name === 'docker-databases' ? null : baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const appWrite = vi.mocked(writeFileSync).mock.calls.find(
+      call => typeof call[0] === 'string' && (call[0] as string).includes('fleet-app1.service'),
+    );
+    expect(appWrite![1] as string).not.toContain('docker-databases.service');
+  });
+
+  it('never adds the databases service as its own dependency', async () => {
+    const reg = makeRegistry({ appServiceNames: ['docker-databases'] });
+    reg.apps[0].dependsOnDatabases = true;
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockImplementation((name: string) => baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).not.toContain('Requires=docker-databases.service');
+  });
+});
+
+describe('patchSystemdCommand run() — teardown removal', () => {
+  it('strips the ExecStartPre compose-down from an existing unit', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry());
+    vi.mocked(readServiceFile).mockReturnValue(
+      '[Unit]\nDescription=app\nStartLimitIntervalSec=300\nStartLimitBurst=5\n\n[Service]\nExecStartPre=-/usr/bin/docker compose down\nExecStart=/usr/bin/env fleet boot-start fleet-app1\nTimeoutStartSec=900\nExecStop=/usr/bin/docker compose down --timeout 30',
+    );
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    const result = await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    expect(result.ok).toBeTruthy();
+    const written = vi.mocked(writeFileSync).mock.calls[0][1] as string;
+    expect(written).not.toContain('ExecStartPre=');
+    // stopping the unit must still tear the stack down
+    expect(written).toContain('ExecStop=/usr/bin/docker compose down --timeout 30');
   });
 });
 

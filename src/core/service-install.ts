@@ -1,5 +1,5 @@
 import { load, findApp } from './registry';
-import { readServiceFile, installServiceFile, enableService } from './systemd';
+import { readServiceFile, installServiceFile, enableService, unsealUnitExists } from './systemd';
 import { generateServiceFile } from '../templates/systemd';
 import { assertAppName, assertComposeFile } from './validate';
 
@@ -37,6 +37,7 @@ export function installServiceForApp(appName: string, opts: { force?: boolean } 
     workingDirectory: app.composePath,
     composeFile: app.composeFile,
     dependsOnDatabases: app.dependsOnDatabases,
+    requiresUnseal: unsealUnitExists(),
   });
   installServiceFile(app.serviceName, content);
   const enabled = enableService(app.serviceName);

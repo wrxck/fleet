@@ -26,6 +26,7 @@ vi.mock('../core/systemd.js', () => ({
   installServiceFile: vi.fn(),
   readServiceFile: vi.fn(),
   enableService: vi.fn(),
+  unsealUnitExists: vi.fn(() => false),
 }));
 
 vi.mock('../templates/systemd.js', () => ({
