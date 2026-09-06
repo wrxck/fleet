@@ -13,6 +13,7 @@ import {
   emptyState,
   formatAlert,
   loadState,
+  MAX_RESTARTS_PER_RUN,
   pruneRestarts,
   recordRestart,
   remediate,
@@ -268,6 +269,53 @@ describe('remediate', () => {
     const { outcomes } = remediate([makeFailure({ severity: 'degraded' })], emptyState(), now, restart);
     expect(restart).not.toHaveBeenCalled();
     expect(outcomes).toEqual([]);
+  });
+
+  it('commits the attempt before the restart is issued', () => {
+    const order: string[] = [];
+    const commit = vi.fn(() => { order.push('commit'); return true; });
+    const restart = vi.fn(() => { order.push('restart'); return { ok: true }; });
+    remediate([makeFailure()], emptyState(), now, restart, { commit });
+    expect(order).toEqual(['commit', 'restart']);
+  });
+
+  it('commits a state that already carries the attempt', () => {
+    let seen: WatchdogState | null = null;
+    const commit = vi.fn((s: WatchdogState) => { seen = s; return true; });
+    remediate([makeFailure()], emptyState(), now, () => ({ ok: true }), { commit });
+    expect(seen!.restarts.macpool).toHaveLength(1);
+  });
+
+  it('restarts nothing when the attempt cannot be persisted', () => {
+    const restart = vi.fn(() => ({ ok: true }));
+    const { outcomes, aborted, state } = remediate(
+      [makeFailure()], emptyState(), now, restart, { commit: () => false },
+    );
+    expect(restart).not.toHaveBeenCalled();
+    expect(aborted).toBeTruthy();
+    expect(outcomes).toEqual([]);
+    expect(state.restarts).toEqual({});
+  });
+
+  it('caps how many apps one run restarts', () => {
+    const restart = vi.fn(() => ({ ok: true }));
+    const many = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map(app =>
+      makeFailure({ app, serviceName: app }));
+    const { outcomes } = remediate(many, emptyState(), now, restart);
+    expect(outcomes).toHaveLength(MAX_RESTARTS_PER_RUN);
+    expect(restart).toHaveBeenCalledTimes(MAX_RESTARTS_PER_RUN);
+  });
+
+  it('honours a custom per-run cap', () => {
+    const restart = vi.fn(() => ({ ok: true }));
+    const many = ['a', 'b', 'c'].map(app => makeFailure({ app, serviceName: app }));
+    const { outcomes } = remediate(many, emptyState(), now, restart, { maxPerRun: 1 });
+    expect(outcomes).toHaveLength(1);
+  });
+
+  it('reports aborted false on a clean run', () => {
+    const { aborted } = remediate([makeFailure()], emptyState(), now, () => ({ ok: true }));
+    expect(aborted).toBeFalsy();
   });
 });
 

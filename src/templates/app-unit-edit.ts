@@ -16,8 +16,13 @@ function findUnitSection(content: string): { start: number; end: number } {
   let start = -1;
   let end = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === '[Unit]') { start = i; continue; }
-    if (start >= 0 && lines[i].startsWith('[') && lines[i].endsWith(']')) {
+    // systemd strips whitespace around a section header before parsing it, and
+    // a CRLF file leaves a \r on every line. match the same way, or this code
+    // and systemd disagree about where [Unit] ends and an edit lands in the
+    // wrong section, where systemd silently ignores it.
+    const header = lines[i].trim();
+    if (header === '[Unit]') { start = i; continue; }
+    if (start >= 0 && header.startsWith('[') && header.endsWith(']')) {
       end = i;
       break;
     }
@@ -97,18 +102,27 @@ export function addUnitDependency(content: string, unit: string): string {
  * counts, while "Requires=my-fleet-unseal.service" must not.
  */
 function directiveLists(line: string, directive: string, unit: string): boolean {
-  const prefix = `${directive}=`;
-  if (!line.startsWith(prefix)) return false;
-  return line.slice(prefix.length).trim().split(/\s+/).includes(unit);
+  const eq = line.indexOf('=');
+  if (eq < 0) return false;
+  // systemd accepts whitespace around the "=", so "Requires = a.service" is
+  // the same directive. matching on a bare prefix would miss it and append a
+  // duplicate on every patch run.
+  if (line.slice(0, eq).trim() !== directive) return false;
+  return line.slice(eq + 1).trim().split(/\s+/).includes(unit);
 }
 
-const START_LIMIT_LINE = /^StartLimit(Burst|IntervalSec|Interval|IntervalUSec)=/;
+const START_LIMIT_LINE = /^StartLimit(Burst|IntervalSec|Interval|IntervalUSec)\s*=/;
+
+// systemd tolerates leading whitespace on a directive, and a CRLF file leaves a
+// trailing \r. match the trimmed line so neither hides a directive from us.
+const isStartLimit = (line: string): boolean => START_LIMIT_LINE.test(line.trim());
 
 /**
- * systemd reads the start rate limit from [Unit]. earlier versions of
- * patch-systemd wrote it into [Service], where it is silently ignored and the
- * unit falls back to the 10s/5 default. lift any existing directives out and
- * re-add them under [Unit].
+ * systemd reads StartLimitIntervalSec only from [Unit]. earlier versions of
+ * patch-systemd wrote the pair into [Service], where the legacy StartLimitBurst
+ * spelling is still honoured but StartLimitIntervalSec is not, so the unit kept
+ * the 10s default window. lift any existing directives out and re-add them
+ * under [Unit], where both spellings are read.
  */
 export function ensureStartLimitInUnit(
   content: string,
@@ -119,7 +133,7 @@ export function ensureStartLimitInUnit(
   const burst = opts.burst ?? 5;
   const stripped = content
     .split('\n')
-    .filter(l => !START_LIMIT_LINE.test(l))
+    .filter(l => !isStartLimit(l))
     .join('\n');
   return appendToUnitSection(stripped, [
     `StartLimitIntervalSec=${intervalSec}`,
@@ -129,8 +143,8 @@ export function ensureStartLimitInUnit(
 
 /**
  * true when the unit has no start rate limit at all, or has one outside [Unit]
- * where systemd ignores it. a unit whose only StartLimit directives already sit
- * in [Unit] is left alone, so a deliberately tuned value survives a re-patch.
+ * where the interval is not read. a unit whose only StartLimit directives
+ * already sit in [Unit] is left alone, so a tuned value survives a re-patch.
  */
 export function startLimitNeedsFix(content: string): boolean {
   const section = tryFindUnitSection(content);
@@ -139,14 +153,16 @@ export function startLimitNeedsFix(content: string): boolean {
   let inUnit = false;
   let outsideUnit = false;
   lines.forEach((l, i) => {
-    if (!START_LIMIT_LINE.test(l)) return;
+    if (!isStartLimit(l)) return;
     if (i > section.start && i < section.end) inUnit = true;
     else outsideUnit = true;
   });
   return outsideUnit || !inUnit;
 }
 
-const COMPOSE_DOWN_PRE = /^ExecStartPre=-?\/usr\/bin\/docker compose\b.*\bdown\b.*$/;
+const COMPOSE_DOWN_PRE = /^ExecStartPre\s*=\s*-?\/usr\/bin\/docker compose\b.*\bdown\b/;
+
+const isTeardownPre = (line: string): boolean => COMPOSE_DOWN_PRE.test(line.trim());
 
 /**
  * drop the "compose down" that ran before every start. at boot dockerd has
@@ -159,10 +175,10 @@ const COMPOSE_DOWN_PRE = /^ExecStartPre=-?\/usr\/bin\/docker compose\b.*\bdown\b
 export function removeTeardownExecStartPre(content: string): string {
   return content
     .split('\n')
-    .filter(l => !COMPOSE_DOWN_PRE.test(l))
+    .filter(l => !isTeardownPre(l))
     .join('\n');
 }
 
 export function hasTeardownExecStartPre(content: string): boolean {
-  return content.split('\n').some(l => COMPOSE_DOWN_PRE.test(l));
+  return content.split('\n').some(l => isTeardownPre(l));
 }

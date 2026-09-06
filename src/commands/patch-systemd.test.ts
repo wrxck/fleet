@@ -297,6 +297,26 @@ describe('patchSystemdCommand run() — databases dependency repair', () => {
     expect(appWrite![1] as string).not.toContain('docker-databases.service');
   });
 
+  it('does not add the dependency when the databases unit is not installed', async () => {
+    // systemd refuses to start a unit that hard-depends on a missing target, so
+    // a registry flag alone would take a working app down at the next boot.
+    const reg = makeRegistry();
+    reg.apps[0].dependsOnDatabases = true;
+    vi.mocked(load).mockReturnValue(reg);
+    vi.mocked(readServiceFile).mockImplementation((name: string) =>
+      name === 'docker-databases' ? null : baseServiceContent(name));
+    vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(copyFileSync).mockImplementation(() => undefined);
+    vi.mocked(execSafe).mockReturnValue({ ok: true, stdout: '', stderr: '' } as never);
+
+    await patchSystemdCommand.run({ rollback: false, yes: true }, makeMcpContext(false));
+
+    const appWrite = vi.mocked(writeFileSync).mock.calls.find(
+      call => typeof call[0] === 'string' && (call[0] as string).includes('fleet-app1.service'),
+    );
+    expect(appWrite![1] as string).not.toContain('docker-databases.service');
+  });
+
   it('never adds the databases service as its own dependency', async () => {
     const reg = makeRegistry({ appServiceNames: ['docker-databases'] });
     reg.apps[0].dependsOnDatabases = true;

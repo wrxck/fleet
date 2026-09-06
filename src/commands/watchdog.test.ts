@@ -298,6 +298,65 @@ describe('watchdogCommand — state write failure', () => {
     await expect(watchdogCommand([])).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not write watchdog state'));
   });
+
+  it('restarts nothing when the attempt cannot be recorded', async () => {
+    // the budget lives only in that file. restarting without it means one
+    // restart per app per run, for ever — a loop, not a rate limit.
+    vi.mocked(load).mockReturnValue(makeRegistry([makeApp()]) as never);
+    vi.mocked(checkAllHealth).mockReturnValue([makeResult()]);
+    vi.mocked(writeJsonAtomic).mockImplementation(() => { throw new Error('ENOSPC'); });
+
+    await watchdogCommand([]);
+
+    expect(restartServiceResult).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('remediation stopped'));
+  });
+});
+
+describe('watchdogCommand — databases listed as an app', () => {
+  it('does not restart the databases even when a stale registry lists them under apps', async () => {
+    const dbApp = makeApp({
+      name: 'docker-databases',
+      serviceName: 'docker-databases',
+      containers: ['shared-postgres'],
+    });
+    vi.mocked(load).mockReturnValue(makeRegistry([dbApp]) as never);
+    vi.mocked(checkAllHealth).mockReturnValue([
+      makeResult({
+        app: 'docker-databases',
+        containers: [{ name: 'shared-postgres', running: false, health: 'not found' }],
+      }),
+    ]);
+    dbActive(false);
+
+    await watchdogCommand([]);
+
+    expect(restartServiceResult).not.toHaveBeenCalled();
+  });
+
+  it('lists the databases once, not twice', async () => {
+    const dbApp = makeApp({ name: 'docker-databases', serviceName: 'docker-databases' });
+    vi.mocked(load).mockReturnValue(makeRegistry([dbApp]) as never);
+    vi.mocked(checkAllHealth).mockReturnValue([makeResult({ app: 'docker-databases' })]);
+    dbActive(false);
+
+    await watchdogCommand([]);
+
+    const message = vi.mocked(sendNotification).mock.calls[0][1] as string;
+    expect(message.match(/docker-databases/g)).toHaveLength(1);
+  });
+});
+
+describe('watchdogCommand — force alert', () => {
+  it('sends a healthy report on a quiet box, so notify can be tested', async () => {
+    vi.mocked(load).mockReturnValue(makeRegistry([]) as never);
+    vi.mocked(checkAllHealth).mockReturnValue([]);
+
+    await watchdogCommand(['--force-alert']);
+
+    expect(sendNotification).toHaveBeenCalled();
+    expect(vi.mocked(sendNotification).mock.calls[0][1]).toContain('all services healthy');
+  });
 });
 
 describe('watchdogCommand — shared databases', () => {

@@ -7,6 +7,8 @@ import { loadNotifyConfig, sendNotification } from '../core/notify';
 import {
   alertSignature,
   decideAlert,
+  type AlertDecision,
+  type WatchdogState,
   formatAlert,
   loadState,
   pruneRestarts,
@@ -22,11 +24,13 @@ import { error, success, warn } from '../ui/output';
  * a human running "fleet watchdog" by hand must still get the report rather
  * than an EACCES stack trace, so a failed write only warns.
  */
-function persist(state: Parameters<typeof saveState>[0]): void {
+function persist(state: WatchdogState): boolean {
   try {
     saveState(state);
+    return true;
   } catch (err) {
     warn(`could not write watchdog state: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
   }
 }
 
@@ -38,8 +42,12 @@ function getHostname(): string {
   }
 }
 
-function toFailure(app: AppEntry, r: HealthResult): Failure | null {
+function toFailure(app: AppEntry, r: HealthResult, dbServiceName: string): Failure | null {
   const systemdFailed = r.systemd.state === 'failed';
+  // a stale registry can list the shared databases as an app as well. restarting
+  // that unit runs its ExecStop and takes every database down, so it is never a
+  // remediation target no matter which list it arrived on.
+  const remediable = app.name !== dbServiceName && app.serviceName !== dbServiceName;
   if (r.overall === 'down') {
     return {
       app: r.app,
@@ -47,7 +55,7 @@ function toFailure(app: AppEntry, r: HealthResult): Failure | null {
       severity: 'down',
       reason: `no running container (systemd: ${r.systemd.state})`,
       systemdFailed,
-      remediable: true,
+      remediable,
     };
   }
   if (r.overall === 'degraded') {
@@ -62,19 +70,19 @@ function toFailure(app: AppEntry, r: HealthResult): Failure | null {
       severity: 'degraded',
       reason: reasons.join('; '),
       systemdFailed,
-      remediable: true,
+      remediable,
     };
   }
   return null;
 }
 
-function collectFailures(apps: AppEntry[]): Failure[] {
+function collectFailures(apps: AppEntry[], dbServiceName: string): Failure[] {
   const byName = new Map(apps.map(a => [a.name, a]));
   const failures: Failure[] = [];
   for (const r of checkAllHealth(apps)) {
     const app = byName.get(r.app);
     if (!app) continue;
-    const f = toFailure(app, r);
+    const f = toFailure(app, r, dbServiceName);
     if (f) failures.push(f);
   }
   return failures;
@@ -99,12 +107,14 @@ export async function watchdogCommand(args: string[]): Promise<void> {
   const apps = reg.apps;
 
   // the shared databases service is not a registered app, so check it on its own
-  const dbStatus = getServiceStatus(reg.infrastructure.databases.serviceName);
-  let failures = collectFailures(apps);
-  if (!dbStatus.active) {
+  const dbServiceName = reg.infrastructure.databases.serviceName;
+  const dbStatus = getServiceStatus(dbServiceName);
+  let failures = collectFailures(apps, dbServiceName);
+  const alreadyListed = failures.some(f => f.app === dbServiceName);
+  if (!dbStatus.active && !alreadyListed) {
     failures.unshift({
-      app: reg.infrastructure.databases.serviceName,
-      serviceName: reg.infrastructure.databases.serviceName,
+      app: dbServiceName,
+      serviceName: dbServiceName,
       severity: 'down',
       reason: `systemd ${dbStatus.state}`,
       systemdFailed: dbStatus.state === 'failed',
@@ -129,9 +139,15 @@ export async function watchdogCommand(args: string[]): Promise<void> {
   let outcomes: RemediationOutcome[] = [];
 
   if (!noRemediate) {
-    const result = remediate(failures, state, now, restartServiceResult);
+    // the attempt is written before the restart is issued. the budget lives
+    // only in that file, so a restart that outran its own record would have no
+    // rate limit at all — on a full disk that becomes a restart loop.
+    const result = remediate(failures, state, now, restartServiceResult, { commit: persist });
     state = result.state;
     outcomes = result.outcomes;
+    if (result.aborted) {
+      warn('remediation stopped: the watchdog state file could not be written');
+    }
 
     // re-check only what was restarted, so an app that came back does not raise
     // an alert that is already stale by the time a human reads it
@@ -147,7 +163,7 @@ export async function watchdogCommand(args: string[]): Promise<void> {
           const r = recheck.get(f.app);
           if (!r) return true;
           const app = byName.get(f.app);
-          return app ? toFailure(app, r) !== null : true;
+          return app ? toFailure(app, r, dbServiceName) !== null : true;
         });
       }
     }
@@ -164,7 +180,7 @@ export async function watchdogCommand(args: string[]): Promise<void> {
   }
 
   const signature = alertSignature(failures, outcomes);
-  const decision = force && signature !== '' ? 'changed' : decideAlert(state, signature, now);
+  const decision: AlertDecision = force ? 'changed' : decideAlert(state, signature, now);
 
   if (decision === 'suppress') {
     persist(state);

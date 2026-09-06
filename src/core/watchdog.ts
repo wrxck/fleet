@@ -6,6 +6,12 @@ export const STATE_PATH = '/var/lib/fleet/watchdog-state.json';
 export const RESTART_WINDOW_MS = 60 * 60 * 1000;
 /** restart attempts allowed per app inside one window before the watchdog gives up. */
 export const MAX_RESTARTS_PER_WINDOW = 2;
+/**
+ * restarts issued in a single run. a bad reboot can leave every app failed, and
+ * each restart blocks for up to 120s, so an uncapped run would outlast its own
+ * timer interval. the rest are picked up on the next run.
+ */
+export const MAX_RESTARTS_PER_RUN = 5;
 /** resend an unchanged failure set at most this often, as a keep-alive digest. */
 export const DIGEST_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -152,21 +158,48 @@ export interface RemediationOutcome {
   attempt: number;
 }
 
+export interface RemediateOptions {
+  maxPerWindow?: number;
+  /** restarts issued in a single run. see MAX_RESTARTS_PER_RUN. */
+  maxPerRun?: number;
+  /**
+   * persist the attempt before the restart is issued. return false to abort
+   * remediation. the budget only exists in the state file, so a restart that
+   * runs before its attempt is durable is a restart with no rate limit at all.
+   */
+  commit?: (state: WatchdogState) => boolean;
+}
+
 /**
  * restart every eligible failed unit. the restart function is injected so the
  * policy can be tested without touching systemd.
+ *
+ * `aborted` is true when `commit` refused, so the caller can say why the rest
+ * of the failures were left alone.
  */
 export function remediate(
   failures: Failure[],
   state: WatchdogState,
   now: Date,
   restart: (serviceName: string) => { ok: boolean; error?: string },
-  maxPerWindow: number = MAX_RESTARTS_PER_WINDOW,
-): { state: WatchdogState; outcomes: RemediationOutcome[] } {
+  opts: RemediateOptions = {},
+): { state: WatchdogState; outcomes: RemediationOutcome[]; aborted: boolean } {
+  const maxPerWindow = opts.maxPerWindow ?? MAX_RESTARTS_PER_WINDOW;
+  const maxPerRun = opts.maxPerRun ?? MAX_RESTARTS_PER_RUN;
+  const commit = opts.commit;
+
   let next = state;
   const outcomes: RemediationOutcome[] = [];
-  for (const f of selectRemediationTargets(failures, state, maxPerWindow)) {
+  const targets = selectRemediationTargets(failures, state, maxPerWindow).slice(0, maxPerRun);
+
+  for (const f of targets) {
     const attempt = (next.restarts[f.app]?.length ?? 0) + 1;
+    const withAttempt = recordRestart(next, f.app, now);
+    if (commit && !commit(withAttempt)) {
+      return { state: next, outcomes, aborted: true };
+    }
+    next = withAttempt;
+
     // a throwing restart must not take the whole watchdog run down with it —
     // the name validator rejects a malformed serviceName by throwing
     let result: { ok: boolean; error?: string };
@@ -175,10 +208,9 @@ export function remediate(
     } catch (err) {
       result = { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
-    next = recordRestart(next, f.app, now);
     outcomes.push({ app: f.app, serviceName: f.serviceName, ok: result.ok, error: result.error, attempt });
   }
-  return { state: next, outcomes };
+  return { state: next, outcomes, aborted: false };
 }
 
 /**

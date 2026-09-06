@@ -112,8 +112,15 @@ export function composeBuildResult(composePath: string, composeFile: string | nu
   return result.ok ? { ok: true } : { ok: false, error: result.stderr || `docker compose build failed (exit ${result.exitCode})` };
 }
 
+// --remove-orphans covers the one job the ExecStartPre teardown used to do:
+// "up -d" recreates and reconciles, but it only warns about a container whose
+// service has been deleted from the compose file. that orphan keeps its
+// published port bound and blocks whatever replaces it.
 export function composeUp(composePath: string, composeFile: string | null): boolean {
-  const args = ['compose', ...(composeFile ? ['-f', composeFile] : []), 'up', '-d', '--force-recreate'];
+  const args = [
+    'compose', ...(composeFile ? ['-f', composeFile] : []),
+    'up', '-d', '--force-recreate', '--remove-orphans',
+  ];
   const result = execSafe('docker', args, { cwd: composePath, timeout: 120_000 });
   return result.ok;
 }

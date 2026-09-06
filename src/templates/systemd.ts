@@ -30,7 +30,7 @@ export function generateServiceFile(opts: SystemdOpts): string {
   // can fail leaves the app with no container at all. "compose up -d"
   // reconciles a running container on its own, so the teardown buys nothing.
   //
-  // StartLimit* live in [Unit]. systemd ignores them in [Service].
+  // StartLimit* live in [Unit]. StartLimitIntervalSec is not read in [Service].
   return `[Unit]
 Description=${opts.description}
 Requires=docker.service${dbDep}${unsealDep}

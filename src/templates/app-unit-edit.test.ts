@@ -224,6 +224,62 @@ describe('startLimitNeedsFix / ensureStartLimitInUnit', () => {
   });
 });
 
+// systemd strips whitespace around a section header and around "=", and a file
+// hand-edited on windows carries CRLF. the edits must see the same structure
+// systemd does, or a directive lands in a section where it is ignored.
+describe('tolerating real-world unit formatting', () => {
+  const trailingSpaceHeader = FIXTURE.replace('[Service]', '[Service] ');
+  const crlf = FIXTURE.replace(/\n/g, '\r\n');
+
+  it('does not write into [Service] when its header has trailing whitespace', () => {
+    const result = addUnsealDependency(trailingSpaceHeader);
+    const serviceStart = result.indexOf('[Service] ');
+    expect(result.slice(serviceStart)).not.toContain('Requires=fleet-unseal.service');
+    expect(result.slice(0, serviceStart)).toContain('Requires=fleet-unseal.service');
+  });
+
+  it('finds a misplaced start rate limit past a padded header', () => {
+    const padded = LEGACY_UNIT.replace('[Service]', '[Service] ');
+    expect(startLimitNeedsFix(padded)).toBe(true);
+    const result = ensureStartLimitInUnit(padded);
+    expect(result.slice(result.indexOf('[Service] '))).not.toContain('StartLimit');
+  });
+
+  it('does not append past [Install] in a CRLF unit', () => {
+    const result = addUnsealDependency(crlf);
+    const installAt = result.indexOf('[Install]');
+    expect(result.slice(installAt)).not.toContain('Requires=fleet-unseal.service');
+  });
+
+  it('finds the teardown in a CRLF unit', () => {
+    expect(hasTeardownExecStartPre(crlf)).toBe(true);
+    expect(hasTeardownExecStartPre(removeTeardownExecStartPre(crlf))).toBe(false);
+  });
+
+  it('finds a start rate limit in a CRLF unit', () => {
+    expect(startLimitNeedsFix(LEGACY_UNIT.replace(/\n/g, '\r\n'))).toBe(true);
+  });
+
+  it('treats a spaced "Requires = unit" as the same directive', () => {
+    const spaced = FIXTURE.replace(
+      'Requires=docker.service',
+      'Requires = docker.service fleet-unseal.service',
+    ).replace(
+      'After=docker.service network-online.target',
+      'After = docker.service fleet-unseal.service',
+    );
+    expect(addUnsealDependency(spaced)).toBe(spaced);
+  });
+
+  it('finds an indented teardown directive', () => {
+    const indented = FIXTURE.replace(
+      'ExecStartPre=-/usr/bin/docker compose down',
+      '  ExecStartPre=-/usr/bin/docker compose down',
+    );
+    expect(hasTeardownExecStartPre(indented)).toBe(true);
+  });
+});
+
 describe('removeTeardownExecStartPre / hasTeardownExecStartPre', () => {
   it('detects and removes the compose-down teardown', () => {
     expect(hasTeardownExecStartPre(FIXTURE)).toBe(true);

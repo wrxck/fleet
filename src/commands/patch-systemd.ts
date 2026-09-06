@@ -43,6 +43,9 @@ function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
   targetMap.set(dbServiceName, { name: dbServiceName, rewriteExecStart: false, needsDb: false });
   const targets = Array.from(targetMap.values());
   const unsealInstalled = unsealUnitExists();
+  // same guard as the unseal edge: systemd refuses to start a unit whose
+  // Requires= target does not exist, so a registry flag alone is not enough.
+  const dbUnitInstalled = readServiceFile(dbServiceName) !== null;
 
   ctx.log({ level: 'info', message: `patching ${targets.length} service(s)...` });
   let patched = 0;
@@ -62,8 +65,8 @@ function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
     let changed = false;
 
     // the start rate limit belongs in [Unit]. earlier versions of this command
-    // wrote it into [Service], where systemd ignores it and the unit silently
-    // falls back to the 10s/5 default. applies to ALL services.
+    // wrote it into [Service], where StartLimitIntervalSec is not read, so every
+    // unit silently kept the 10s default window. applies to ALL services.
     if (startLimitNeedsFix(updated)) {
       updated = ensureStartLimitInUnit(updated);
       changed = true;
@@ -91,7 +94,7 @@ function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
 
     // the registry says this app needs the shared databases, so the unit must
     // wait for them. a missing edge here is a boot race, not a cosmetic gap.
-    if (needsDb && name !== dbServiceName) {
+    if (needsDb && dbUnitInstalled && name !== dbServiceName) {
       const withDb = addUnitDependency(updated, `${dbServiceName}.service`);
       if (withDb !== updated) {
         updated = withDb;
