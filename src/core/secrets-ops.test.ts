@@ -22,6 +22,7 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('./secrets-validate.js', () => ({
   validateAll: vi.fn(() => []),
+  composeFileSecrets: vi.fn(() => []),
 }));
 
 vi.mock('./secrets.js', async () => {
@@ -71,15 +72,18 @@ vi.mock('./secrets-audit.js', () => ({
 import { existsSync, readFileSync, readdirSync, chmodSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
 
 import {
-  loadManifest, decryptApp, sealApp, parseSecretsBundle,
+  loadManifest, decryptApp, sealApp, sealDbSecrets, parseSecretsBundle,
   ageEncrypt, backupVaultFile, restoreVaultFile, removeBackup,
 } from './secrets';
+import { composeFileSecrets } from './secrets-validate';
 import { execSafe } from './exec';
 import { validateBeforeSeal, detectDrift, safeSealApp, setSecret, unsealAll, rotateKey } from './secrets-ops';
 
 const mockLoadManifest = vi.mocked(loadManifest);
 const mockDecryptApp = vi.mocked(decryptApp);
 const mockSealApp = vi.mocked(sealApp);
+const mockSealDbSecrets = vi.mocked(sealDbSecrets);
+const mockComposeFileSecrets = vi.mocked(composeFileSecrets);
 const mockParseSecretsBundle = vi.mocked(parseSecretsBundle);
 const mockBackupVaultFile = vi.mocked(backupVaultFile);
 const mockRestoreVaultFile = vi.mocked(restoreVaultFile);
@@ -485,6 +489,10 @@ describe('setSecret', () => {
     // an earlier safeSealApp test installs a throwing sealApp implementation
     // and clearAllMocks does not remove implementations — restore a no-op.
     mockSealApp.mockImplementation(() => undefined);
+    mockSealDbSecrets.mockImplementation(() => undefined);
+    // default: the app's compose declares no file secrets, so set behaves as
+    // the plain env path. individual tests override per scenario.
+    mockComposeFileSecrets.mockImplementation(() => []);
   });
 
   it('bootstraps a fresh env vault for an app with no manifest entry', async () => {
@@ -525,7 +533,7 @@ describe('setSecret', () => {
     expect(sourceFile).toBe('/home/matt/app1/.env');
   });
 
-  it('still rejects key/value writes for a secrets-dir app', async () => {
+  it('still rejects key/value writes for a secrets-dir app when the key is not compose-declared', async () => {
     mockLoadManifest.mockReturnValue({
       version: 1,
       apps: {
@@ -538,6 +546,97 @@ describe('setSecret', () => {
 
     await expect(setSecret('db1', 'K', 'p3Dz8sKq1vBn6tGw', { allowWeak: true }))
       .rejects.toThrow(/secrets-dir/);
+    expect(mockSealApp).not.toHaveBeenCalled();
+  });
+
+  it('routes a compose-declared file secret into a fresh secrets-dir bundle', async () => {
+    // regression for the ai-glasses npmrc bug: bootstrapping assumed env for
+    // every new app, so a file secret landed as env lines the validator
+    // could never see — set reported success and unseal refused forever.
+    mockComposeFileSecrets.mockReturnValue(['npmrc']);
+    mockLoadManifest.mockReturnValue({ version: 1, apps: {} });
+    mockBackupVaultFile.mockReturnValue(null);
+
+    await setSecret('glasses', 'npmrc', '//reg.example/:_authToken=t0k3nV4lu3xyz\nalways-auth=true', { allowWeak: true });
+
+    expect(mockSealApp).not.toHaveBeenCalled();
+    expect(mockSealDbSecrets).toHaveBeenCalledTimes(1);
+    const [app, bundle, sourceDir] = mockSealDbSecrets.mock.calls[0];
+    expect(app).toBe('glasses');
+    expect(bundle).toEqual({ npmrc: '//reg.example/:_authToken=t0k3nV4lu3xyz\nalways-auth=true' });
+    expect(sourceDir).toBe('/run/fleet-secrets/glasses/secrets');
+  });
+
+  it('updates one file inside an existing secrets-dir bundle, preserving the rest', async () => {
+    mockComposeFileSecrets.mockReturnValue(['npmrc']);
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        app2: {
+          type: 'secrets-dir', encryptedFile: 'app2.secrets.age',
+          sourceFile: '/home/matt/app2/secrets', lastSealedAt: '', keyCount: 2,
+          files: ['npmrc', 'other'],
+        },
+      },
+    });
+    mockDecryptApp.mockReturnValue('bundle-blob');
+    mockParseSecretsBundle.mockReturnValue({ npmrc: 'old', other: 'keep' });
+    mockBackupVaultFile.mockReturnValue(null);
+
+    await setSecret('app2', 'npmrc', 'n3wV4lu3F0rTh3F1l3', { allowWeak: true });
+
+    const [, bundle, sourceDir] = mockSealDbSecrets.mock.calls[0];
+    expect(bundle).toEqual({ npmrc: 'n3wV4lu3F0rTh3F1l3', other: 'keep' });
+    expect(sourceDir).toBe('/home/matt/app2/secrets');
+  });
+
+  it('repairs the env-bootstrapped artefact for a compose file secret', async () => {
+    // the pre-fix bootstrap stored the file secret as env lines under the
+    // runtime provenance path; a set on the same key replaces that entry
+    // with a real secrets-dir bundle rather than failing forever.
+    mockComposeFileSecrets.mockReturnValue(['npmrc']);
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        glasses: {
+          type: 'env', encryptedFile: 'glasses.env.age',
+          sourceFile: '/run/fleet-secrets/glasses/.env', lastSealedAt: '', keyCount: 2,
+        },
+      },
+    });
+    mockBackupVaultFile.mockReturnValue('/etc/fleet/vault/glasses.env.age.bak-x');
+
+    await setSecret('glasses', 'npmrc', 'line1=aaaaaaaa\nline2=bbbbbbbb', { allowWeak: true });
+
+    expect(mockSealDbSecrets).toHaveBeenCalledTimes(1);
+    const [, bundle] = mockSealDbSecrets.mock.calls[0];
+    expect(bundle).toEqual({ npmrc: 'line1=aaaaaaaa\nline2=bbbbbbbb' });
+    expect(mockRemoveBackup).toHaveBeenCalled();
+  });
+
+  it('refuses to convert a real env vault even when compose declares the key', async () => {
+    mockComposeFileSecrets.mockReturnValue(['npmrc']);
+    mockLoadManifest.mockReturnValue({
+      version: 1,
+      apps: {
+        legit: {
+          type: 'env', encryptedFile: 'legit.env.age',
+          sourceFile: '/home/matt/legit/.env', lastSealedAt: '', keyCount: 5,
+        },
+      },
+    });
+
+    await expect(setSecret('legit', 'npmrc', 'v8Zq3xLpT0kW9rYd', { allowWeak: true }))
+      .rejects.toThrow(/env-type/);
+    expect(mockSealDbSecrets).not.toHaveBeenCalled();
+    expect(mockSealApp).not.toHaveBeenCalled();
+  });
+
+  it('rejects a multi-line value on the env path instead of corrupting the vault', async () => {
+    mockLoadManifest.mockReturnValue({ version: 1, apps: {} });
+
+    await expect(setSecret('plain', 'TOKEN', 'a=1111111111\nb=2222222222', { allowWeak: true }))
+      .rejects.toThrow(/newlines/);
     expect(mockSealApp).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@matthesketh/fleet",
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "Docker production management CLI + MCP server for Claude Code",
   "type": "module",
   "main": "dist/index.js",
@@ -97,9 +97,9 @@
   },
   "overrides": {
     "ws": "8.21.0",
-    "qs": "6.15.2",
+    "qs": "6.16.0",
     "ip-address": "10.5.0",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.7",
     "hono": "4.13.1",
     "@hono/node-server": "2.1.0"
   }

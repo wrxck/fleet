@@ -14,6 +14,7 @@ vi.mock('./systemd.js', () => ({
   readServiceFile: vi.fn(),
   installServiceFile: vi.fn(),
   enableService: vi.fn(),
+  unsealUnitExists: vi.fn(() => false),
 }));
 
 // templates/systemd and validate stay REAL — the template output shape and the

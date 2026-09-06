@@ -3,7 +3,15 @@ import { copyFileSync, existsSync, renameSync, writeFileSync } from 'node:fs';
 import { z } from 'zod';
 
 import { load } from '../core/registry';
-import { readServiceFile } from '../core/systemd';
+import { readServiceFile, unsealUnitExists, UNSEAL_SERVICE } from '../core/systemd';
+import {
+  addUnitDependency,
+  addUnsealDependency,
+  ensureStartLimitInUnit,
+  hasTeardownExecStartPre,
+  removeTeardownExecStartPre,
+  startLimitNeedsFix,
+} from '../templates/app-unit-edit';
 import { execSafe } from '../core/exec';
 import { defineCommand } from '../registry/registry';
 import type { CommandContext, CommandResult } from '../registry/types';
@@ -19,24 +27,31 @@ interface PatchSystemdData {
 function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
   const reg = load();
   const dbServiceName = reg.infrastructure.databases.serviceName;
-  const appServiceNames = reg.apps.map(a => a.serviceName);
 
   // dedupe by service name with infra (rewriteExecStart=false) winning. a stale
   // registry can list docker-databases under both reg.apps and infrastructure;
   // without this guard the apps entry would rewrite ExecStart on the shared
   // databases service, defeating the safety carve-out.
-  const targetMap = new Map<string, { name: string; rewriteExecStart: boolean }>();
-  for (const name of appServiceNames) {
-    targetMap.set(name, { name, rewriteExecStart: true });
+  const targetMap = new Map<string, { name: string; rewriteExecStart: boolean; needsDb: boolean }>();
+  for (const app of reg.apps) {
+    targetMap.set(app.serviceName, {
+      name: app.serviceName,
+      rewriteExecStart: true,
+      needsDb: app.dependsOnDatabases,
+    });
   }
-  targetMap.set(dbServiceName, { name: dbServiceName, rewriteExecStart: false });
+  targetMap.set(dbServiceName, { name: dbServiceName, rewriteExecStart: false, needsDb: false });
   const targets = Array.from(targetMap.values());
+  const unsealInstalled = unsealUnitExists();
+  // same guard as the unseal edge: systemd refuses to start a unit whose
+  // Requires= target does not exist, so a registry flag alone is not enough.
+  const dbUnitInstalled = readServiceFile(dbServiceName) !== null;
 
   ctx.log({ level: 'info', message: `patching ${targets.length} service(s)...` });
   let patched = 0;
   let skipped = 0;
 
-  for (const { name, rewriteExecStart } of targets) {
+  for (const { name, rewriteExecStart, needsDb } of targets) {
     const path = `${SERVICE_DIR}/${name}.service`;
     const content = readServiceFile(name);
 
@@ -49,13 +64,42 @@ function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
     let updated = content;
     let changed = false;
 
-    // existing behaviour: add StartLimitBurst if missing (applies to ALL services including databases)
-    if (!updated.includes('StartLimitBurst=')) {
-      updated = updated.replace(
-        /(\[Service\])/,
-        '$1\nStartLimitBurst=5\nStartLimitIntervalSec=300',
-      );
+    // the start rate limit belongs in [Unit]. earlier versions of this command
+    // wrote it into [Service], where StartLimitIntervalSec is not read, so every
+    // unit silently kept the 10s default window. applies to ALL services.
+    if (startLimitNeedsFix(updated)) {
+      updated = ensureStartLimitInUnit(updated);
       changed = true;
+    }
+
+    // the generated units ran "docker compose down" before every start. at boot
+    // that destroys the container dockerd has already restarted from its own
+    // restart policy, so a start that then fails leaves the app with no
+    // container at all. applies to ALL services.
+    if (hasTeardownExecStartPre(updated)) {
+      updated = removeTeardownExecStartPre(updated);
+      changed = true;
+    }
+
+    // the runtime secrets dir is a tmpfs and is empty after every reboot.
+    // fleet-unseal refills it, but that is only an ordering edge, so an app
+    // still starts when the unseal fails and compose then has no env file.
+    if (unsealInstalled && name !== UNSEAL_SERVICE) {
+      const withUnseal = addUnsealDependency(updated);
+      if (withUnseal !== updated) {
+        updated = withUnseal;
+        changed = true;
+      }
+    }
+
+    // the registry says this app needs the shared databases, so the unit must
+    // wait for them. a missing edge here is a boot race, not a cosmetic gap.
+    if (needsDb && dbUnitInstalled && name !== dbServiceName) {
+      const withDb = addUnitDependency(updated, `${dbServiceName}.service`);
+      if (withDb !== updated) {
+        updated = withDb;
+        changed = true;
+      }
     }
 
     // ExecStart + TimeoutStartSec rewrite ONLY for app services — databases has no git repo
@@ -83,9 +127,11 @@ function runPatch(ctx: CommandContext): CommandResult<PatchSystemdData> {
       continue;
     }
 
-    // backup original before overwrite
+    // back up the original before overwriting. write-once: a second patch run
+    // must not overwrite the .bak with an already-patched file, or rollback
+    // would restore a patched unit instead of the original.
     try {
-      copyFileSync(path, `${path}.bak`);
+      if (!existsSync(`${path}.bak`)) copyFileSync(path, `${path}.bak`);
     } catch (err) {
       ctx.log({
         level: 'warn',
@@ -183,7 +229,7 @@ function runRollback(ctx: CommandContext): CommandResult<PatchSystemdData> {
 
 export const patchSystemdCommand = defineCommand({
   name: 'patch-systemd',
-  summary: 'Add StartLimit settings to all service files',
+  summary: 'Bring all service files up to the current unit template',
   args: z.object({ rollback: z.boolean().default(false), yes: z.boolean().default(false) }),
   destructive: true,
   async run(args, ctx): Promise<CommandResult<PatchSystemdData>> {

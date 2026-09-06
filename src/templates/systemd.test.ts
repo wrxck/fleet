@@ -68,9 +68,35 @@ describe('generateServiceFile', () => {
     expect(result).toContain('ExecStop=/usr/bin/docker compose down --timeout 30');
   });
 
-  it('includes ExecStartPre to tear down existing containers', () => {
+  it('emits no ExecStartPre teardown — it would destroy a container dockerd restarted', () => {
     const result = generateServiceFile(makeOpts());
-    expect(result).toContain('ExecStartPre=-/usr/bin/docker compose down');
+    expect(result).not.toContain('ExecStartPre=');
+  });
+
+  it('puts the start rate limit in [Unit], where systemd actually reads it', () => {
+    const result = generateServiceFile(makeOpts());
+    const unitSection = result.slice(result.indexOf('[Unit]'), result.indexOf('[Service]'));
+    expect(unitSection).toContain('StartLimitIntervalSec=300');
+    expect(unitSection).toContain('StartLimitBurst=5');
+    const serviceSection = result.slice(result.indexOf('[Service]'));
+    expect(serviceSection).not.toContain('StartLimit');
+  });
+
+  it('omits the unseal dependency by default', () => {
+    const result = generateServiceFile(makeOpts());
+    expect(result).not.toContain('fleet-unseal.service');
+  });
+
+  it('adds the unseal dependency to both Requires and After when asked', () => {
+    const result = generateServiceFile(makeOpts({ requiresUnseal: true }));
+    expect(result).toContain('Requires=docker.service fleet-unseal.service');
+    expect(result).toContain('After=docker.service fleet-unseal.service network-online.target');
+  });
+
+  it('orders the unseal after the database dependency when both apply', () => {
+    const result = generateServiceFile(makeOpts({ dependsOnDatabases: true, requiresUnseal: true }));
+    expect(result).toContain('Requires=docker.service docker-databases.service fleet-unseal.service');
+    expect(result).toContain('After=docker.service docker-databases.service fleet-unseal.service network-online.target');
   });
 
   it('includes ExecReload with docker compose restart', () => {
@@ -126,7 +152,6 @@ describe('generateServiceFile', () => {
   it('accepts a clean compose filename and emits the expected -f flag', () => {
     const result = generateServiceFile(makeOpts({ composeFile: 'docker-compose.yml' }));
     expect(result).toContain('-f "docker-compose.yml"');
-    expect(result).toContain('ExecStartPre=-/usr/bin/docker compose -f "docker-compose.yml" down');
     expect(result).toContain('ExecStop=/usr/bin/docker compose -f "docker-compose.yml" down --timeout 30');
     expect(result).toContain('ExecReload=/usr/bin/docker compose -f "docker-compose.yml" restart');
   });
@@ -172,7 +197,7 @@ describe('boot-start integration in template', () => {
     expect(content).not.toContain('TimeoutStartSec=300');
   });
 
-  it('keeps ExecStartPre and ExecStop as docker compose (only ExecStart changes)', () => {
+  it('keeps ExecStop as compose down and drops the ExecStartPre teardown', () => {
     const content = generateServiceFile({
       serviceName: 'sample',
       description: 'sample',
@@ -180,9 +205,10 @@ describe('boot-start integration in template', () => {
       composeFile: null,
       dependsOnDatabases: false,
     });
-    // ExecStartPre still does compose down (defensive cleanup before refresh)
-    expect(content).toContain('ExecStartPre=-/usr/bin/docker compose down');
-    // ExecStop still does compose down --timeout 30
+    // the teardown before start is gone: at boot it destroys the container
+    // dockerd has already restarted, and a start that then fails leaves nothing
+    expect(content).not.toContain('ExecStartPre=');
+    // stopping the unit still tears the stack down
     expect(content).toContain('ExecStop=/usr/bin/docker compose down --timeout 30');
   });
 });

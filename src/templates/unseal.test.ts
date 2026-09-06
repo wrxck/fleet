@@ -114,10 +114,10 @@ describe('generateUnsealService', () => {
     expect(result).toContain('RemainAfterExit=yes');
   });
 
-  it('has TimeoutStartSec', () => {
+  it('allows 120s to unseal — apps now hard-depend on this unit', () => {
     mockLoad.mockReturnValue(makeRegistry([]));
     const result = generateUnsealService();
-    expect(result).toContain('TimeoutStartSec=30');
+    expect(result).toContain('TimeoutStartSec=120');
   });
 
   it('is installed to multi-user.target', () => {

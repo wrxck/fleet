@@ -21,7 +21,7 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/bin/node ${fleetBin} secrets unseal
 ExecStop=/bin/rm -rf /run/fleet-secrets
-TimeoutStartSec=30
+TimeoutStartSec=120
 
 [Install]
 WantedBy=multi-user.target

@@ -132,6 +132,18 @@ export function readServiceFile(serviceName: string): string | null {
   return readFileSync(path, 'utf-8');
 }
 
+export const UNSEAL_SERVICE = 'fleet-unseal';
+
+/**
+ * whether the unseal unit is installed. a generated app unit may only carry
+ * Requires=fleet-unseal.service when it is — systemd refuses to start a unit
+ * whose Requires= target does not exist, which would be worse than the boot
+ * race the dependency is there to close.
+ */
+export function unsealUnitExists(): boolean {
+  return readServiceFile(UNSEAL_SERVICE) !== null;
+}
+
 export function discoverServices(): string[] {
   const result = execSafe('systemctl', [
     'list-units', '--type=service', '--state=active', '--no-legend', '--no-pager',

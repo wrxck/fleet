@@ -113,7 +113,7 @@ Requires Node.js 20+, Docker Compose v2, systemd, nginx, and [age](https://githu
 
 **Nginx routing** -- Generate proxy, SPA, or Next.js server blocks with `fleet nginx add`. Automatic config testing and reload.
 
-**Health monitoring** -- Three-layer checks (systemd + container + HTTP) with `fleet health`. The `watchdog` command runs on cron and sends alerts on failure.
+**Health monitoring** -- Three-layer checks (systemd + container + HTTP) with `fleet health`. The `watchdog` command runs on a timer, restarts an app that is down with a failed unit (at most twice an hour), and alerts when the failure set changes rather than on every run.
 
 **Dependency scanning** -- Detects outdated packages, CVEs (via OSV), Docker image updates, and runtime EOL across all registered apps.
 
@@ -417,7 +417,7 @@ On every systemd start — including reboots — Fleet pulls the latest code fro
 |---------|-------------|
 | `fleet boot-start <app>` | Entry point systemd now invokes (`ExecStart`). Runs refresh then `docker compose up`. Not typically run by hand. |
 | `fleet rollback <app>` | Re-tags `<image>:fleet-previous` → `<image>:latest` and restarts the service. Fleet tags the previous image automatically before every build. |
-| `fleet patch-systemd` | Rewrites `ExecStart` in all installed unit files to use `fleet boot-start`, sets `TimeoutStartSec=900`, and backs up originals to `<path>.service.bak`. |
+| `fleet patch-systemd` | Brings every installed unit up to the current template: `ExecStart=fleet boot-start`, `TimeoutStartSec=900`, the start rate limit moved into `[Unit]`, the `ExecStartPre` compose-down teardown removed, and the `fleet-unseal` / `docker-databases` dependencies added where they apply. Backs the original up to `<path>.service.bak`, write-once. |
 | `fleet patch-systemd --rollback` | Restores all `.bak` unit files and runs `daemon-reload`. |
 
 **Kill switch**

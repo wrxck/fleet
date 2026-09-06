@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, readdirSync, chmodSync, chownS
 import { join, basename } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 
-import { validateAll } from './secrets-validate';
+import { validateAll, composeFileSecrets } from './secrets-validate';
 import { execSafe } from './exec';
 import { assertAppName, assertFilePath, assertSecretKey } from './validate';
 import { SecretsError } from './errors';
@@ -166,7 +166,71 @@ export async function setSecret(
   await lockManifest(() => {
     const manifest = loadManifest();
     const entry = manifest.apps[app];
-    if (entry && entry.type !== 'env') throw new SecretsError(`Cannot set key/value on secrets-dir type for ${app}`);
+
+    // the compose file is the authority on delivery: a name declared under
+    // its top-level secrets: block is a FILE the runtime materialises, so it
+    // belongs in the secrets-dir bundle — the shape whose manifest files list
+    // is what validate/unseal check. bootstrapping used to assume env for
+    // every new app, so a file secret "set" reported success into a vault
+    // shape the validator could never see, and every unseal after it refused
+    // with that same secret reported missing.
+    if (composeFileSecrets(app).includes(key)) {
+      let bundle: Record<string, string> = {};
+      let sourceDir = join(RUNTIME_DIR, app, 'secrets');
+      if (entry?.type === 'secrets-dir') {
+        bundle = parseSecretsBundle(decryptApp(app));
+        sourceDir = entry.sourceFile;
+      } else if (entry?.type === 'env') {
+        // an env entry whose provenance is the runtime path this function
+        // invents is the pre-fix bootstrap artefact: it holds this same file
+        // secret mangled through env-line splitting, and replacing it is the
+        // repair. an env vault sealed from a real source file is not ours to
+        // convert.
+        if (entry.sourceFile !== join(RUNTIME_DIR, app, '.env')) {
+          throw new SecretsError(
+            `${app} declares "${key}" as a compose file secret, but its vault entry is env-type ` +
+            `(sealed from ${entry.sourceFile}). Re-seal the app's env keys elsewhere before setting file secrets.`,
+          );
+        }
+      }
+      bundle[key] = value;
+      if (entry?.type === 'env') {
+        // seal directly with backup: the manifest entry is still env-type, so
+        // the pre-seal differ would compare env keys against a bundle — a
+        // meaningless diff whose accidental-wipe guard can false-trip on
+        // exactly the mangled entry being repaired here.
+        const bak = backupVaultFile(app);
+        try {
+          sealDbSecrets(app, bundle, sourceDir);
+          if (bak) removeBackup(app, bak);
+        } catch (err) {
+          if (bak) restoreVaultFile(app, bak);
+          throw err;
+        }
+      } else {
+        safeSealDbSecrets(app, bundle, sourceDir);
+      }
+      auditLog({
+        op: 'set', app, secret: key, ok: true,
+        ...(entry?.type === 'secrets-dir' ? {} : { details: 'bootstrapped secrets-dir vault from compose declaration' }),
+      });
+      return;
+    }
+
+    if (entry && entry.type !== 'env') {
+      throw new SecretsError(
+        `${app} stores file secrets (secrets-dir) and "${key}" is not declared under its compose ` +
+        `top-level secrets: block. Declare it there first, or re-seal via fleet secrets import.`,
+      );
+    }
+    // an env line cannot carry newlines — splitting would corrupt the vault
+    // into garbage keys while still reporting success.
+    if (value.includes('\n')) {
+      throw new SecretsError(
+        `Value for ${key} contains newlines. Env vault entries are single-line — if this is a ` +
+        `file secret, declare it under the app's compose top-level secrets: block first.`,
+      );
+    }
     // no manifest entry means this is the app's first secret. bootstrap an
     // empty env vault instead of refusing — before this, a brand-new app
     // could never be seeded via `secrets set` (cli or mcp) at all.
