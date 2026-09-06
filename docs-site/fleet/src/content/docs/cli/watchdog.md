@@ -25,9 +25,10 @@ fleet watchdog [--motd] [--no-remediate] [--force-alert]
 
 ### Remediation
 
-A restart is attempted only when **both** conditions hold:
+A restart is attempted only when **all three** conditions hold:
 
-- the app is **down** — no running container, so a restart can cost nothing, and
+- the app is **down**, and
+- **not one** of its containers is running — `down` alone is raised as soon as a single listed container is missing, and a registry that names a container the app no longer has would make a serving app look down, and
 - systemd reports its unit as **failed** — an inactive unit can be a deliberate stop.
 
 A **degraded** app is never restarted. It is still serving traffic, and `systemctl restart` runs the unit's `ExecStop` first, which would take that away. The shared databases are never restarted either: their state comes from systemd alone, with no container check, and every app depends on them.
