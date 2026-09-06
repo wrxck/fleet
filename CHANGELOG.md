@@ -2,6 +2,33 @@
 
 Auto-generated from git tags. See https://github.com/wrxck/fleet/releases for the GitHub release notes with extra context.
 
+## v1.18.0 — 2026-09-06
+
+### Fixes
+
+- fix(boot): stop a failed boot start from leaving an app with no container (#162)
+- fix(secrets): route compose-declared file secrets to the secrets-dir bundle
+
+### Other
+
+- chore(release): 1.18.0
+- chore(release): 1.17.1
+
+## v1.17.0 — 2026-08-10
+
+### Features
+
+- feat(logs): redact credentials and pii on every log read path
+
+### Fixes
+
+- fix(deps): raise pinned overrides past the new advisories
+
+### Other
+
+- 1.17.0
+- chore(release): regenerate CHANGELOG for v1.16.0
+
 ## v1.16.0 — 2026-08-01
 
 ### Features
