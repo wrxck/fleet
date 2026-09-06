@@ -3,6 +3,10 @@ import { defineConfig } from 'vitepress';
 export default defineConfig({
   title: '@matthesketh/ink',
   description: 'The most comprehensive component library for Ink — 30 packages for building modern terminal UIs with React',
+  // docs-site/fleet is a separate astro project. without this, vitepress walks
+  // into it, reads its markdown as its own, and fails the build on astro-style
+  // absolute links it cannot resolve.
+  srcExclude: ['fleet/**'],
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
   ],

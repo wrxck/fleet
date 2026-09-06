@@ -1,7 +1,7 @@
 {
   "name": "@matthesketh/fleet-secrets-client",
   "version": "0.1.0",
-  "description": "Client library for fleet-secrets-agent v2 — fetches secrets over a Unix socket",
+  "description": "Client library for fleet-secrets-agent v2 \u2014 fetches secrets over a Unix socket",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -13,12 +13,18 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "test": "vitest run"
   },
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "20"
+  },
   "license": "MIT",
   "author": "Matt Hesketh <matt@heskethwebdesign.co.uk>",
   "repository": {
@@ -26,10 +32,15 @@
     "url": "https://github.com/wrxck/fleet.git",
     "directory": "packages/fleet-secrets-client"
   },
-  "keywords": ["fleet", "secrets", "vault", "unix-socket"],
+  "keywords": [
+    "fleet",
+    "secrets",
+    "vault",
+    "unix-socket"
+  ],
   "devDependencies": {
     "tsup": "8.5.1",
-    "vitest": "4.0.18",
+    "vitest": "4.1.11",
     "typescript": "5.6.3"
   }
 }

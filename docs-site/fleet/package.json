@@ -8,9 +8,9 @@
     "preview": "astro preview"
   },
   "dependencies": {
-    "@astrojs/starlight": "^0.32",
-    "astro": "^5",
-    "sharp": "^0.33",
+    "@astrojs/starlight": "0.42.0",
+    "astro": "7.3.1",
+    "sharp": "0.35.4",
     "zod": "3.25.76"
   }
 }
