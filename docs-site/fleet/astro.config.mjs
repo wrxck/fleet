@@ -7,9 +7,9 @@ export default defineConfig({
     starlight({
       title: 'Fleet',
       description: 'Docker production management CLI + MCP server',
-      social: {
-        github: 'https://github.com/wrxck/fleet',
-      },
+      social: [
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/wrxck/fleet' },
+      ],
       editLink: {
         baseUrl: 'https://github.com/wrxck/fleet/edit/feat/docs-site/docs-site/fleet/',
       },
