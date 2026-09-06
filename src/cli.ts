@@ -102,7 +102,8 @@ Commands:
   mcp connect         Proxy stdio to the root daemon's socket (for MCP clients)
   mcp doctor          Check the root daemon: group, unit, socket perms, policy
   mcp uninstall       Remove the root MCP daemon and its unit (root)
-  patch-systemd       Add StartLimitBurst/StartLimitIntervalSec to all service files
+  patch-systemd [--yes] [--rollback]
+                      Bring all service files up to the current unit template
   boot-start <app>    Start app respecting boot-order dependencies
   freeze <app>        Freeze a crash-looping service (stop + disable)
   rollback <app>      Roll back app to previous image
