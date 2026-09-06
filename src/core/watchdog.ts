@@ -31,6 +31,13 @@ export interface Failure {
    * containers still serve, and a restart runs ExecStop first.
    */
   remediable: boolean;
+  /**
+   * true only when not one of the app's containers is running. severity 'down'
+   * is raised as soon as ONE listed container is missing, and a registry that
+   * lists a container the app no longer has makes a serving app look down.
+   * a restart must never be issued on that signal alone.
+   */
+  allContainersDown: boolean;
 }
 
 export interface WatchdogState {
@@ -119,11 +126,13 @@ export function pruneRestarts(
 }
 
 /**
- * the apps the watchdog may restart on this run. two conditions, both required:
+ * the apps the watchdog may restart on this run. every condition is required:
  *
- * - severity is 'down', so there is no running container and a restart can cost
- *   nothing. a degraded app is still serving, and "systemctl restart" runs the
- *   unit's ExecStop first, which would take a working container away.
+ * - severity is 'down'. a degraded app is still serving, and "systemctl
+ *   restart" runs the unit's ExecStop first, which would take that away.
+ * - not one container is running, so a restart can cost nothing. severity
+ *   'down' alone is not enough: it is raised as soon as ONE listed container is
+ *   missing, and a stale registry entry makes a healthy app look down.
  * - systemd reports the unit as failed. an inactive unit can be a deliberate
  *   stop, and restarting it would fight the operator.
  */
@@ -135,6 +144,7 @@ export function selectRemediationTargets(
   return failures.filter(f => {
     if (!f.remediable) return false;
     if (f.severity !== 'down') return false;
+    if (!f.allContainersDown) return false;
     if (!f.systemdFailed) return false;
     const attempts = state.restarts[f.app]?.length ?? 0;
     return attempts < maxPerWindow;

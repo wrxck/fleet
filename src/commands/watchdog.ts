@@ -48,14 +48,18 @@ function toFailure(app: AppEntry, r: HealthResult, dbServiceName: string): Failu
   // that unit runs its ExecStop and takes every database down, so it is never a
   // remediation target no matter which list it arrived on.
   const remediable = app.name !== dbServiceName && app.serviceName !== dbServiceName;
+  const allContainersDown = r.containers.length > 0 && r.containers.every(c => !c.running);
   if (r.overall === 'down') {
     return {
       app: r.app,
       serviceName: app.serviceName,
       severity: 'down',
-      reason: `no running container (systemd: ${r.systemd.state})`,
+      reason: allContainersDown
+        ? `no running container (systemd: ${r.systemd.state})`
+        : `${r.containers.filter(c => !c.running).map(c => c.name).join(', ')} not running (systemd: ${r.systemd.state})`,
       systemdFailed,
       remediable,
+      allContainersDown,
     };
   }
   if (r.overall === 'degraded') {
@@ -71,6 +75,7 @@ function toFailure(app: AppEntry, r: HealthResult, dbServiceName: string): Failu
       reason: reasons.join('; '),
       systemdFailed,
       remediable,
+      allContainersDown,
     };
   }
   return null;
@@ -122,6 +127,7 @@ export async function watchdogCommand(args: string[]): Promise<void> {
       // check, so the watchdog must not restart them. every app on the box
       // depends on them and a needless restart would be an outage of its own.
       remediable: false,
+      allContainersDown: false,
     });
   }
 
