@@ -47,7 +47,7 @@ function namedVolumesOf(container: string): string[] | null {
 
 /** detect named docker volumes attached to the app's containers. */
 // prefer registry names: docker's name filter is a substring match (macpool hits macpool-staging).
-export function detectVolumes(appName: string, containers?: string[]): string[] {
+export function detectVolumes(appName: string, containers?: string[], composeDir?: string): string[] {
   const vols = new Set<string>();
   let inspected = 0;
   for (const c of containers ?? []) {
@@ -58,7 +58,9 @@ export function detectVolumes(appName: string, containers?: string[]): string[] 
   }
   if (inspected === 0) {
     // no registry name resolves (stale or never recorded), so fall back rather than drop the volumes.
-    const r = execSafe('docker', ['ps', '-q', '--filter', `name=${appName}`], { timeout: 5_000 });
+    // the compose working dir is exact; the name filter is a substring match and the last resort.
+    const filter = composeDir ? `label=com.docker.compose.project.working_dir=${composeDir}` : `name=${appName}`;
+    const r = execSafe('docker', ['ps', '-a', '-q', '--filter', filter], { timeout: 5_000 });
     if (r.ok) {
       for (const id of r.stdout.split('\n').filter(Boolean)) {
         for (const n of namedVolumesOf(id) ?? []) vols.add(n);
@@ -102,7 +104,7 @@ export function detectAppConfig(appName: string): AppBackupConfig | null {
   const paths = existsSync(composeDir) ? [composeDir] : [];
 
   const dump = detectDumpHook(appName);
-  const volumes = detectVolumes(appName, app.containers);
+  const volumes = detectVolumes(appName, app.containers, composeDir);
 
   return {
     app: appName,

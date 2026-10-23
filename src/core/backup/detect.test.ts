@@ -43,7 +43,16 @@ describe('backup/detect detectVolumes', () => {
       .mockReturnValueOnce(ok('abc123\n'))
       .mockReturnValueOnce(ok('app_data|'));
     expect(detectVolumes('app', ['old'])).toEqual(['app_data']);
-    expect(exec.mock.calls[1][1]).toEqual(['ps', '-q', '--filter', 'name=app']);
+    expect(exec.mock.calls[1][1]).toEqual(['ps', '-a', '-q', '--filter', 'name=app']);
+  });
+
+  it('falls back to the compose working dir label when it is known', () => {
+    exec
+      .mockReturnValueOnce(fail('Error: No such container: old'))
+      .mockReturnValueOnce(ok('abc123\n'))
+      .mockReturnValueOnce(ok('macpool_macpool-data|'));
+    expect(detectVolumes('macpool', ['old'], '/home/matt/macpool')).toEqual(['macpool_macpool-data']);
+    expect(exec.mock.calls[1][1]).toEqual(['ps', '-a', '-q', '--filter', 'label=com.docker.compose.project.working_dir=/home/matt/macpool']);
   });
 
   it('falls back to the docker name filter without registry containers', () => {
@@ -51,7 +60,7 @@ describe('backup/detect detectVolumes', () => {
       .mockReturnValueOnce(ok('abc123\n'))
       .mockReturnValueOnce(ok('app_data|'));
     expect(detectVolumes('app')).toEqual(['app_data']);
-    expect(exec.mock.calls[0][1]).toEqual(['ps', '-q', '--filter', 'name=app']);
+    expect(exec.mock.calls[0][1]).toEqual(['ps', '-a', '-q', '--filter', 'name=app']);
   });
 
   it('skips anonymous volumes', () => {
