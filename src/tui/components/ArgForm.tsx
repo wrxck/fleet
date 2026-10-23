@@ -19,7 +19,7 @@ function describeField(name: string, schema: z.ZodTypeAny): Field {
   }
   if (s instanceof z.ZodBoolean) return { name, kind: 'boolean' };
   if (s instanceof z.ZodNumber) return { name, kind: 'number' };
-  if (s instanceof z.ZodEnum) return { name, kind: 'enum', options: s._def.values as string[] };
+  if (s instanceof z.ZodEnum) return { name, kind: 'enum', options: s.options as string[] };
   return { name, kind: 'string' };
 }
 

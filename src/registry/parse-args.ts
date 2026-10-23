@@ -25,7 +25,7 @@ export function parseArgs(schema: z.ZodObject<z.ZodRawShape>, argv: string[]): P
 
   const shape = schema.shape;
   const fieldNames = Object.keys(shape);
-  const booleanFields = new Set(fieldNames.filter(n => isBooleanField(shape[n])));
+  const booleanFields = new Set(fieldNames.filter(n => isBooleanField(shape[n] as z.ZodTypeAny)));
 
   const values: Record<string, unknown> = {};
   const positionals: string[] = [];
