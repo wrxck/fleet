@@ -9,7 +9,7 @@ import {
   validateAppName,
 } from '../core/backup/config';
 import { exportAllZones } from '../core/backup/cloudflare';
-import { detectAppConfig } from '../core/backup/detect';
+import { detectAppConfig, mergeSnapshotPaths, resolveVolumeMountpoints } from '../core/backup/detect';
 import { load as loadRegistry } from '../core/registry';
 import { dumpStreamCommand, dumpFilename } from '../core/backup/dump';
 import {
@@ -197,11 +197,25 @@ function cmdSnapshot(args: string[]): void {
   let snapCount = 0;
   const prefix = dryRun ? '[dry-run] ' : '';
 
+  // a docker failure still lets the plain paths and the dump run; the error is raised at the end.
+  let vols: { paths: string[]; missing: string[] } = { paths: [], missing: [] };
+  let volumeError: unknown;
+  try {
+    vols = resolveVolumeMountpoints(cfg.volumes ?? []);
+  } catch (e) {
+    volumeError = e;
+    warn(`volumes not backed up: ${messageOf(e)}`);
+  }
+  if (vols.missing.length > 0) warn(`${vols.missing.length} configured volume(s) not found, skipping: ${vols.missing.join(', ')}`);
+  const fsPaths = mergeSnapshotPaths(cfg.paths, vols.paths);
+
   // file-system snapshot
-  if (cfg.paths.length > 0) {
-    const existing = cfg.paths.filter(p => existsSync(p));
-    const skipped = cfg.paths.length - existing.length;
+  if (fsPaths.length > 0) {
+    const existing = fsPaths.filter(p => existsSync(p));
+    const skipped = cfg.paths.filter(p => !existsSync(p)).length;
     if (skipped > 0) warn(`${skipped} configured path(s) missing on disk, skipping those`);
+    const goneMounts = vols.paths.filter(p => !cfg.paths.includes(p) && !existsSync(p));
+    if (goneMounts.length > 0) warn(`${goneMounts.length} volume mountpoint(s) missing on disk, skipping: ${goneMounts.join(', ')}`);
     if (existing.length > 0) {
       const snap = snapshot(app, {
         paths: existing,
@@ -268,6 +282,7 @@ function cmdSnapshot(args: string[]): void {
     }
   }
 
+  if (volumeError) throw volumeError;
   success(`${prefix}${app}: ${snapCount} snapshot(s) ${dryRun ? 'planned' : 'added'}`);
 }
 
