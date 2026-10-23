@@ -9,7 +9,7 @@ import {
   validateAppName,
 } from '../core/backup/config';
 import { exportAllZones } from '../core/backup/cloudflare';
-import { detectAppConfig, resolveVolumeMountpoints } from '../core/backup/detect';
+import { detectAppConfig, mergeSnapshotPaths, resolveVolumeMountpoints } from '../core/backup/detect';
 import { load as loadRegistry } from '../core/registry';
 import { dumpStreamCommand, dumpFilename } from '../core/backup/dump';
 import {
@@ -198,13 +198,13 @@ function cmdSnapshot(args: string[]): void {
   const prefix = dryRun ? '[dry-run] ' : '';
 
   const vols = resolveVolumeMountpoints(cfg.volumes ?? []);
-  if (vols.missing.length > 0) warn(`volume(s) not found, skipping: ${vols.missing.join(', ')}`);
-  const fsPaths = [...new Set([...cfg.paths, ...vols.paths])];
+  if (vols.missing.length > 0) warn(`${vols.missing.length} configured volume(s) not found, skipping: ${vols.missing.join(', ')}`);
+  const fsPaths = mergeSnapshotPaths(cfg.paths, vols.paths);
 
   // file-system snapshot
   if (fsPaths.length > 0) {
     const existing = fsPaths.filter(p => existsSync(p));
-    const skipped = fsPaths.length - existing.length;
+    const skipped = cfg.paths.filter(p => !existsSync(p)).length;
     if (skipped > 0) warn(`${skipped} configured path(s) missing on disk, skipping those`);
     if (existing.length > 0) {
       const snap = snapshot(app, {
