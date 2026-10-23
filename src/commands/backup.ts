@@ -9,7 +9,7 @@ import {
   validateAppName,
 } from '../core/backup/config';
 import { exportAllZones } from '../core/backup/cloudflare';
-import { detectAppConfig } from '../core/backup/detect';
+import { detectAppConfig, resolveVolumeMountpoints } from '../core/backup/detect';
 import { load as loadRegistry } from '../core/registry';
 import { dumpStreamCommand, dumpFilename } from '../core/backup/dump';
 import {
@@ -197,10 +197,14 @@ function cmdSnapshot(args: string[]): void {
   let snapCount = 0;
   const prefix = dryRun ? '[dry-run] ' : '';
 
+  const vols = resolveVolumeMountpoints(cfg.volumes ?? []);
+  if (vols.missing.length > 0) warn(`volume(s) not found, skipping: ${vols.missing.join(', ')}`);
+  const fsPaths = [...new Set([...cfg.paths, ...vols.paths])];
+
   // file-system snapshot
-  if (cfg.paths.length > 0) {
-    const existing = cfg.paths.filter(p => existsSync(p));
-    const skipped = cfg.paths.length - existing.length;
+  if (fsPaths.length > 0) {
+    const existing = fsPaths.filter(p => existsSync(p));
+    const skipped = fsPaths.length - existing.length;
     if (skipped > 0) warn(`${skipped} configured path(s) missing on disk, skipping those`);
     if (existing.length > 0) {
       const snap = snapshot(app, {
